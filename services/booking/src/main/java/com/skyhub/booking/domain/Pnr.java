@@ -45,6 +45,10 @@ public class Pnr {
     @Column(nullable = false, length = 64, unique = true)
     private String idempotencyKey;
 
+    /** SHA-256 of the request that created this PNR; a replayed key must carry the same request. */
+    @Column(nullable = false, length = 64)
+    private String requestFingerprint;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "pnr_segment", joinColumns = @JoinColumn(name = "pnr_id"))
     @OrderColumn(name = "segment_order")
@@ -59,7 +63,8 @@ public class Pnr {
     }
 
     public static Pnr confirmed(String locator, String contactEmail, List<PnrSegment> segments,
-                                List<PnrPassenger> passengers, Instant createdAt, String idempotencyKey) {
+                                List<PnrPassenger> passengers, Instant createdAt, String idempotencyKey,
+                                String requestFingerprint) {
         Pnr pnr = new Pnr();
         pnr.locator = locator;
         pnr.contactEmail = contactEmail;
@@ -68,7 +73,12 @@ public class Pnr {
         pnr.passengers = new ArrayList<>(passengers);
         pnr.createdAt = createdAt;
         pnr.idempotencyKey = idempotencyKey;
+        pnr.requestFingerprint = requestFingerprint;
         return pnr;
+    }
+
+    public boolean wasCreatedBy(String fingerprint) {
+        return requestFingerprint.equals(fingerprint);
     }
 
     /** Retrieval check for "manage booking": any passenger's last name, ignoring case and surrounding spaces. */

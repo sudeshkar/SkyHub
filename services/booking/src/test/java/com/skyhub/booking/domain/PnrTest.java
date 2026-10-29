@@ -13,7 +13,13 @@ class PnrTest {
             List.of(new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), new PnrSegment("SK901", LocalDate.of(2026, 11, 2))),
             List.of(new PnrPassenger("Priya", "Perera", List.of("11D", "24A")),
                     new PnrPassenger("Raj", "O'Neil", List.of("11E", "24B"))),
-            Instant.parse("2026-10-29T10:00:00Z"), "key-12345678");
+            Instant.parse("2026-10-29T10:00:00Z"), "key-12345678", "fingerprint-1");
+
+    @Test
+    void should_recognise_the_request_that_created_it() {
+        assertThat(pnr.wasCreatedBy("fingerprint-1")).isTrue();
+        assertThat(pnr.wasCreatedBy("fingerprint-2")).isFalse();
+    }
 
     @Test
     void should_be_confirmed_with_segments_and_seats() {
