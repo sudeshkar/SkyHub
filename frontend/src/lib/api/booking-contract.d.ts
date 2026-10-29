@@ -130,6 +130,25 @@ export interface components {
         };
     };
     responses: {
+        /** @description The flight does not operate on that date */
+        FlightNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The timetable could not be checked; retry later */
+        ScheduleUnavailable: {
+            headers: {
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Invalid request */
         BadRequest: {
             headers: {
@@ -170,6 +189,8 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["FlightNotFound"];
+            503: components["responses"]["ScheduleUnavailable"];
         };
     };
     createPnr: {
@@ -208,6 +229,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["FlightNotFound"];
             /** @description A requested seat is no longer available */
             409: {
                 headers: {
@@ -217,6 +239,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            503: components["responses"]["ScheduleUnavailable"];
         };
     };
     getPnr: {

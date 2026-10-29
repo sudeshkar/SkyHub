@@ -25,7 +25,7 @@ import com.skyhub.booking.domain.SeatUnavailableException;
 
 /** The guarantee behind ADR-0002: ten people click the same seat at the same moment; exactly one gets it. */
 @SpringBootTest
-@Import(PostgresTestcontainer.class)
+@Import({PostgresTestcontainer.class, TestFlightCatalog.class})
 class ConcurrentBookingTest {
 
     private static final int BUYERS = 10;

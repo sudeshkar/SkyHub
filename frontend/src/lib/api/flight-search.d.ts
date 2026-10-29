@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/flights/{flightNumber}/departures/{departureDate}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One flight on one date, if it operates
+         * @description Used by the booking service to confirm a flight exists before creating its seat inventory.
+         */
+        get: operations["getDeparture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -148,6 +168,39 @@ export interface operations {
             };
             /** @description Invalid search */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDeparture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flightNumber: string;
+                /** @description UTC departure date */
+                departureDate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The flight operates on this date */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlightLeg"];
+                };
+            };
+            /** @description No such flight on this date */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

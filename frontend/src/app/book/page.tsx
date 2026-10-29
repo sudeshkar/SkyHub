@@ -28,18 +28,16 @@ async function Booking({ searchParams }: Pick<PageProps<"/book">, "searchParams"
   const { segments, passengers } = parsed.selection;
 
   // Every segment's seat map, fetched in parallel.
-  const seatMaps = await Promise.all(segments.map(getSeatMap));
-  if (seatMaps.some((map) => map === null)) {
+  const results = await Promise.all(segments.map(getSeatMap));
+  if (results.includes("not-found")) {
+    return <Problem text="One of these flights doesn't operate on that date. Please search again." />;
+  }
+  const seatMaps = results.filter((map) => typeof map !== "string");
+  if (seatMaps.length !== segments.length) {
     return <Problem text="We couldn't load the seat maps right now. Please try again in a moment." />;
   }
 
-  return (
-    <BookingWizard
-      segments={segments}
-      seatMaps={seatMaps.filter((map) => map !== null)}
-      passengerCount={passengers}
-    />
-  );
+  return <BookingWizard segments={segments} seatMaps={seatMaps} passengerCount={passengers} />;
 }
 
 function Problem({ text }: { text: string }) {

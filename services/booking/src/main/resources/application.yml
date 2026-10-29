@@ -29,6 +29,8 @@ spring:
         order_updates: true
 
 skyhub:
+  flight-search:
+    url: ${FLIGHT_SEARCH_URL:http://localhost:8081}
   security:
     # Base64 256-bit AES key for personal data at rest. No default: the service refuses to start without it.
     pii-key: ${SKYHUB_PII_KEY:}

@@ -58,7 +58,7 @@ class BookingServiceTest {
     private final SeatInventoryInitializer initializer = mock(SeatInventoryInitializer.class);
     private final Map<String, SeatInventory> inventory = new HashMap<>();
 
-    private final BookingService service = new BookingService(seats, pnrs, initializer, new CreatePnrValidator(List.of(new SegmentCountRule(), new PassengerCountRule(),
+    private final BookingService service = new BookingService(seats, pnrs, initializer, new SeatMapCache(), new CreatePnrValidator(List.of(new SegmentCountRule(), new PassengerCountRule(),
                     new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
             Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction());
 
