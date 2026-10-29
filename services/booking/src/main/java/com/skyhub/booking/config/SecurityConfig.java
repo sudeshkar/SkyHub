@@ -1,5 +1,6 @@
 package com.skyhub.booking.config;
 
+import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.http.HttpMethod.PUT;
@@ -36,11 +37,15 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(GET, "/api/v1/flights/*/departures/*/seats").permitAll()
+                        .requestMatchers(POST, "/api/v1/holds").permitAll()
+                        .requestMatchers(DELETE, "/api/v1/holds/{holdId}").permitAll()
                         .requestMatchers(POST, "/api/v1/pnrs").permitAll()
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/sessions").permitAll()
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/cancellation").access(ownsBooking)
                         .requestMatchers(PUT, "/api/v1/pnrs/{locator}/seat-assignments").access(ownsBooking)
+                        .requestMatchers(POST, "/api/v1/pnrs/{locator}/check-ins").access(ownsBooking)
+                        .requestMatchers(GET, "/api/v1/pnrs/{locator}/check-ins/{segmentIndex}").access(ownsBooking)
                         // Actuator is only served on the management port, which is never exposed publicly.
                         .requestMatchers(GET, "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .anyRequest().denyAll())

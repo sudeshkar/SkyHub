@@ -26,6 +26,13 @@ describe("SeatMap", () => {
     expect(screen.getByRole("button", { name: "Seat 11E, economy, taken" })).toBeDisabled();
   });
 
+  it("disables seats another traveller is holding at the moment", () => {
+    const held: Seat[] = [{ seatNumber: "11D", row: 11, letter: "D", cabin: "ECONOMY", status: "HELD" }];
+    render(<SeatMap seats={held} heldByParty={new Map()} onSelect={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Seat 11D, economy, held by another traveller" })).toBeDisabled();
+  });
+
   it("disables seats chosen for another passenger in the same booking", () => {
     render(<SeatMap seats={seats} heldByParty={new Map([["11F", "RP"]])} onSelect={vi.fn()} />);
 

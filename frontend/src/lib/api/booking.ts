@@ -55,6 +55,41 @@ export async function createPnr(request: CreatePnrRequest, idempotencyKey: strin
   return { kind: "unavailable" };
 }
 
+export type HoldOutcome =
+  | { kind: "held"; holdId: string; expiresAt: string }
+  | { kind: "seat-taken"; detail: string }
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+export type HoldItem = components["schemas"]["HoldItem"];
+
+/** Holds every seat or none for a few minutes, so nobody else can take them while the traveller checks out. */
+export async function createHold(items: HoldItem[]): Promise<HoldOutcome> {
+  const response = await call("/api/v1/holds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) {
+    const hold = (await response.json()) as components["schemas"]["Hold"];
+    return { kind: "held", holdId: hold.holdId, expiresAt: hold.expiresAt };
+  }
+  if (response.status === 409) {
+    return { kind: "seat-taken", detail: await problemDetail(response, "A selected seat was just taken.") };
+  }
+  if (response.status === 400 || response.status === 404 || response.status === 422) {
+    return { kind: "rejected", detail: await problemDetail(response, "Please check your seats.") };
+  }
+  return { kind: "unavailable" };
+}
+
+/** Safe to repeat. Returns nothing: a hold that is already gone is the outcome we wanted. */
+export async function releaseHold(holdId: string): Promise<void> {
+  await call(`/api/v1/holds/${encodeURIComponent(holdId)}`, { method: "DELETE", cache: "no-store" });
+}
+
 export type SessionOutcome =
   | { kind: "opened"; accessToken: string; expiresAt: string; pnr: Pnr }
   | { kind: "not-found" }
@@ -116,6 +151,62 @@ async function managed(path: string, token: string, init: RequestInit = {}): Pro
     default:
       return { kind: "unavailable" };
   }
+}
+
+export type BoardingPass = components["schemas"]["BoardingPass"];
+
+export type CheckInOutcome =
+  | { kind: "ok"; passes: BoardingPass[]; created: boolean }
+  | { kind: "unauthorized" }
+  | { kind: "not-found" }
+  | { kind: "closed"; detail: string } // not open yet, or already closed
+  | { kind: "cancelled"; detail: string }
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+async function passesOutcome(response: Response | null, okStatuses: number[]): Promise<CheckInOutcome> {
+  if (!response) return { kind: "unavailable" };
+  if (okStatuses.includes(response.status)) {
+    const body = (await response.json()) as components["schemas"]["BoardingPasses"];
+    return { kind: "ok", passes: body.passes, created: response.status === 201 };
+  }
+  switch (response.status) {
+    case 401:
+    case 403:
+      return { kind: "unauthorized" };
+    case 404:
+      return { kind: "not-found" };
+    case 409: {
+      const problem = (await response.json().catch(() => null)) as Problem | null;
+      const detail = problem?.detail ?? "Check-in is not possible right now.";
+      return problem?.title === "Booking cancelled" ? { kind: "cancelled", detail } : { kind: "closed", detail };
+    }
+    case 400:
+    case 422:
+      return { kind: "rejected", detail: await problemDetail(response, "Please check your details.") };
+    default:
+      return { kind: "unavailable" };
+  }
+}
+
+/** Checks in every passenger on one flight. Repeating it returns the same passes. */
+export async function checkIn(locator: string, token: string, segmentIndex: number): Promise<CheckInOutcome> {
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ segmentIndex }),
+    cache: "no-store",
+  });
+  return passesOutcome(response, [200, 201]);
+}
+
+/** "not-found" here means the flight is not checked in (or the booking is gone). */
+export async function getBoardingPasses(locator: string, token: string, segmentIndex: number): Promise<CheckInOutcome> {
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins/${segmentIndex}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  return passesOutcome(response, [200]);
 }
 
 export function getManagedPnr(locator: string, token: string): Promise<ManageOutcome> {

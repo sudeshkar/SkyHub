@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
-import { createBooking } from "@/app/book/actions";
+import { createBooking, holdSeats, releaseSeats } from "@/app/book/actions";
 import type { Pnr, SeatMap as SeatMapData, Segment } from "@/lib/api/booking";
+import { HoldCountdown } from "./hold-countdown";
 import { SeatMap } from "./seat-map";
 
 type Step = "seats" | "passengers" | "review" | "done";
@@ -44,6 +45,8 @@ export function BookingWizard({
   const [email, setEmail] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [booked, setBooked] = useState<Pnr | null>(null);
+  // Set while the chosen seats are held for this traveller, so nobody else can take them mid-checkout.
+  const [hold, setHold] = useState<{ id: string; expiresAt: string } | null>(null);
   const [pending, startTransition] = useTransition();
   // One key per review attempt: a double-click or retry replays instead of booking twice.
   const idempotencyKey = useRef<string>("");
@@ -63,6 +66,41 @@ export function BookingWizard({
     if (passengerIndex < passengerCount - 1) setPassengerIndex(passengerIndex + 1);
   }
 
+  function continueToPassengers() {
+    setNotice(null);
+    startTransition(async () => {
+      const outcome = await holdSeats(segments, seats);
+      if (outcome.kind === "held") {
+        setHold({ id: outcome.holdId, expiresAt: outcome.expiresAt });
+        setStep("passengers");
+      } else if (outcome.kind === "seat-taken") {
+        setSeats(seats.map((row) => row.map(() => "")));
+        setNotice("One of your seats was just taken by another traveller. Please choose your seats again.");
+        router.refresh();
+      } else if (outcome.kind === "rate-limited") {
+        setNotice(`Too many attempts. Please wait ${outcome.retryAfterSeconds} seconds and try again.`);
+      } else if (outcome.kind === "rejected") {
+        setNotice(outcome.detail);
+      } else {
+        setNotice("We couldn't reach the booking service, so your seats are not held yet. Please try again.");
+      }
+    });
+  }
+
+  /** Going back to change seats lets go of the hold, so other travellers can see those seats again. */
+  function backToSeats() {
+    if (hold) void releaseSeats(hold.id);
+    setHold(null);
+    setStep("seats");
+  }
+
+  function holdEnded() {
+    setHold(null);
+    setNotice("Your seat hold ended. Check your seats and continue to hold them again.");
+    setStep("seats");
+    router.refresh(); // show the current seat map
+  }
+
   function goToReview(event: React.FormEvent) {
     event.preventDefault();
     idempotencyKey.current = crypto.randomUUID();
@@ -74,6 +112,7 @@ export function BookingWizard({
     startTransition(async () => {
       const outcome = await createBooking(
         {
+          holdId: hold?.id,
           contactEmail: email,
           segments,
           passengers: passengers.map((p, i) => ({ ...p, seats: seats[i] })),
@@ -81,9 +120,11 @@ export function BookingWizard({
         idempotencyKey.current,
       );
       if (outcome.kind === "booked") {
+        setHold(null);
         setBooked(outcome.pnr);
         setStep("done");
       } else if (outcome.kind === "seat-taken") {
+        setHold(null);
         setSeats(seats.map((row) => row.map(() => "")));
         setNotice("One of your seats was just taken by another traveller. Please choose your seats again.");
         setStep("seats");
@@ -179,11 +220,11 @@ export function BookingWizard({
             </ul>
             <button
               type="button"
-              disabled={!allSeated}
-              onClick={() => setStep("passengers")}
+              disabled={!allSeated || pending}
+              onClick={continueToPassengers}
               className="w-full rounded-md bg-copper px-4 py-3 font-semibold text-white hover:bg-copper-strong disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Continue to passengers
+              {pending ? "Holding your seats…" : "Continue to passengers"}
             </button>
             {!allSeated && <p className="text-xs text-muted">Choose a seat for every passenger on every flight.</p>}
           </aside>
@@ -192,6 +233,7 @@ export function BookingWizard({
 
       {step === "passengers" && (
         <form onSubmit={goToReview} className="max-w-xl space-y-6">
+          {hold && <HoldCountdown expiresAt={hold.expiresAt} onExpire={holdEnded} />}
           {passengers.map((passenger, p) => (
             <fieldset key={p} className="rounded-lg border border-sand bg-white p-5">
               <legend className="px-1 font-semibold">Passenger {p + 1}</legend>
@@ -229,7 +271,7 @@ export function BookingWizard({
             <span className="mt-1 block text-xs text-muted">We send the booking confirmation here.</span>
           </label>
           <div className="flex gap-4">
-            <button type="button" onClick={() => setStep("seats")} className="rounded-md border border-sand px-5 py-3">
+            <button type="button" onClick={backToSeats} className="rounded-md border border-sand px-5 py-3">
               Back
             </button>
             <button type="submit" className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong">
@@ -244,6 +286,7 @@ export function BookingWizard({
           <h2 id="review-heading" className="text-xl font-semibold">
             Check your booking
           </h2>
+          {hold && <HoldCountdown expiresAt={hold.expiresAt} onExpire={holdEnded} />}
           <dl className="divide-y divide-sand rounded-lg border border-sand bg-white">
             {passengers.map((p, i) => (
               <div key={i} className="flex justify-between px-5 py-3">

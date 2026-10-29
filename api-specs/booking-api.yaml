@@ -11,6 +11,8 @@ tags:
   - name: SeatMaps
   - name: Pnrs
   - name: ManageBooking
+  - name: Holds
+  - name: CheckIn
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -44,6 +46,57 @@ paths:
           $ref: '#/components/responses/FlightNotFound'
         '503':
           $ref: '#/components/responses/ScheduleUnavailable'
+
+  /api/v1/holds:
+    post:
+      tags: [Holds]
+      operationId: createHold
+      summary: Hold seats for a few minutes while the traveller completes a booking
+      description: |
+        Holds every requested seat or none. The hold lasts 10 minutes. Pass the returned `holdId` to
+        `POST /pnrs` to turn the held seats into a booking; if it has expired, the booking is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHoldRequest'
+      responses:
+        '201':
+          description: Seats held
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/FlightNotFound'
+        '409':
+          description: At least one seat is not available; nothing was held
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
+
+  /api/v1/holds/{holdId}:
+    delete:
+      tags: [Holds]
+      operationId: releaseHold
+      summary: Let go of held seats
+      description: Safe to repeat. An unknown or already-expired hold is not an error.
+      parameters:
+        - name: holdId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: The seats are no longer held by this hold
 
   /api/v1/pnrs:
     post:
@@ -209,6 +262,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /api/v1/pnrs/{locator}/check-ins:
+    post:
+      tags: [CheckIn]
+      operationId: checkIn
+      summary: Check in every passenger on one flight and get their boarding passes
+      description: |
+        Open from 24 hours to 60 minutes before departure. Idempotent: checking in again returns the same
+        passes and does not renumber anyone. A flight that is checked in can no longer have its seats changed.
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInRequest'
+      responses:
+        '201':
+          description: Checked in now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPasses'
+        '200':
+          description: Already checked in; the same passes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPasses'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
+        '409':
+          description: Check-in is not open yet, is closed, or the booking is cancelled
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
+
+  /api/v1/pnrs/{locator}/check-ins/{segmentIndex}:
+    get:
+      tags: [CheckIn]
+      operationId: getBoardingPasses
+      summary: The boarding passes of a flight that is checked in
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+        - name: segmentIndex
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 3
+      responses:
+        '200':
+          description: The boarding passes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPasses'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such booking, or this flight is not checked in
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The booking is cancelled
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
   securitySchemes:
     manageToken:
@@ -277,7 +418,7 @@ components:
 
     SeatStatus:
       type: string
-      enum: [AVAILABLE, BOOKED]
+      enum: [AVAILABLE, HELD, BOOKED]
 
     Seat:
       type: object
@@ -343,6 +484,10 @@ components:
       type: object
       required: [contactEmail, segments, passengers]
       properties:
+        holdId:
+          type: string
+          format: uuid
+          description: Hold made earlier for these exact seats. Without it, the seats are booked directly.
         contactEmail:
           type: string
           format: email
@@ -401,6 +546,50 @@ components:
           type: string
           format: date-time
 
+    CheckInRequest:
+      type: object
+      required: [segmentIndex]
+      properties:
+        segmentIndex:
+          type: integer
+          minimum: 0
+          maximum: 3
+
+    BoardingPass:
+      type: object
+      required: [passengerName, locator, flightNumber, departureDate, seatNumber, sequence, barcode]
+      properties:
+        passengerName:
+          type: string
+          description: SURNAME/FIRSTNAME, upper case, as printed on the pass
+          example: PERERA/PRIYA
+        locator:
+          type: string
+          example: ABC234
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+        seatNumber:
+          $ref: '#/components/schemas/SeatNumber'
+        sequence:
+          type: integer
+          minimum: 1
+          description: Boarding sequence number on this flight, in order of check-in
+        barcode:
+          type: string
+          description: Signed payload for the gate scanner. Any change to the pass invalidates it.
+
+    BoardingPasses:
+      type: object
+      required: [passes]
+      properties:
+        passes:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardingPass'
+
     ManageSessionRequest:
       type: object
       required: [lastName]
@@ -439,6 +628,44 @@ components:
           maximum: 3
         seatNumber:
           $ref: '#/components/schemas/SeatNumber'
+
+    HoldItem:
+      type: object
+      required: [flightNumber, departureDate, seatNumber]
+      properties:
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+        seatNumber:
+          $ref: '#/components/schemas/SeatNumber'
+
+    CreateHoldRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 36
+          items:
+            $ref: '#/components/schemas/HoldItem'
+
+    Hold:
+      type: object
+      required: [holdId, expiresAt, items]
+      properties:
+        holdId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HoldItem'
 
     Problem:
       type: object

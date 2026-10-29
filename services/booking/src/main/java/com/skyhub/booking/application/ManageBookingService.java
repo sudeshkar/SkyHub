@@ -2,12 +2,14 @@ package com.skyhub.booking.application;
 
 import com.skyhub.booking.application.ManageMetrics.Action;
 import com.skyhub.booking.application.view.PnrView;
+import com.skyhub.booking.domain.AlreadyCheckedInException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.Pnr;
 import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.SeatInventory;
 import com.skyhub.booking.domain.SeatUnavailableException;
+import com.skyhub.booking.persistence.CheckInRepository;
 import com.skyhub.booking.persistence.PnrRepository;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
 import java.util.List;
@@ -29,15 +31,18 @@ public class ManageBookingService {
 
     private final PnrRepository pnrs;
     private final SeatInventoryRepository seats;
+    private final CheckInRepository checkIns;
     private final SeatMapCache seatMaps;
     private final ManageTokenIssuer tokens;
     private final ManageMetrics metrics;
     private final TransactionOperations transactions;
 
-    public ManageBookingService(PnrRepository pnrs, SeatInventoryRepository seats, SeatMapCache seatMaps,
-                                ManageTokenIssuer tokens, ManageMetrics metrics, TransactionOperations transactions) {
+    public ManageBookingService(PnrRepository pnrs, SeatInventoryRepository seats, CheckInRepository checkIns,
+                                SeatMapCache seatMaps, ManageTokenIssuer tokens, ManageMetrics metrics,
+                                TransactionOperations transactions) {
         this.pnrs = pnrs;
         this.seats = seats;
+        this.checkIns = checkIns;
         this.seatMaps = seatMaps;
         this.tokens = tokens;
         this.metrics = metrics;
@@ -121,6 +126,10 @@ public class ManageBookingService {
         String current = pnr.seatOf(command.passengerIndex(), command.segmentIndex());
         pnr.requireActive();
         PnrSegment flight = pnr.getSegments().get(command.segmentIndex());
+        if (checkIns.existsByLocatorAndSegmentIndex(locator, command.segmentIndex())) {
+            throw new AlreadyCheckedInException(
+                    flight.flightNumber() + " is checked in, so its seats can no longer be changed");
+        }
         if (current.equals(command.seatNumber())) {
             return new SeatChange(PnrView.of(pnr), flight, false);
         }

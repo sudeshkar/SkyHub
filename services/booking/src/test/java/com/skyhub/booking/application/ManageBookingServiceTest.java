@@ -43,6 +43,8 @@ class ManageBookingServiceTest {
 
     private final PnrRepository pnrs = mock(PnrRepository.class);
     private final SeatInventoryRepository seats = mock(SeatInventoryRepository.class);
+    private final com.skyhub.booking.persistence.CheckInRepository checkIns =
+            mock(com.skyhub.booking.persistence.CheckInRepository.class);
     private final ManageTokenIssuer tokens = mock(ManageTokenIssuer.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final SeatMapCache seatMapCache = new SeatMapCache(registry);
@@ -73,8 +75,23 @@ class ManageBookingServiceTest {
                 .thenAnswer(call -> Optional.ofNullable(
                         inventory.get(call.<String>getArgument(0) + call.<String>getArgument(2))));
         when(tokens.issue("ABC234")).thenReturn(new ManageToken("signed.jwt.value", TOKEN_EXPIRY));
-        service = new ManageBookingService(pnrs, seats, seatMapCache, tokens, new ManageMetrics(registry),
+        service = new ManageBookingService(pnrs, seats, checkIns, seatMapCache, tokens, new ManageMetrics(registry),
                 TransactionOperations.withoutTransaction());
+    }
+
+    @Test
+    void should_freeze_the_seats_of_a_flight_that_is_checked_in() {
+        when(checkIns.existsByLocatorAndSegmentIndex("ABC234", 1)).thenReturn(true);
+
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(com.skyhub.booking.domain.AlreadyCheckedInException.class)
+                .isThrownBy(() -> service.changeSeat("ABC234", new SeatChangeCommand(0, 1, "30C")))
+                .withMessageContaining("checked in");
+
+        assertThat(inventory.get("SK90130C").getStatus()).isEqualTo(com.skyhub.booking.domain.SeatStatus.AVAILABLE);
+        assertThat(pnr.seatOf(0, 1)).isEqualTo("24A");
+        // The other flight of the same booking can still change.
+        service.changeSeat("ABC234", new SeatChangeCommand(0, 0, "30C"));
+        assertThat(pnr.seatOf(0, 0)).isEqualTo("30C");
     }
 
     private double count(String action) {

@@ -10,9 +10,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -25,13 +27,32 @@ class FlightSearchCatalogTest {
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
     private final FlightSearchCatalog catalog = new FlightSearchCatalog(builder, BASE, new SimpleMeterRegistry());
 
+    private static final String LEG = "{\"flightNumber\":\"SK501\",\"departureTime\":\"2026-11-02T10:30:00+04:00\"}";
+
     @Test
     void should_confirm_an_operating_flight_and_cache_the_answer() {
-        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02")).andRespond(withSuccess());
+        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02"))
+                .andRespond(withSuccess(LEG, MediaType.APPLICATION_JSON));
 
         assertThat(catalog.operates("SK501", DATE)).isTrue();
         assertThat(catalog.operates("SK501", DATE)).isTrue();
         server.verify();
+    }
+
+    @Test
+    void should_report_when_the_flight_leaves_as_an_instant() {
+        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02"))
+                .andRespond(withSuccess(LEG, MediaType.APPLICATION_JSON));
+
+        assertThat(catalog.departure("SK501", DATE)).contains(Instant.parse("2026-11-02T06:30:00Z"));
+    }
+
+    @Test
+    void should_treat_an_answer_without_a_departure_time_as_unavailable() {
+        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02"))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        assertThatExceptionOfType(FlightCatalogUnavailableException.class).isThrownBy(() -> catalog.departure("SK501", DATE));
     }
 
     @Test
@@ -47,7 +68,8 @@ class FlightSearchCatalogTest {
     @Test
     void should_report_unavailable_and_not_cache_failures() {
         server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02")).andRespond(withServerError());
-        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02")).andRespond(withSuccess());
+        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02"))
+                .andRespond(withSuccess(LEG, MediaType.APPLICATION_JSON));
 
         assertThatExceptionOfType(FlightCatalogUnavailableException.class).isThrownBy(() -> catalog.operates("SK501", DATE));
         assertThat(catalog.operates("SK501", DATE)).isTrue();

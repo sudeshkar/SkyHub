@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cancelBooking, changeSeat, loadSeatMap } from "@/app/manage/actions";
+import { cancelBooking, changeSeat, checkInFlight, loadSeatMap } from "@/app/manage/actions";
 import type { Pnr, SeatMap } from "@/lib/api/booking";
 import { ManageView } from "./manage-view";
 
@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("@/app/manage/actions", () => ({
   cancelBooking: vi.fn(),
   changeSeat: vi.fn(),
+  checkInFlight: vi.fn(),
   closeSession: vi.fn(),
   loadSeatMap: vi.fn(),
 }));
@@ -84,6 +85,55 @@ describe("ManageView", () => {
       expect(screen.getByText("Cancelled")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Cancel booking" })).not.toBeInTheDocument();
       for (const button of screen.getAllByRole("button", { name: /Change seat for/ })) expect(button).toBeDisabled();
+    });
+  });
+
+  describe("checking in", () => {
+    const PASS = {
+      passengerName: "PERERA/PRIYA",
+      locator: "YUFHBD",
+      flightNumber: "SK501",
+      departureDate: "2026-11-02",
+      seatNumber: "11D",
+      sequence: 7,
+      barcode: "M1PERERA/PRIYA YUFHBD SK501 2026-11-02 11D 0007.sig",
+    };
+
+    it("checks in one flight and shows each passenger's boarding pass", async () => {
+      vi.mocked(checkInFlight).mockResolvedValue({ kind: "ok", passes: [PASS], created: true });
+      render(<ManageView pnr={PNR} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Check in for SK501" }));
+
+      expect(await screen.findByText("PERERA/PRIYA")).toBeInTheDocument();
+      expect(screen.getByText("Boarding no. 7")).toBeInTheDocument();
+      expect(screen.getByText(PASS.barcode)).toBeInTheDocument();
+      expect(checkInFlight).toHaveBeenCalledWith(0);
+      expect(screen.queryByRole("button", { name: "Check in for SK501" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Check in for SK901" })).toBeInTheDocument(); // other flight unaffected
+    });
+
+    it("freezes the seats of a flight that is checked in", () => {
+      render(<ManageView pnr={PNR} boardingPasses={{ 0: [PASS] }} />);
+
+      expect(screen.getByText("PERERA/PRIYA")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK901" })).toBeEnabled();
+    });
+
+    it("explains when check-in is not open", async () => {
+      vi.mocked(checkInFlight).mockResolvedValue({ kind: "closed", detail: "Check-in opens at 2026-11-01T10:00:00Z" });
+      render(<ManageView pnr={PNR} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Check in for SK501" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Check-in opens at 2026-11-01T10:00:00Z");
+    });
+
+    it("offers no check-in on a cancelled booking", () => {
+      render(<ManageView pnr={{ ...PNR, status: "CANCELLED" }} />);
+
+      expect(screen.queryByRole("button", { name: /Check in for/ })).not.toBeInTheDocument();
     });
   });
 
