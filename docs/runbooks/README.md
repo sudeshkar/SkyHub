@@ -61,6 +61,18 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** Overview → *Check-ins per minute by outcome*; in Loki the refusal text names the time: the window is 24 hours to 60 minutes before departure (`skyhub.booking.check-in.*`). Compare the departure time in the message with the flight in flight-search (`GET /api/v1/flights/{flight}/departures/{date}`): a wrong timetable or a changed window setting shifts every flight.
 **Mitigate:** correct the timetable or the setting and restart booking (window values are read at startup). Nothing is written when check-in is refused, so no data needs repair.
 
+## RefundFailed
+
+**Means:** a booking failed *after* the traveller was charged (usually: the seat was taken in the meantime), and giving the money back failed too. A traveller has been charged and has no booking. This is the one payment failure that cannot fix itself.
+**Confirm:** the booking log line `Refund failed after a failed booking; the traveller has been charged` carries `payment.charge`, the provider's charge reference. In Loki: `{service="booking"} |= "Refund failed"`. Overview → *Payments per minute by outcome* (`refund_failed`).
+**Mitigate:** refund that charge by hand in the payment provider's dashboard using the `payment.charge` reference, then check the provider is reachable (see PaymentProviderUnavailable). There is no booking to cancel: no `payment` row exists for it. Automated reconciliation of charges without a booking is the planned follow-up (ADR-0015).
+
+## PaymentProviderUnavailable
+
+**Means:** more than half of payment attempts in the last 10 minutes could not reach the payment provider. Nobody is charged and nobody is booked while this lasts: travellers see "payment provider unavailable" and can retry.
+**Confirm:** Overview → *Payments per minute by outcome* (`unavailable` far above `captured`); the provider's status page; `Payment provider unavailable` warnings in Loki.
+**Mitigate:** nothing in SkyHub to fix if the provider is down; wait for it and tell support. If only SkyHub cannot reach it, check outbound network access and the provider credentials. A retry with the same Idempotency-Key is safe: the provider never charges one key twice.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.

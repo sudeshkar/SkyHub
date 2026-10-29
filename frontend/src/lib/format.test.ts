@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayOffset, formatDuration, formatMoney, formatSearchDate, localTime, utcDateTime } from "./format";
+import { dayOffset, formatDuration, formatMoney, formatPrice, formatSearchDate, localTime, utcDateTime } from "./format";
 
 describe("formatDuration", () => {
   it.each([
@@ -60,5 +60,12 @@ describe("utcDateTime", () => {
 
   it("does not shift into the viewer's own zone", () => {
     expect(utcDateTime("2026-11-02T23:45:00+04:00")).toMatch(/^2 Nov.*19:45 UTC$/);
+  });
+});
+
+describe("formatPrice", () => {
+  it("keeps the cents", () => {
+    expect(formatPrice(861, "USD")).toBe("$861.00");
+    expect(formatPrice(310.5, "USD")).toBe("$310.50");
   });
 });

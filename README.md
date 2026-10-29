@@ -10,7 +10,7 @@ SkyHub is a **portfolio project, not a real airline**. It is built the way a pro
 |---|---|
 | **Search** | Find flights between hubs and destinations, including connections that change airports between DXB and DWC. |
 | **Choose seats** | A live seat map. Chosen seats are **held for 10 minutes** while you fill in passenger details, with a countdown. |
-| **Book** | One booking covers every flight of the trip. Repeating a request (double-click, retry) never books twice. |
+| **Book and pay** | One booking covers every flight of the trip. The server works out the price and charges it (demo payment methods, no real card); if booking then fails the charge is refunded. Repeating a request (double-click, retry) never books or charges twice. |
 | **Manage** | Look up a booking with its reference and a passenger's last name, then change seats or cancel. |
 | **Check in** | Opens 24 hours before departure. Gives each passenger a boarding pass with a signed barcode. |
 
@@ -37,6 +37,7 @@ More in [`docs/design/01-hld.md`](docs/design/01-hld.md) (high-level) and [`docs
 
 - **No double-selling.** Seats use optimistic locking (`@Version`). A test makes ten threads grab one seat at once; exactly one wins. → [ADR-0002](docs/adr/0002-optimistic-locking-for-seats.md)
 - **Holds that cannot be abused or outlive their time.** All-or-nothing, 10 minutes, expiry checked when a hold becomes a booking *and* swept every 30 s by one idempotent SQL statement. → [ADR-0012](docs/adr/0012-seat-holds-that-expire.md)
+- **Money that cannot be charged twice.** Charge first, book second, refund if booking fails; the charge key comes from the request's Idempotency-Key, so a retry after a crash finds the charge instead of making another. The price is the server's, never the browser's. → [ADR-0015](docs/adr/0015-payment-before-booking-with-compensation.md)
 - **Unique boarding numbers under concurrency** via a single atomic upsert; eight simultaneous check-ins get eight different numbers. Barcodes are HMAC-signed. → [ADR-0013](docs/adr/0013-online-check-in-and-boarding-passes.md)
 - **Security.** Deny-by-default Spring Security; short-lived booking-scoped JWTs; personal data encrypted at rest (AES-256-GCM) and idempotency keys stored hashed; DTOs only at API boundaries; rate limiting at the edge. → [ADR-0009](docs/adr/0009-rate-limiting-at-the-edge.md), [0010](docs/adr/0010-encrypt-personal-data-at-rest.md), [0011](docs/adr/0011-manage-booking-with-a-short-lived-token.md)
 - **Performance, measured on a laptop.** In-memory timetable: search went from 1,558 to 9,085 requests/s (median latency 92 ms to 2 ms). Cached seat maps: 1,762 to about 23,000 requests/s. → [ADR-0006](docs/adr/0006-in-memory-timetable-instead-of-result-cache.md)
@@ -116,6 +117,6 @@ docs/           design documents, decision records (ADRs), runbooks
 
 ## Status and honest limits
 
-Built so far: search, seat selection, booking, manage booking, seat holds, online check-in, observability.
+Built so far: search, seat selection, booking with payment (mock provider), manage booking, seat holds, online check-in, delays and cancellations, observability.
 
-Not built, on purpose or not yet: payments, user accounts, email delivery, disruptions and re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.
+Not built, on purpose or not yet: a real payment provider and refunds on cancellation, user accounts, staff login (operations use a shared key), email delivery, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.

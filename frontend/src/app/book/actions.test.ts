@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createHold, createPnr, releaseHold } from "@/lib/api/booking";
+import { createHold, createPnr, getQuote, releaseHold } from "@/lib/api/booking";
 import { rateLimit } from "@/lib/rate-limit";
-import { createBooking, holdSeats, releaseSeats, type BookingInput } from "./actions";
+import { createBooking, holdSeats, quoteTrip, releaseSeats, type BookingInput } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: {}, rateLimit: vi.fn(async () => ({ allowed: true })) }));
-vi.mock("@/lib/api/booking", () => ({ createPnr: vi.fn(), createHold: vi.fn(), releaseHold: vi.fn() }));
+vi.mock("@/lib/api/booking", () => ({
+  createPnr: vi.fn(),
+  createHold: vi.fn(),
+  releaseHold: vi.fn(),
+  getQuote: vi.fn(),
+}));
 
 const KEY = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const HOLD = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 const valid: BookingInput = {
+  paymentToken: "tok_visa",
   contactEmail: " priya@example.com ",
   segments: [{ flightNumber: "SK501", departureDate: "2026-11-02" }],
   passengers: [{ firstName: " Priya ", lastName: "O'Neil", seats: ["11D"] }],
@@ -25,6 +31,7 @@ describe("createBooking", () => {
 
     expect(createPnr).toHaveBeenCalledWith(
       {
+        paymentToken: "tok_visa",
         contactEmail: "priya@example.com",
         segments: valid.segments,
         passengers: [{ firstName: "Priya", lastName: "O'Neil", seats: ["11D"] }],
@@ -50,6 +57,27 @@ describe("createBooking", () => {
     vi.mocked(rateLimit).mockResolvedValueOnce({ allowed: false, retryAfterSeconds: 30 });
 
     expect(await createBooking(valid, KEY)).toEqual({ kind: "rate-limited", retryAfterSeconds: 30 });
+    expect(createPnr).not.toHaveBeenCalled();
+  });
+
+  it("sends the price the traveller saw so a changed price is caught", async () => {
+    await createBooking({ ...valid, expectedAmount: 200 }, KEY);
+
+    expect(createPnr).toHaveBeenCalledWith(expect.objectContaining({ expectedAmount: 200 }), KEY);
+  });
+
+  it.each([["4242 4242 4242 4242"], ["tok_"], ["TOK_VISA"], [""], ["tok_visa; drop table"]])(
+    "rejects the payment token %j without calling the API",
+    async (paymentToken) => {
+      expect((await createBooking({ ...valid, paymentToken }, KEY)).kind).toBe("rejected");
+      expect(createPnr).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a price that is not a positive amount", async () => {
+    for (const expectedAmount of [-1, 0, Number.NaN, Infinity]) {
+      expect((await createBooking({ ...valid, expectedAmount }, KEY)).kind).toBe("rejected");
+    }
     expect(createPnr).not.toHaveBeenCalled();
   });
 
@@ -127,5 +155,30 @@ describe("releaseSeats", () => {
 
     expect(releaseHold).toHaveBeenCalledTimes(1);
     expect(releaseHold).toHaveBeenCalledWith(HOLD);
+  });
+});
+
+describe("quoteTrip", () => {
+  const segments = [{ flightNumber: "SK501", departureDate: "2026-11-02" }];
+
+  beforeEach(() => {
+    vi.mocked(getQuote).mockReset();
+    vi.mocked(getQuote).mockResolvedValue({ kind: "quoted", amount: 861, currency: "USD" });
+  });
+
+  it("asks the booking service for the price of the trip", async () => {
+    expect(await quoteTrip(segments, 2)).toEqual({ kind: "quoted", amount: 861, currency: "USD" });
+    expect(getQuote).toHaveBeenCalledWith(segments, 2);
+  });
+
+  it.each([[0], [10], [1.5]])("rejects %s passengers without calling the API", async (count) => {
+    expect((await quoteTrip(segments, count)).kind).toBe("rejected");
+    expect(getQuote).not.toHaveBeenCalled();
+  });
+
+  it("rejects a forged flight or date without calling the API", async () => {
+    expect((await quoteTrip([{ flightNumber: "../x", departureDate: "2026-11-02" }], 1)).kind).toBe("rejected");
+    expect((await quoteTrip([{ flightNumber: "SK501", departureDate: "soon" }], 1)).kind).toBe("rejected");
+    expect(getQuote).not.toHaveBeenCalled();
   });
 });

@@ -84,6 +84,13 @@ export interface components {
             arrivalTime: string;
             /** @example A350 */
             aircraftType: string;
+            /**
+             * @description Price per passenger for this flight
+             * @example 310
+             */
+            fare: number;
+            /** @example USD */
+            currency: string;
         };
         Connection: {
             /** @example DXB */
