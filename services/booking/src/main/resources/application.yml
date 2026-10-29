@@ -1,0 +1,32 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: booking
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/booking}
+    username: ${DB_USERNAME:skyhub}
+    password: ${DB_PASSWORD:skyhub}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        # Flush seat updates in primary-key order so concurrent multi-seat bookings
+        # lock rows in the same order and cannot deadlock each other.
+        order_updates: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

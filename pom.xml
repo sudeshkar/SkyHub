@@ -19,8 +19,7 @@
 
     <modules>
         <module>services/flight-search</module>
-        <!-- <module>services/booking</module>  next slice -->
-
+        <module>services/booking</module>
     </modules>
 
     <properties>
