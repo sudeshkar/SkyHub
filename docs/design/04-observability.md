@@ -98,14 +98,28 @@ Alerts link to a short runbook in `docs/runbooks/` (what it means, how to confir
 - Grafana requires login; anonymous access is off.
 - Logs and traces are checked for PII by a test that books a PNR and asserts the email and names never appear in captured log output.
 
-## 8. Build plan (next slice, test-first)
+## 8. Build plan and status
 
-| Step | Deliverable | Verified by |
-|---|---|---|
-| 1 | Prometheus endpoint on a management port in both services; histograms on | Test: `/actuator/prometheus` on the management port, 403 on the public port |
-| 2 | Structured JSON logs with trace IDs; business events; PII test | Test captures logs during a booking: JSON, has `traceId`, no email or names |
-| 3 | Custom metrics (bookings, catalog, caches, timetable) | Tests assert counters change after actions |
-| 4 | Tracing across Next.js → booking → flight-search | One trace in Tempo shows all three services for a booking |
-| 5 | Docker Compose profile: Prometheus, Grafana, Loki, Tempo, Alloy | `docker compose --profile observability up` then all targets UP |
-| 6 | Provisioned dashboards and alert rules + runbooks | Load test makes panels move; a stopped flight-search fires the dependency alert |
-| 7 | Screenshots and an "Observability" section in the README | Portfolio |
+| Step | Deliverable | Verified by | Status |
+|---|---|---|---|
+| 1 | Prometheus endpoint on a management port (9081/9082); histograms on | Test: metrics on the management port, nothing on the public port | Done |
+| 2 | Structured JSON logs with trace IDs; business events; PII test | Test captures logs during a booking: JSON, `traceId`, no email or names | Done |
+| 3 | Custom metrics (bookings, catalog, caches, timetable) | Tests assert the series exist after real requests | Done |
+| 4 | Tracing booking → flight-search | One Tempo trace for `POST /pnrs` contains spans from both services; its trace ID matches the Loki log line | Done (Java) |
+| 4b | Tracing from Next.js (Server Actions, proxy) | One trace from the browser request to the database | Next |
+| 5 | Compose profile: Prometheus, Grafana, Loki, Tempo, Alloy | All scrape targets up; logs in Loki; traces in Tempo | Done |
+| 6 | Provisioned dashboard, alert rules, runbooks | Panels return data after traffic; 7 rules loaded; [runbooks](../runbooks/README.md) | Done |
+| 7 | README "Observability" section with screenshots | Portfolio | Next |
+
+**Known gaps:** database queries are not yet spans (add JDBC observation via `datasource-micrometer`); Spring Security adds several filter-chain spans per request (to be filtered); the Next.js server has no metrics or traces yet (4b).
+
+## 9. Running it locally
+
+```bash
+docker compose --profile observability up -d        # Prometheus :9090, Grafana :3001, Loki, Tempo, Alloy
+# run each service with:
+#   LOG_FILE=logs/<service>.log        JSON logs, collected into Loki
+#   TRACING_EXPORT_ENABLED=true        traces to Tempo (OTLP http://localhost:4318)
+```
+
+Grafana login comes from `.env` (`GRAFANA_ADMIN_PASSWORD`, see `.env.example`); anonymous access is disabled.

@@ -139,7 +139,7 @@ Delivered as thin vertical slices, each tested end to end and merged separately.
 | 2 | Booking: seat maps, multi-segment PNRs, manage booking | Done |
 | 3 | Security: Spring Security, rate limiting, encryption at rest | Done |
 | 4 | Performance: in-memory timetable, flight checks, seat-map cache, load tests | In review (#3) |
-| 5 | **Observability: Prometheus, Grafana, Loki, Tempo, SLOs, alerts, runbooks** | **Next** |
+| 5 | Observability: Prometheus, Grafana, Loki, Tempo, SLOs, alerts, runbooks | In review (Next.js tracing next) |
 | 6 | Seat holds with expiry, cancel and change seat (manage-booking JWT) | Planned |
 | 7 | Kafka + outbox: notification and loyalty-miles services | Planned |
 | 8 | Kong gateway, Kubernetes + Helm, SonarQube gate | Planned |

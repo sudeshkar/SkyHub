@@ -25,5 +25,55 @@ services:
       interval: 5s
       retries: 10
 
+  # ---- Observability (docs/design/04-observability.md): docker compose --profile observability up -d ----
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [observability]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  loki:
+    image: grafana/loki:3.5.3
+    profiles: [observability]
+    ports:
+      - "3100:3100"
+
+  tempo:
+    image: grafana/tempo:2.8.1
+    profiles: [observability]
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    ports:
+      - "3200:3200"
+      - "4318:4318" # OTLP over HTTP from the services
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+
+  alloy:
+    image: grafana/alloy:v1.10.0
+    profiles: [observability]
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./logs:/var/log/skyhub:ro
+    depends_on: [loki]
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: [observability]
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus, loki, tempo]
+
 volumes:
   postgres-data:
