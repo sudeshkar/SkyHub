@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Design tokens — "Desert Dusk". Components use these names only, never raw hex values. */
+@theme {
+  --color-ink: #0f1b2d;
+  --color-ink-soft: #24344a;
+  --color-ivory: #faf7f2;
+  --color-sand: #e9dfcc;
+  --color-sand-soft: #f3ede2;
+  --color-copper: #b5552b;
+  --color-copper-strong: #964420;
+  --color-gold: #b08d57;
+  --color-text: #1b2533;
+  --color-muted: #5b6472;
+  --color-amber: #8a5200;
+  --color-amber-bg: #fff6e0;
+  --color-amber-line: #e8c77a;
+  --color-danger: #a8321f;
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-display: var(--font-fraunces), Georgia, serif;
+}
+
+body {
+  background: var(--color-ivory);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-copper);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
