@@ -1,6 +1,5 @@
 package com.skyhub.flightsearch.domain;
 
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
@@ -13,5 +12,5 @@ public record FlightLeg(
         OffsetDateTime arrival,
         String aircraftType,
         BigDecimal fare,
-        String currency) implements Serializable {
+        String currency) {
 }

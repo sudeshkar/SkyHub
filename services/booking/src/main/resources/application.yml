@@ -1,7 +1,14 @@
 server:
+  tomcat:
+    # Default is 100 requests per connection, after which Tomcat closes it and clients reconnect.
+    # Behind a load balancer that keeps connections open, that churn costs throughput.
+    max-keep-alive-requests: 10000
   port: 8082
 
 spring:
+  autoconfigure:
+    # No users or logins in this service; don't create Spring Security's default in-memory user.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   application:
     name: booking
   threads:
