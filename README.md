@@ -1,0 +1,121 @@
+# SkyHub
+
+A two-hub airline booking platform: search flights across **Dubai International (DXB)** and **Al Maktoum (DWC)**, pick seats, book, manage the booking and check in online.
+
+SkyHub is a **portfolio project, not a real airline**. It is built the way a production system would be: API-first contracts, test-driven code, security and observability from the start, and a written reason for every significant decision.
+
+## What you can do
+
+| | |
+|---|---|
+| **Search** | Find flights between hubs and destinations, including connections that change airports between DXB and DWC. |
+| **Choose seats** | A live seat map. Chosen seats are **held for 10 minutes** while you fill in passenger details, with a countdown. |
+| **Book** | One booking covers every flight of the trip. Repeating a request (double-click, retry) never books twice. |
+| **Manage** | Look up a booking with its reference and a passenger's last name, then change seats or cancel. |
+| **Check in** | Opens 24 hours before departure. Gives each passenger a boarding pass with a signed barcode. |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    B[Browser] --> W[Next.js website<br/>:3000]
+    W -->|rate limit| R[(Redis)]
+    W --> FS[flight-search<br/>:8081]
+    W --> BK[booking<br/>:8082]
+    BK -->|does the flight operate,<br/>when does it leave| FS
+    FS --> P1[(PostgreSQL<br/>flightsearch)]
+    BK --> P2[(PostgreSQL<br/>booking)]
+```
+
+- **flight-search** keeps the timetable in memory (copy-on-write) and answers searches without touching the database.
+- **booking** owns seats, holds, bookings and check-in. One database per service.
+- **website** is the only thing the public reaches. It talks to the services from the server, so the browser never sees them or their tokens.
+
+More in [`docs/design/01-hld.md`](docs/design/01-hld.md) (high-level) and [`docs/design/02-lld.md`](docs/design/02-lld.md) (classes and patterns).
+
+## Engineering highlights
+
+- **No double-selling.** Seats use optimistic locking (`@Version`). A test makes ten threads grab one seat at once; exactly one wins. → [ADR-0002](docs/adr/0002-optimistic-locking-for-seats.md)
+- **Holds that cannot be abused or outlive their time.** All-or-nothing, 10 minutes, expiry checked when a hold becomes a booking *and* swept every 30 s by one idempotent SQL statement. → [ADR-0012](docs/adr/0012-seat-holds-that-expire.md)
+- **Unique boarding numbers under concurrency** via a single atomic upsert; eight simultaneous check-ins get eight different numbers. Barcodes are HMAC-signed. → [ADR-0013](docs/adr/0013-online-check-in-and-boarding-passes.md)
+- **Security.** Deny-by-default Spring Security; short-lived booking-scoped JWTs; personal data encrypted at rest (AES-256-GCM) and idempotency keys stored hashed; DTOs only at API boundaries; rate limiting at the edge. → [ADR-0009](docs/adr/0009-rate-limiting-at-the-edge.md), [0010](docs/adr/0010-encrypt-personal-data-at-rest.md), [0011](docs/adr/0011-manage-booking-with-a-short-lived-token.md)
+- **Performance, measured on a laptop.** In-memory timetable: search went from 1,558 to 9,085 requests/s (median latency 92 ms to 2 ms). Cached seat maps: 1,762 to about 23,000 requests/s. → [ADR-0006](docs/adr/0006-in-memory-timetable-instead-of-result-cache.md)
+- **Observability.** Prometheus metrics, JSON logs with trace ids, tracing, a Grafana dashboard, SLO alerts that each link to a [runbook](docs/runbooks/README.md). → [`docs/design/04-observability.md`](docs/design/04-observability.md)
+- **Architecture rules are tests.** ArchUnit fails the build if the domain layer imports Spring or the web layer reaches into persistence.
+
+All decisions are in [`docs/adr/`](docs/adr/README.md).
+
+## Tech stack
+
+Java 25, Spring Boot 4.1, Spring Security, Spring Data JPA (Hibernate), Flyway, PostgreSQL 18, Redis 8, Caffeine, OpenAPI Generator · Next.js 16, React 19, Tailwind 4 · JUnit, Mockito, Testcontainers, ArchUnit, Vitest · Micrometer, Prometheus, Grafana, Loki, Tempo. Why each was chosen: [`docs/design/00-tech-stack.md`](docs/design/00-tech-stack.md).
+
+## Run it locally
+
+You need **JDK 25**, **Node.js 24** (what CI uses), and **Docker**. The commands below are for a Unix-style shell (Git Bash on Windows works).
+
+**1. Start PostgreSQL and Redis**
+
+```bash
+docker compose up -d
+```
+
+**2. Create your keys.** The booking service refuses to start without them. Spring does not read `.env`, so export them in the shell that starts the service (see [`.env.example`](.env.example)). Use a different key for each.
+
+```bash
+export SKYHUB_PII_KEY=$(openssl rand -base64 32)
+export SKYHUB_MANAGE_TOKEN_KEY=$(openssl rand -base64 32)
+export SKYHUB_BOARDING_PASS_KEY=$(openssl rand -base64 32)
+```
+
+Keep `SKYHUB_PII_KEY` somewhere safe: bookings saved with one key cannot be read with another.
+
+**3. Start the two services** (each in its own terminal)
+
+```bash
+./mvnw -pl services/flight-search spring-boot:run     # http://localhost:8081
+./mvnw -pl services/booking spring-boot:run           # http://localhost:8082  (needs the keys from step 2)
+```
+
+**4. Start the website**
+
+```bash
+cd frontend
+npm ci
+npm run dev                                           # http://localhost:3000
+```
+
+Search a route, pick seats, book, then use **Manage booking** with your reference and a passenger's last name. Check-in appears per flight and is only accepted inside its window (24 hours to 60 minutes before departure), so to try it you need a flight leaving within the next day.
+
+**Optional: metrics, logs and traces**
+
+```bash
+docker compose --profile observability up -d          # Grafana at http://localhost:3001
+```
+
+Set `GRAFANA_ADMIN_PASSWORD` first (see `.env.example`). Open the *SkyHub overview* dashboard.
+
+## Tests
+
+```bash
+./mvnw verify                  # both services; integration tests start PostgreSQL in Docker
+cd frontend && npm test        # unit and component tests
+cd frontend && npm run typecheck && npx eslint src
+```
+
+CI runs the same on every pull request.
+
+## Repository layout
+
+```
+api-specs/      OpenAPI contracts, written before the code (the services generate their interfaces from them)
+services/       flight-search and booking (Spring Boot)
+frontend/       the website (Next.js)
+observability/  Prometheus rules, Grafana dashboard, Loki / Tempo / Alloy config
+docs/           design documents, decision records (ADRs), runbooks
+```
+
+## Status and honest limits
+
+Built so far: search, seat selection, booking, manage booking, seat holds, online check-in, observability.
+
+Not built, on purpose or not yet: payments, user accounts, email delivery, disruptions and re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.
