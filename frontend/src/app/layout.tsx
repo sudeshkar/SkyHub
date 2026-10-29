@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Fraunces, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import Image from "next/image";
 import Link from "next/link";
+import logo from "@/assets/skyhub-logo.png";
+import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -32,27 +35,23 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${plexSans.variable} ${plexMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <header className="bg-ink text-ivory">
-          <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
-            <Link href="/" className="font-display text-2xl tracking-tight">
-              SkyHub
+        <header className="border-b border-sand bg-white">
+          <div className="mx-auto flex h-20 max-w-5xl items-center justify-between px-4">
+            <Link href="/" aria-label="SkyHub home" className="shrink-0">
+              <Image src={logo} alt="SkyHub" className="h-14 w-auto sm:h-16" />
             </Link>
-            <nav aria-label="Main" className="flex gap-6 text-sm text-sand">
-              <Link href="/" className="hover:text-ivory">
+            <nav aria-label="Main" className="flex gap-6 text-sm font-medium text-ink">
+              <Link href="/" className="hover:text-copper">
                 Book
               </Link>
-              <Link href="/manage" className="hover:text-ivory">
+              <Link href="/manage" className="hover:text-copper">
                 Manage booking
               </Link>
             </nav>
           </div>
         </header>
         <main className="flex-1">{children}</main>
-        <footer className="border-t border-sand">
-          <p className="mx-auto max-w-5xl px-4 py-6 text-sm text-muted">
-            SkyHub is a portfolio project, not a real airline. Times are shown in each airport&apos;s local time.
-          </p>
-        </footer>
+        <SiteFooter />
       </body>
     </html>
   );

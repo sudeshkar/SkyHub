@@ -1,6 +1,7 @@
 package com.skyhub.booking.web;
 
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
+import com.skyhub.booking.domain.BookingCancelledException;
 import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
@@ -61,6 +62,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(IdempotencyKeyReusedException.class)
     ProblemDetail handleKeyReused(IdempotencyKeyReusedException ex) {
         return problem(HttpStatus.UNPROCESSABLE_CONTENT, "Idempotency-Key reused", ex.getMessage());
+    }
+
+    @ExceptionHandler(BookingCancelledException.class)
+    ProblemDetail handleCancelled(BookingCancelledException ex) {
+        return problem(HttpStatus.CONFLICT, "Booking cancelled", ex.getMessage());
     }
 
     @ExceptionHandler(FlightNotFoundException.class)

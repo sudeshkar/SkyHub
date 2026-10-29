@@ -44,6 +44,11 @@ public class PnrPassenger {
         this.seats = new ArrayList<>(seats);
     }
 
+    /** @return the seat that was replaced */
+    String replaceSeat(int segmentIndex, String seat) {
+        return seats.set(segmentIndex, seat);
+    }
+
     public String getFirstName() {
         return firstName;
     }

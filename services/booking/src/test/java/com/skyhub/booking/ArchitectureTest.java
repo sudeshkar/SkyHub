@@ -44,6 +44,17 @@ class ArchitectureTest {
             .that().resideInAPackage("com.skyhub.booking.application..")
             .should().dependOnClassesThat().resideInAPackage("com.skyhub.booking.api..");
 
+    /** Use cases know a ManageTokenIssuer port, never the JWT library behind it (ADR-0011). */
+    @ArchTest
+    static final ArchRule application_does_not_know_the_token_format = noClasses()
+            .that().resideInAPackage("com.skyhub.booking.application..")
+            .should().dependOnClassesThat().resideInAnyPackage("org.springframework.security..", "com.nimbusds..");
+
+    @ArchTest
+    static final ArchRule domain_does_not_know_security = noClasses()
+            .that().resideInAPackage("com.skyhub.booking.domain..")
+            .should().dependOnClassesThat().resideInAnyPackage("com.skyhub.booking.security..", "org.springframework.security..");
+
     @ArchTest
     static final ArchRule controllers_live_in_web = classes()
             .that().areAnnotatedWith(RestController.class)

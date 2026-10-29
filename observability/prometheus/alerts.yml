@@ -57,6 +57,14 @@ groups:
           summary: "Booking cannot reach flight-search (over 5% of calls failing)"
           runbook: "docs/runbooks/README.md#flightcatalogunavailable"
 
+      - alert: BookingReferenceGuessing
+        expr: sum(rate(skyhub_manage_actions_total{action="session_denied"}[5m])) > 0.2
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "Many failed manage-booking lookups (over 12 per minute for 5 minutes)"
+          runbook: "docs/runbooks/README.md#bookingreferenceguessing"
+
       - alert: ServiceDown
         expr: up == 0
         for: 1m

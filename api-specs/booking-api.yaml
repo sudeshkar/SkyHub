@@ -10,6 +10,7 @@ servers:
 tags:
   - name: SeatMaps
   - name: Pnrs
+  - name: ManageBooking
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -94,46 +95,148 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /api/v1/pnrs/{locator}/sessions:
+    post:
+      tags: [ManageBooking]
+      operationId: openManageSession
+      summary: Prove ownership of a booking and get a short-lived manage token
+      description: |
+        Checks the last name of any passenger on the booking. On success returns a signed token
+        (15 minutes) that authorises reading and changing this booking only. An unknown reference
+        and a wrong last name both return 404, so neither can be probed.
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManageSessionRequest'
+      responses:
+        '201':
+          description: Session opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManageSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
+
   /api/v1/pnrs/{locator}:
     get:
-      tags: [Pnrs]
+      tags: [ManageBooking]
       operationId: getPnr
-      summary: Retrieve a PNR
-      description: |
-        Requires the last name of any passenger on the booking, so a guessed locator alone reveals nothing.
-        An unknown locator and a wrong last name both return 404.
+      summary: Retrieve a booking
+      security:
+        - manageToken: []
       parameters:
-        - name: locator
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[A-Z0-9]{6}$'
-        - name: lastName
-          in: query
-          required: true
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 50
+        - $ref: '#/components/parameters/Locator'
       responses:
         '200':
-          description: PNR
+          description: The booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pnr'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
+
+  /api/v1/pnrs/{locator}/cancellation:
+    post:
+      tags: [ManageBooking]
+      operationId: cancelPnr
+      summary: Cancel a booking and release its seats
+      description: Idempotent. Cancelling an already-cancelled booking returns it unchanged.
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      responses:
+        '200':
+          description: The cancelled booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pnr'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
+
+  /api/v1/pnrs/{locator}/seat-assignments:
+    put:
+      tags: [ManageBooking]
+      operationId: changeSeat
+      summary: Move one passenger to another seat on one flight
+      description: Books the new seat and releases the old one in a single transaction.
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeatChange'
+      responses:
+        '200':
+          description: The updated booking
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Pnr'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
-          description: No booking matches this locator and last name
+          $ref: '#/components/responses/PnrNotFound'
+        '409':
+          description: The seat is taken, or the booking is cancelled
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
 
 components:
+  securitySchemes:
+    manageToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived token from POST /api/v1/pnrs/{locator}/sessions, valid for that booking only.
+
+  parameters:
+    Locator:
+      name: locator
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Z0-9]{6}$'
+
   responses:
+    PnrNotFound:
+      description: No booking matches
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing, invalid or expired manage token
+    Forbidden:
+      description: The token belongs to a different booking
     FlightNotFound:
       description: The flight does not operate on that date
       content:
@@ -297,6 +400,45 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    ManageSessionRequest:
+      type: object
+      required: [lastName]
+      properties:
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 50
+
+    ManageSession:
+      type: object
+      required: [accessToken, tokenType, expiresAt, pnr]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresAt:
+          type: string
+          format: date-time
+        pnr:
+          $ref: '#/components/schemas/Pnr'
+
+    SeatChange:
+      type: object
+      required: [passengerIndex, segmentIndex, seatNumber]
+      properties:
+        passengerIndex:
+          type: integer
+          minimum: 0
+          maximum: 8
+        segmentIndex:
+          type: integer
+          minimum: 0
+          maximum: 3
+        seatNumber:
+          $ref: '#/components/schemas/SeatNumber'
 
     Problem:
       type: object

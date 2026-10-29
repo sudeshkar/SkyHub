@@ -6,7 +6,6 @@ import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.LocatorGenerator;
 import com.skyhub.booking.domain.Pnr;
-import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.SeatInventory;
@@ -104,13 +103,6 @@ public class BookingService {
             // Seats changed (or a conflict showed this instance's map is stale): show fresh maps next time.
             command.segments().forEach(s -> seatMaps.invalidate(s.flightNumber(), s.departureDate()));
         }
-    }
-
-    public PnrView findPnr(String locator, String lastName) {
-        return pnrs.findByLocator(locator)
-                .filter(pnr -> pnr.hasPassengerWithLastName(lastName))
-                .map(PnrView::of)
-                .orElseThrow(() -> new PnrNotFoundException("No booking matches this reference and last name"));
     }
 
     private BookingResult book(CreatePnrCommand command, ContactEmail contactEmail, String keyHash,

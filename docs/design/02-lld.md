@@ -455,7 +455,11 @@ Every pattern here solves a concrete problem in the code; none is added "just in
 | Internal details in errors | RFC 9457 problem details with fixed messages; generic 500 | `ApiExceptionHandler` |
 | Tampered client input | Server Actions re-validate everything; the Java API validates again against the contract | `actions.ts`, generated validation |
 | Personal data in URLs | Manage booking is a POST, so the last name never appears in a URL, history or access log | `ManageForm` |
+| Taking over someone else's booking | A last-name check opens a 15-minute JWT for that one booking; every manage endpoint requires a token whose subject is the booking in the URL (401 without, 403 for another booking) | `OwnsBookingAuthorization`, ADR-0011 |
+| Stolen manage token | httpOnly, SameSite=Strict cookie scoped to `/manage`, read only by the server; short life; no personal data inside; `toString()` never prints it | `manage-session.ts`, `ManageToken` |
+| Guessing references and surnames | Same 404 for unknown reference and wrong name; 10 lookups per 15 min per client; `session_denied` metric and alert | `ManageBookingService`, `BookingReferenceGuessing` |
+| Cancel racing a seat change | `Pnr` is optimistically locked; both changes are single transactions | `Pnr.version`, `ManageBookingService` |
 
 Rate limits run where the real client IP is visible: the Next.js server now, the Kong gateway later. Inside the Java services every request comes from the Next.js server, so per-IP limits there would throttle everyone together. Limits count once per request (in the proxy or an action), never during render, which can run more than once.
 
-Not yet in place: authentication for staff tools (JWT via the gateway), a manage-booking session token (arrives with the first manage operation), and service-to-service authentication (mTLS or signed tokens).
+Not yet in place: authentication for staff tools (JWT via the gateway), revoking a manage token before it expires, and service-to-service authentication (mTLS or signed tokens).

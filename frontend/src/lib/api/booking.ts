@@ -55,13 +55,81 @@ export async function createPnr(request: CreatePnrRequest, idempotencyKey: strin
   return { kind: "unavailable" };
 }
 
-/** Last name travels in the query string server-to-server only; it never appears in a browser URL. */
-export async function getPnr(locator: string, lastName: string): Promise<Pnr | "not-found" | "unavailable"> {
-  const response = await call(
-    `/api/v1/pnrs/${encodeURIComponent(locator)}?lastName=${encodeURIComponent(lastName)}`,
-  );
-  if (!response) return "unavailable";
-  if (response.ok) return (await response.json()) as Pnr;
-  if (response.status === 404 || response.status === 400) return "not-found";
-  return "unavailable";
+export type SessionOutcome =
+  | { kind: "opened"; accessToken: string; expiresAt: string; pnr: Pnr }
+  | { kind: "not-found" }
+  | { kind: "unavailable" };
+
+/** What came back from a call that needs a manage token. */
+export type ManageOutcome =
+  | { kind: "ok"; pnr: Pnr }
+  | { kind: "unauthorized" } // token missing, expired, or for another booking
+  | { kind: "not-found" }
+  | { kind: "seat-taken"; detail: string }
+  | { kind: "cancelled"; detail: string }
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+export type SeatChange = components["schemas"]["SeatChange"];
+
+/**
+ * Proves ownership with a passenger's last name and returns a short-lived token for that booking.
+ * An unknown reference and a wrong last name look the same, here and in the API.
+ */
+export async function openManageSession(locator: string, lastName: string): Promise<SessionOutcome> {
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lastName }),
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 201) {
+    const session = (await response.json()) as components["schemas"]["ManageSession"];
+    return { kind: "opened", accessToken: session.accessToken, expiresAt: session.expiresAt, pnr: session.pnr };
+  }
+  if (response.status === 404 || response.status === 400) return { kind: "not-found" };
+  return { kind: "unavailable" };
+}
+
+async function managed(path: string, token: string, init: RequestInit = {}): Promise<ManageOutcome> {
+  const response = await call(path, {
+    ...init,
+    headers: { ...init.headers, Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) return { kind: "ok", pnr: (await response.json()) as Pnr };
+  switch (response.status) {
+    case 401:
+    case 403:
+      return { kind: "unauthorized" };
+    case 404:
+      return { kind: "not-found" };
+    case 409: {
+      const problem = (await response.json().catch(() => null)) as Problem | null;
+      const detail = problem?.detail ?? "That change could not be made.";
+      return problem?.title === "Booking cancelled" ? { kind: "cancelled", detail } : { kind: "seat-taken", detail };
+    }
+    case 400:
+    case 422:
+      return { kind: "rejected", detail: await problemDetail(response, "Please check your details.") };
+    default:
+      return { kind: "unavailable" };
+  }
+}
+
+export function getManagedPnr(locator: string, token: string): Promise<ManageOutcome> {
+  return managed(`/api/v1/pnrs/${encodeURIComponent(locator)}`, token);
+}
+
+export function cancelPnr(locator: string, token: string): Promise<ManageOutcome> {
+  return managed(`/api/v1/pnrs/${encodeURIComponent(locator)}/cancellation`, token, { method: "POST" });
+}
+
+export function changeSeat(locator: string, token: string, change: SeatChange): Promise<ManageOutcome> {
+  return managed(`/api/v1/pnrs/${encodeURIComponent(locator)}/seat-assignments`, token, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(change),
+  });
 }

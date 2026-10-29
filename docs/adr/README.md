@@ -14,3 +14,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | 0008 | `Idempotency-Key` on `POST /pnrs` | ✍️ To write |
 | [0009](0009-rate-limiting-at-the-edge.md) | Rate limiting at the edge with a sliding window counter | Accepted |
 | [0010](0010-encrypt-personal-data-at-rest.md) | Encrypt personal data at rest; hash what is only compared | Accepted |
+| [0011](0011-manage-booking-with-a-short-lived-token.md) | Manage a booking with a short-lived, booking-scoped token | Accepted |

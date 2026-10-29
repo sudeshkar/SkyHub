@@ -23,7 +23,6 @@ import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.Pnr;
-import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.SeatInventory;
@@ -184,17 +183,6 @@ class BookingServiceTest {
         assertThatExceptionOfType(SeatUnavailableException.class)
                 .isThrownBy(() -> service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY));
         verify(pnrs, never()).saveAndFlush(any());
-    }
-
-    @Test
-    void should_find_pnr_by_locator_and_last_name() {
-        var pnr = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(SK501),
-                List.of(new PnrPassenger("Priya", "Perera", List.of("11D"))), NOW, KEY, "fingerprint");
-        when(pnrs.findByLocator("ABC234")).thenReturn(Optional.of(pnr));
-
-        assertThat(service.findPnr("ABC234", "perera").locator()).isEqualTo("ABC234");
-        assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.findPnr("ABC234", "Silva"));
-        assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.findPnr("ZZZZZZ", "Perera"));
     }
 
     private static CreatePnrCommand command(PassengerCommand... passengers) {
