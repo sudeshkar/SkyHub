@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
@@ -11,7 +12,8 @@ import {
   type CheckInActionResult,
   type ManageActionResult,
 } from "@/app/manage/actions";
-import type { BoardingPass, Pnr, SeatMap as SeatMapData } from "@/lib/api/booking";
+import type { BoardingPass, Disruption, Pnr, SeatMap as SeatMapData } from "@/lib/api/booking";
+import { utcDateTime } from "@/lib/format";
 import { SeatMap } from "@/components/booking/seat-map";
 import { BoardingPassCard } from "./boarding-pass-card";
 
@@ -59,7 +61,16 @@ function checkInFailure(result: Exclude<CheckInActionResult, { kind: "ok" }>): s
 }
 
 /** `boardingPasses` maps a flight's position in the booking to its passes, for flights already checked in. */
-export function ManageView({ pnr, boardingPasses = {} }: { pnr: Pnr; boardingPasses?: Record<number, BoardingPass[]> }) {
+export function ManageView({
+  pnr,
+  boardingPasses = {},
+  disruptions = [],
+}: {
+  pnr: Pnr;
+  boardingPasses?: Record<number, BoardingPass[]>;
+  /** Delays and cancellations on this booking's flights; `segmentIndex` is the flight's position in the booking. */
+  disruptions?: Disruption[];
+}) {
   const router = useRouter();
   const [passes, setPasses] = useState<Record<number, BoardingPass[]>>(boardingPasses);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -172,58 +183,64 @@ export function ManageView({ pnr, boardingPasses = {} }: { pnr: Pnr; boardingPas
       )}
 
       <section aria-label="Flights and seats" className="space-y-8">
-        {pnr.segments.map((segment, s) => (
-          <div key={`${segment.flightNumber}-${segment.departureDate}`}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-mono text-lg">
-                {segment.flightNumber} <span className="text-muted">· {segment.departureDate}</span>
-              </h2>
-              {passes[s] ? (
-                <p className="text-sm font-semibold text-copper">Checked in</p>
-              ) : (
-                !cancelled && (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => checkIn(s)}
-                    aria-label={`Check in for ${segment.flightNumber}`}
-                    className="rounded-md border border-copper px-4 py-1.5 text-sm font-semibold text-copper hover:bg-sand-soft disabled:opacity-50"
-                  >
-                    Check in
-                  </button>
-                )
-              )}
-            </div>
-            <ul className="mt-3 divide-y divide-sand rounded-lg border border-sand bg-white">
-              {pnr.passengers.map((passenger, p) => (
-                <li key={`${passenger.firstName}-${passenger.lastName}-${p}`} className="flex items-center justify-between gap-4 px-5 py-3">
-                  <span>
-                    {passenger.firstName} {passenger.lastName}
-                  </span>
-                  <span className="flex items-center gap-4">
-                    <span className="font-mono text-sm">Seat {passenger.seats[s]}</span>
+        {pnr.segments.map((segment, s) => {
+          const disruption = disruptions.find((d) => d.segmentIndex === s);
+          const flightCancelled = disruption?.type === "CANCELLED";
+          return (
+            <div key={`${segment.flightNumber}-${segment.departureDate}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-mono text-lg">
+                  {segment.flightNumber} <span className="text-muted">· {segment.departureDate}</span>
+                </h2>
+                {passes[s] ? (
+                  <p className="text-sm font-semibold text-copper">Checked in</p>
+                ) : (
+                  !cancelled &&
+                  !flightCancelled && (
                     <button
                       type="button"
-                      disabled={cancelled || pending || Boolean(passes[s])}
-                      onClick={() => openPicker(p, s)}
-                      aria-label={`Change seat for ${passenger.firstName} ${passenger.lastName} on ${segment.flightNumber}`}
-                      className="text-sm text-copper hover:text-copper-strong disabled:cursor-not-allowed disabled:text-muted"
+                      disabled={pending}
+                      onClick={() => checkIn(s)}
+                      aria-label={`Check in for ${segment.flightNumber}`}
+                      className="rounded-md border border-copper px-4 py-1.5 text-sm font-semibold text-copper hover:bg-sand-soft disabled:opacity-50"
                     >
-                      Change seat
+                      Check in
                     </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {passes[s] && !cancelled && (
-              <ul aria-label={`Boarding passes for ${segment.flightNumber}`} className="mt-3 grid gap-3 sm:grid-cols-2">
-                {passes[s].map((pass) => (
-                  <BoardingPassCard key={pass.barcode} pass={pass} />
+                  )
+                )}
+              </div>
+              {disruption && <DisruptionNotice flightNumber={segment.flightNumber} disruption={disruption} />}
+              <ul className="mt-3 divide-y divide-sand rounded-lg border border-sand bg-white">
+                {pnr.passengers.map((passenger, p) => (
+                  <li key={`${passenger.firstName}-${passenger.lastName}-${p}`} className="flex items-center justify-between gap-4 px-5 py-3">
+                    <span>
+                      {passenger.firstName} {passenger.lastName}
+                    </span>
+                    <span className="flex items-center gap-4">
+                      <span className="font-mono text-sm">Seat {passenger.seats[s]}</span>
+                      <button
+                        type="button"
+                        disabled={cancelled || flightCancelled || pending || Boolean(passes[s])}
+                        onClick={() => openPicker(p, s)}
+                        aria-label={`Change seat for ${passenger.firstName} ${passenger.lastName} on ${segment.flightNumber}`}
+                        className="text-sm text-copper hover:text-copper-strong disabled:cursor-not-allowed disabled:text-muted"
+                      >
+                        Change seat
+                      </button>
+                    </span>
+                  </li>
                 ))}
               </ul>
-            )}
-          </div>
-        ))}
+              {passes[s] && !cancelled && (
+                <ul aria-label={`Boarding passes for ${segment.flightNumber}`} className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {passes[s].map((pass) => (
+                    <BoardingPassCard key={pass.barcode} pass={pass} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </section>
 
       {editing && (
@@ -305,5 +322,39 @@ export function ManageView({ pnr, boardingPasses = {} }: { pnr: Pnr; boardingPas
         </section>
       )}
     </div>
+  );
+}
+
+/** A delay is information; a cancellation needs action, so it is announced as an alert with a way forward. */
+function DisruptionNotice({ flightNumber, disruption }: { flightNumber: string; disruption: Disruption }) {
+  if (disruption.type === "CANCELLED") {
+    return (
+      <div
+        role="alert"
+        aria-label={`${flightNumber} is cancelled`}
+        className="mt-3 border-l-4 border-danger bg-white px-4 py-3 text-sm"
+      >
+        <p className="font-semibold text-danger">This flight is cancelled.</p>
+        {disruption.reason && <p className="mt-1 text-muted">{disruption.reason}</p>}
+        <p className="mt-2">
+          You can cancel this booking below and{" "}
+          <Link href="/" className="text-copper underline hover:text-copper-strong">
+            Search for another flight
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  }
+  return (
+    <p
+      role="status"
+      aria-label={`${flightNumber} is delayed`}
+      className="mt-3 border-l-4 border-copper bg-white px-4 py-3 text-sm"
+    >
+      <span className="font-semibold">Delayed.</span> New departure{" "}
+      {disruption.revisedDeparture ? utcDateTime(disruption.revisedDeparture) : "to be confirmed"}.
+      {disruption.reason && <span className="text-muted"> {disruption.reason}</span>}
+    </p>
   );
 }

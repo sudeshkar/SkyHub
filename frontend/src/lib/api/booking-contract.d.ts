@@ -179,6 +179,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/disruptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a delay or cancellation of one flight on one date
+         * @description Idempotent: recording again for the same flight and date replaces the earlier record, so a retry or a
+         *     correction is the same request. Returns how many active bookings are on the flight.
+         */
+        post: operations["recordDisruption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pnrs/{locator}/disruptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Delays and cancellations on the flights of this booking */
+        get: operations["getDisruptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pnrs/{locator}/check-ins/{segmentIndex}": {
         parameters: {
             query?: never;
@@ -202,6 +240,42 @@ export interface components {
     schemas: {
         /** @example SK501 */
         FlightNumber: string;
+        /** @enum {string} */
+        DisruptionType: "DELAYED" | "CANCELLED";
+        RecordDisruptionRequest: {
+            flightNumber: components["schemas"]["FlightNumber"];
+            /**
+             * Format: date
+             * @description The flight's scheduled departure date (UTC)
+             */
+            departureDate: string;
+            type: components["schemas"]["DisruptionType"];
+            /**
+             * Format: date-time
+             * @description Required for DELAYED, must be omitted for CANCELLED
+             */
+            revisedDeparture?: string;
+            /** @description Shown to travellers. Keep it free of personal data. */
+            reason?: string;
+        };
+        DisruptionRecorded: {
+            /** @description Active bookings on this flight and date */
+            affectedBookings: number;
+        };
+        Disruption: {
+            /** @description Position of the flight in this booking */
+            segmentIndex: number;
+            flightNumber: components["schemas"]["FlightNumber"];
+            /** Format: date */
+            departureDate: string;
+            type: components["schemas"]["DisruptionType"];
+            /** Format: date-time */
+            revisedDeparture?: string;
+            reason?: string;
+        };
+        BookingDisruptions: {
+            items: components["schemas"]["Disruption"][];
+        };
         /** @example 11D */
         SeatNumber: string;
         /** @enum {string} */
@@ -684,6 +758,57 @@ export interface operations {
                 };
             };
             503: components["responses"]["ScheduleUnavailable"];
+        };
+    };
+    recordDisruption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordDisruptionRequest"];
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisruptionRecorded"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getDisruptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locator: components["parameters"]["Locator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Possibly empty */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingDisruptions"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["PnrNotFound"];
         };
     };
     getBoardingPasses: {
