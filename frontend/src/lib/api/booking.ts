@@ -55,6 +55,41 @@ export async function createPnr(request: CreatePnrRequest, idempotencyKey: strin
   return { kind: "unavailable" };
 }
 
+export type HoldOutcome =
+  | { kind: "held"; holdId: string; expiresAt: string }
+  | { kind: "seat-taken"; detail: string }
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+export type HoldItem = components["schemas"]["HoldItem"];
+
+/** Holds every seat or none for a few minutes, so nobody else can take them while the traveller checks out. */
+export async function createHold(items: HoldItem[]): Promise<HoldOutcome> {
+  const response = await call("/api/v1/holds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) {
+    const hold = (await response.json()) as components["schemas"]["Hold"];
+    return { kind: "held", holdId: hold.holdId, expiresAt: hold.expiresAt };
+  }
+  if (response.status === 409) {
+    return { kind: "seat-taken", detail: await problemDetail(response, "A selected seat was just taken.") };
+  }
+  if (response.status === 400 || response.status === 404 || response.status === 422) {
+    return { kind: "rejected", detail: await problemDetail(response, "Please check your seats.") };
+  }
+  return { kind: "unavailable" };
+}
+
+/** Safe to repeat. Returns nothing: a hold that is already gone is the outcome we wanted. */
+export async function releaseHold(holdId: string): Promise<void> {
+  await call(`/api/v1/holds/${encodeURIComponent(holdId)}`, { method: "DELETE", cache: "no-store" });
+}
+
 export type SessionOutcome =
   | { kind: "opened"; accessToken: string; expiresAt: string; pnr: Pnr }
   | { kind: "not-found" }

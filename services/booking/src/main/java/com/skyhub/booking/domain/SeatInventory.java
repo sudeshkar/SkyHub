@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.time.Instant;
 import java.time.LocalDate;
 
 /** One seat on one flight on one date. See docs/adr/0002-optimistic-locking-for-seats.md. */
@@ -46,6 +47,12 @@ public class SeatInventory {
     @Column(length = 6)
     private String pnrLocator;
 
+    /** Set while the seat is HELD: who holds it (an unguessable id) and until when (ADR-0012). */
+    @Column(length = 36)
+    private String holdId;
+
+    private Instant heldUntil;
+
     @Version
     private long version;
 
@@ -71,6 +78,52 @@ public class SeatInventory {
         }
         status = SeatStatus.BOOKED;
         pnrLocator = locator;
+    }
+
+    /** Holds an available seat for whoever knows {@code holdId}, until {@code until}. */
+    public void hold(String holdId, Instant until) {
+        requireAvailable();
+        status = SeatStatus.HELD;
+        this.holdId = holdId;
+        this.heldUntil = until;
+    }
+
+    /** Lets a caller check a whole group of seats before changing any of them. */
+    public void requireAvailable() {
+        if (status != SeatStatus.AVAILABLE) {
+            throw new SeatUnavailableException(
+                    "Seat " + seatNumber + " on " + flightNumber + " " + departureDate + " is no longer available");
+        }
+    }
+
+    /** Lets go of a hold. Only its owner can; anything else (already released, booked, someone else's) is ignored. */
+    public void releaseHold(String holdId) {
+        if (status == SeatStatus.HELD && holdId.equals(this.holdId)) {
+            clearHold();
+        }
+    }
+
+    /**
+     * Turns a hold into a booking. The expiry time is checked here, not left to the cleanup job, so an
+     * expired hold can never be used however late the cleanup runs.
+     */
+    public void bookFromHold(String holdId, String locator, Instant now) {
+        if (status != SeatStatus.HELD || !holdId.equals(this.holdId)) {
+            throw new SeatUnavailableException(
+                    "Seat " + seatNumber + " on " + flightNumber + " " + departureDate + " is not held for this booking");
+        }
+        if (!now.isBefore(heldUntil)) {
+            throw new SeatUnavailableException("Your hold on seat " + seatNumber + " on " + flightNumber + " has expired");
+        }
+        clearHold();
+        status = SeatStatus.BOOKED;
+        pnrLocator = locator;
+    }
+
+    private void clearHold() {
+        status = SeatStatus.AVAILABLE;
+        holdId = null;
+        heldUntil = null;
     }
 
     /**
@@ -112,6 +165,14 @@ public class SeatInventory {
 
     public SeatStatus getStatus() {
         return status;
+    }
+
+    public String getHoldId() {
+        return holdId;
+    }
+
+    public Instant getHeldUntil() {
+        return heldUntil;
     }
 
     public String getPnrLocator() {

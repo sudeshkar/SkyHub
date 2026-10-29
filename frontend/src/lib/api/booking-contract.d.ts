@@ -21,6 +21,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/holds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hold seats for a few minutes while the traveller completes a booking
+         * @description Holds every requested seat or none. The hold lasts 10 minutes. Pass the returned `holdId` to
+         *     `POST /pnrs` to turn the held seats into a booking; if it has expired, the booking is refused.
+         */
+        post: operations["createHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/holds/{holdId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Let go of held seats
+         * @description Safe to repeat. An unknown or already-expired hold is not an error.
+         */
+        delete: operations["releaseHold"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pnrs": {
         parameters: {
             query?: never;
@@ -128,7 +169,7 @@ export interface components {
         /** @enum {string} */
         Cabin: "BUSINESS" | "ECONOMY";
         /** @enum {string} */
-        SeatStatus: "AVAILABLE" | "BOOKED";
+        SeatStatus: "AVAILABLE" | "HELD" | "BOOKED";
         Seat: {
             seatNumber: components["schemas"]["SeatNumber"];
             row: number;
@@ -155,6 +196,11 @@ export interface components {
             seats: components["schemas"]["SeatNumber"][];
         };
         CreatePnrRequest: {
+            /**
+             * Format: uuid
+             * @description Hold made earlier for these exact seats. Without it, the seats are booked directly.
+             */
+            holdId?: string;
             /** Format: email */
             contactEmail: string;
             segments: components["schemas"]["Segment"][];
@@ -193,6 +239,22 @@ export interface components {
             passengerIndex: number;
             segmentIndex: number;
             seatNumber: components["schemas"]["SeatNumber"];
+        };
+        HoldItem: {
+            flightNumber: components["schemas"]["FlightNumber"];
+            /** Format: date */
+            departureDate: string;
+            seatNumber: components["schemas"]["SeatNumber"];
+        };
+        CreateHoldRequest: {
+            items: components["schemas"]["HoldItem"][];
+        };
+        Hold: {
+            /** Format: uuid */
+            holdId: string;
+            /** Format: date-time */
+            expiresAt: string;
+            items: components["schemas"]["HoldItem"][];
         };
         /** @description RFC 9457 problem details */
         Problem: {
@@ -290,6 +352,62 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             404: components["responses"]["FlightNotFound"];
             503: components["responses"]["ScheduleUnavailable"];
+        };
+    };
+    createHold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateHoldRequest"];
+            };
+        };
+        responses: {
+            /** @description Seats held */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Hold"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["FlightNotFound"];
+            /** @description At least one seat is not available; nothing was held */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            503: components["responses"]["ScheduleUnavailable"];
+        };
+    };
+    releaseHold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                holdId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The seats are no longer held by this hold */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     createPnr: {

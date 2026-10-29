@@ -11,6 +11,7 @@ tags:
   - name: SeatMaps
   - name: Pnrs
   - name: ManageBooking
+  - name: Holds
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -44,6 +45,57 @@ paths:
           $ref: '#/components/responses/FlightNotFound'
         '503':
           $ref: '#/components/responses/ScheduleUnavailable'
+
+  /api/v1/holds:
+    post:
+      tags: [Holds]
+      operationId: createHold
+      summary: Hold seats for a few minutes while the traveller completes a booking
+      description: |
+        Holds every requested seat or none. The hold lasts 10 minutes. Pass the returned `holdId` to
+        `POST /pnrs` to turn the held seats into a booking; if it has expired, the booking is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHoldRequest'
+      responses:
+        '201':
+          description: Seats held
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/FlightNotFound'
+        '409':
+          description: At least one seat is not available; nothing was held
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
+
+  /api/v1/holds/{holdId}:
+    delete:
+      tags: [Holds]
+      operationId: releaseHold
+      summary: Let go of held seats
+      description: Safe to repeat. An unknown or already-expired hold is not an error.
+      parameters:
+        - name: holdId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: The seats are no longer held by this hold
 
   /api/v1/pnrs:
     post:
@@ -277,7 +329,7 @@ components:
 
     SeatStatus:
       type: string
-      enum: [AVAILABLE, BOOKED]
+      enum: [AVAILABLE, HELD, BOOKED]
 
     Seat:
       type: object
@@ -343,6 +395,10 @@ components:
       type: object
       required: [contactEmail, segments, passengers]
       properties:
+        holdId:
+          type: string
+          format: uuid
+          description: Hold made earlier for these exact seats. Without it, the seats are booked directly.
         contactEmail:
           type: string
           format: email
@@ -439,6 +495,44 @@ components:
           maximum: 3
         seatNumber:
           $ref: '#/components/schemas/SeatNumber'
+
+    HoldItem:
+      type: object
+      required: [flightNumber, departureDate, seatNumber]
+      properties:
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+        seatNumber:
+          $ref: '#/components/schemas/SeatNumber'
+
+    CreateHoldRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 36
+          items:
+            $ref: '#/components/schemas/HoldItem'
+
+    Hold:
+      type: object
+      required: [holdId, expiresAt, items]
+      properties:
+        holdId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HoldItem'
 
     Problem:
       type: object
