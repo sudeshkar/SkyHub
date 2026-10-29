@@ -6,6 +6,8 @@ import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.SeatInventory;
 import com.skyhub.booking.domain.SeatLayout;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.time.Duration;
 import java.time.LocalDate;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -32,14 +34,16 @@ public class SeatInventoryInitializer {
     private final Cache<String, Boolean> initialized = Caffeine.newBuilder()
             .maximumSize(100_000)
             .expireAfterAccess(Duration.ofDays(1))
+            .recordStats()
             .build();
 
     public SeatInventoryInitializer(SeatInventoryRepository seats, SeatLayout layout, FlightCatalog flights,
-                                    TransactionOperations transactions) {
+                                    TransactionOperations transactions, MeterRegistry registry) {
         this.seats = seats;
         this.layout = layout;
         this.flights = flights;
         this.transactions = transactions;
+        CaffeineCacheMetrics.monitor(registry, initialized, "seatInventory");
     }
 
     /**

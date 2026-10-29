@@ -6,7 +6,9 @@ import static org.mockito.Mockito.when;
 
 import com.skyhub.flightsearch.domain.FlightSchedule;
 import com.skyhub.flightsearch.persistence.FlightScheduleRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -20,13 +22,13 @@ class TimetableCacheTest {
     void should_load_the_timetable_at_startup() {
         when(repository.findAll()).thenReturn(List.of(schedule("SK501")));
 
-        assertThat(new TimetableCache(repository).current().flight("SK501")).isPresent();
+        assertThat(new TimetableCache(repository, new SimpleMeterRegistry(), Clock.systemUTC()).current().flight("SK501")).isPresent();
     }
 
     @Test
     void should_publish_a_new_snapshot_on_refresh() {
         when(repository.findAll()).thenReturn(List.of(schedule("SK501")), List.of(schedule("SK501"), schedule("SK901")));
-        var cache = new TimetableCache(repository);
+        var cache = new TimetableCache(repository, new SimpleMeterRegistry(), Clock.systemUTC());
 
         cache.refresh();
 
@@ -37,7 +39,7 @@ class TimetableCacheTest {
     void should_keep_serving_the_previous_snapshot_when_refresh_fails() {
         when(repository.findAll()).thenReturn(List.of(schedule("SK501")))
                 .thenThrow(new DataAccessResourceFailureException("database down"));
-        var cache = new TimetableCache(repository);
+        var cache = new TimetableCache(repository, new SimpleMeterRegistry(), Clock.systemUTC());
 
         cache.refresh();
 

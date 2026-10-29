@@ -20,3 +20,6 @@ Thumbs.db
 # Frontend (Phase 2)
 node_modules/
 .next/
+
+# Service log files collected by Alloy
+logs/

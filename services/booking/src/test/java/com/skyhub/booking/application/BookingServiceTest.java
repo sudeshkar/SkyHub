@@ -32,6 +32,7 @@ import com.skyhub.booking.domain.SeatStatus;
 import com.skyhub.booking.domain.SeatUnavailableException;
 import com.skyhub.booking.persistence.PnrRepository;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -58,9 +59,10 @@ class BookingServiceTest {
     private final SeatInventoryInitializer initializer = mock(SeatInventoryInitializer.class);
     private final Map<String, SeatInventory> inventory = new HashMap<>();
 
-    private final BookingService service = new BookingService(seats, pnrs, initializer, new SeatMapCache(), new CreatePnrValidator(List.of(new SegmentCountRule(), new PassengerCountRule(),
+    private final BookingService service = new BookingService(seats, pnrs, initializer, new SeatMapCache(new SimpleMeterRegistry()), new CreatePnrValidator(List.of(new SegmentCountRule(), new PassengerCountRule(),
                     new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
-            Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction());
+            Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
+            new BookingMetrics(new SimpleMeterRegistry()));
 
     @BeforeEach
     void setUp() {

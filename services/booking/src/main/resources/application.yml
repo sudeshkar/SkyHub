@@ -6,6 +6,11 @@ server:
   port: 8082
 
 spring:
+  http:
+    clients:
+      # Calls to flight-search fail fast instead of tying up request threads.
+      connect-timeout: 1s
+      read-timeout: 2s
   autoconfigure:
     # No users or logins in this service; don't create Spring Security's default in-memory user.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
@@ -36,11 +41,40 @@ skyhub:
     pii-key: ${SKYHUB_PII_KEY:}
 
 management:
+  # Actuator lives on its own port, never exposed publicly (docs/design/04-observability.md §7).
+  server:
+    port: 9082
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      probability: ${TRACE_SAMPLING:1.0}
+    export:
+      # Off by default so a laptop without the observability stack isn't flooded with export errors.
+      enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  structured:
+    format:
+      console: ecs
+      file: ecs
+  file:
+    # Set LOG_FILE to also write JSON logs to a file (collected by Grafana Alloy into Loki).
+    name: ${LOG_FILE:}

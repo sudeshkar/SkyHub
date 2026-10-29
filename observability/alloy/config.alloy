@@ -1,0 +1,43 @@
+// Ships the services' JSON log files to Loki.
+// Labels stay low-cardinality (service, level); the trace ID goes in structured metadata.
+
+local.file_match "skyhub" {
+  path_targets = [{"__path__" = "/var/log/skyhub/*.log"}]
+}
+
+loki.source.file "skyhub" {
+  targets    = local.file_match.skyhub.targets
+  forward_to = [loki.process.skyhub.receiver]
+}
+
+loki.process "skyhub" {
+  stage.json {
+    expressions = {
+      service   = "service.name",
+      level     = "log.level",
+      trace_id  = "traceId",
+      timestamp = "\"@timestamp\"",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  stage.labels {
+    values = { service = "", level = "" }
+  }
+
+  stage.structured_metadata {
+    values = { trace_id = "" }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

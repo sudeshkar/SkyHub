@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -22,7 +23,7 @@ class FlightSearchCatalogTest {
 
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    private final FlightSearchCatalog catalog = new FlightSearchCatalog(builder, BASE);
+    private final FlightSearchCatalog catalog = new FlightSearchCatalog(builder, BASE, new SimpleMeterRegistry());
 
     @Test
     void should_confirm_an_operating_flight_and_cache_the_answer() {

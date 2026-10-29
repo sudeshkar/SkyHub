@@ -1,0 +1,41 @@
+# Fixed UIDs so dashboards and cross-links stay stable.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+
+  - name: Loki
+    uid: loki
+    type: loki
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # Every JSON log line carries "traceId": click it to open the trace in Tempo.
+        - name: traceId
+          matcherRegex: '"traceId":"(\w+)"'
+          url: "$${__value.raw}"
+          datasourceUid: tempo
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        # From a span, jump to that trace's log lines in Loki.
+        datasourceUid: loki
+        filterByTraceID: true
+        customQuery: true
+        query: '{service=~".+"} | trace_id="$${__trace.traceId}"'
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true

@@ -12,17 +12,26 @@ import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.SeatInventory;
 import com.skyhub.booking.persistence.PnrRepository;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
+import com.skyhub.booking.application.BookingMetrics.Outcome;
+import com.skyhub.booking.domain.FlightNotFoundException;
+import com.skyhub.booking.domain.SeatUnavailableException;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Create-PNR workflow (docs/design/02-lld.md §4.5). Returns read models only; entities stay inside.
+ * Every attempt records one outcome metric; business events are logged without personal data.
  */
 @Service
 public class BookingService {
+
+    private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
     private final SeatInventoryRepository seats;
     private final PnrRepository pnrs;
@@ -32,10 +41,11 @@ public class BookingService {
     private final LocatorGenerator locators;
     private final Clock clock;
     private final TransactionOperations transactions;
+    private final BookingMetrics metrics;
 
     public BookingService(SeatInventoryRepository seats, PnrRepository pnrs, SeatInventoryInitializer inventory,
                           SeatMapCache seatMaps, CreatePnrValidator validator, LocatorGenerator locators, Clock clock,
-                          TransactionOperations transactions) {
+                          TransactionOperations transactions, BookingMetrics metrics) {
         this.seats = seats;
         this.pnrs = pnrs;
         this.inventory = inventory;
@@ -44,9 +54,37 @@ public class BookingService {
         this.locators = locators;
         this.clock = clock;
         this.transactions = transactions;
+        this.metrics = metrics;
     }
 
     public BookingResult createPnr(CreatePnrCommand command, String idempotencyKey) {
+        try {
+            BookingResult result = attempt(command, idempotencyKey);
+            metrics.record(result.created() ? Outcome.CREATED : Outcome.REPLAYED);
+            log.atInfo()
+                    .addKeyValue("pnr.locator", result.pnr().locator())
+                    .addKeyValue("pnr.segments", command.segments().size())
+                    .addKeyValue("pnr.passengers", command.passengers().size())
+                    .log(result.created() ? "Booking created" : "Booking replayed");
+            return result;
+        } catch (SeatUnavailableException | OptimisticLockingFailureException e) {
+            metrics.record(Outcome.SEAT_TAKEN);
+            log.atInfo()
+                    .addKeyValue("flights", flightNumbers(command))
+                    .log("Booking refused: seat taken");
+            throw e;
+        } catch (InvalidBookingException | FlightNotFoundException | IdempotencyKeyReusedException e) {
+            metrics.record(Outcome.REJECTED);
+            log.atInfo().addKeyValue("reason", e.getClass().getSimpleName()).log("Booking rejected");
+            throw e;
+        }
+    }
+
+    private static String flightNumbers(CreatePnrCommand command) {
+        return String.join(",", command.segments().stream().map(PnrSegment::flightNumber).toList());
+    }
+
+    private BookingResult attempt(CreatePnrCommand command, String idempotencyKey) {
         String keyHash = Sha256.hex(idempotencyKey);
         String fingerprint = RequestFingerprint.of(command);
         Optional<Pnr> replay = pnrs.findByIdempotencyKeyHash(keyHash);

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.SeatLayout;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,7 @@ class SeatInventoryInitializerTest {
     private final SeatInventoryRepository seats = mock(SeatInventoryRepository.class);
     private final FlightCatalog flights = mock(FlightCatalog.class);
     private final SeatInventoryInitializer initializer = new SeatInventoryInitializer(seats, SeatLayout.standard(),
-            flights, TransactionOperations.withoutTransaction());
+            flights, TransactionOperations.withoutTransaction(), new SimpleMeterRegistry());
 
     @Test
     void should_create_seats_once_and_then_answer_from_memory() {

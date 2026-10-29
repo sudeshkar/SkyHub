@@ -27,14 +27,43 @@ spring:
       enabled: true
 
 management:
+  # Actuator lives on its own port, never exposed publicly (docs/design/04-observability.md §7).
+  server:
+    port: 9081
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      probability: ${TRACE_SAMPLING:1.0}
+    export:
+      # Off by default so a laptop without the observability stack isn't flooded with export errors.
+      enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  structured:
+    format:
+      console: ecs
+      file: ecs
+  file:
+    # Set LOG_FILE to also write JSON logs to a file (collected by Grafana Alloy into Loki).
+    name: ${LOG_FILE:}
 
 # Hub network — see docs/adr/0001-multi-hub-configuration.md
 skyhub:
