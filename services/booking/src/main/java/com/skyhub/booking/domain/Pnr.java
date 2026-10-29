@@ -32,8 +32,9 @@ public class Pnr {
     @Column(nullable = false, length = 6, unique = true)
     private String locator;
 
-    @Column(nullable = false, length = 254)
-    private String contactEmail;
+    /** Encrypted at rest by an auto-applied converter in the persistence layer. */
+    @Column(name = "contact_email", nullable = false, length = 512)
+    private ContactEmail contactEmail;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
@@ -42,8 +43,9 @@ public class Pnr {
     @Column(nullable = false)
     private Instant createdAt;
 
-    @Column(nullable = false, length = 64, unique = true)
-    private String idempotencyKey;
+    /** SHA-256 of the client's Idempotency-Key; the raw key is never stored. */
+    @Column(name = "idempotency_key", nullable = false, length = 64, unique = true)
+    private String idempotencyKeyHash;
 
     /** SHA-256 of the request that created this PNR; a replayed key must carry the same request. */
     @Column(nullable = false, length = 64)
@@ -62,8 +64,8 @@ public class Pnr {
     protected Pnr() {
     }
 
-    public static Pnr confirmed(String locator, String contactEmail, List<PnrSegment> segments,
-                                List<PnrPassenger> passengers, Instant createdAt, String idempotencyKey,
+    public static Pnr confirmed(String locator, ContactEmail contactEmail, List<PnrSegment> segments,
+                                List<PnrPassenger> passengers, Instant createdAt, String idempotencyKeyHash,
                                 String requestFingerprint) {
         Pnr pnr = new Pnr();
         pnr.locator = locator;
@@ -72,7 +74,7 @@ public class Pnr {
         pnr.segments = new ArrayList<>(segments);
         pnr.passengers = new ArrayList<>(passengers);
         pnr.createdAt = createdAt;
-        pnr.idempotencyKey = idempotencyKey;
+        pnr.idempotencyKeyHash = idempotencyKeyHash;
         pnr.requestFingerprint = requestFingerprint;
         return pnr;
     }
@@ -95,7 +97,7 @@ public class Pnr {
         return locator;
     }
 
-    public String getContactEmail() {
+    public ContactEmail getContactEmail() {
         return contactEmail;
     }
 

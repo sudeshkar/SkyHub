@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * Read model returned by the application layer. Entities never leave it, so the web layer cannot
- * leak persistence details or lazily load data by accident. Personal data is masked here, once.
+ * leak persistence details or lazily load data by accident. Personal data leaves only in masked form.
  */
 public record PnrView(
         String locator,
@@ -29,7 +29,7 @@ public record PnrView(
         return new PnrView(
                 pnr.getLocator(),
                 pnr.getStatus(),
-                EmailMasking.mask(pnr.getContactEmail()),
+                pnr.getContactEmail().masked(),
                 pnr.getSegments().stream().map(PnrView::segment).toList(),
                 pnr.getPassengers().stream()
                         .map(p -> new PassengerView(p.getFirstName(), p.getLastName(), p.getSeats()))

@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.skyhub.booking.application.BookingResult;
 import com.skyhub.booking.application.BookingService;
 import com.skyhub.booking.application.view.PnrView;
+import com.skyhub.booking.config.SecurityConfig;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrStatus;
@@ -24,11 +25,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PnrsController.class)
+@Import(SecurityConfig.class)
 class PnrsControllerTest {
 
     private static final String BODY = """
