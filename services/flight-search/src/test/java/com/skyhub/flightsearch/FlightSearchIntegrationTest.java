@@ -61,7 +61,9 @@ class FlightSearchIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "max-age=60, public"))
                 .andExpect(jsonPath("$.origin").value("DWC"))
-                .andExpect(jsonPath("$.departureTime").value("2026-11-02T11:00:00Z"));
+                .andExpect(jsonPath("$.departureTime").value("2026-11-02T11:00:00Z"))
+                .andExpect(jsonPath("$.fare").value(880.00))
+                .andExpect(jsonPath("$.currency").value("USD"));
     }
 
     @Test
