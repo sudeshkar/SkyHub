@@ -41,10 +41,12 @@ public class BookingService {
     private final Clock clock;
     private final TransactionOperations transactions;
     private final BookingMetrics metrics;
+    private final HoldMetrics holdMetrics;
 
     public BookingService(SeatInventoryRepository seats, PnrRepository pnrs, SeatInventoryInitializer inventory,
                           SeatMapCache seatMaps, CreatePnrValidator validator, LocatorGenerator locators, Clock clock,
-                          TransactionOperations transactions, BookingMetrics metrics) {
+                          TransactionOperations transactions, BookingMetrics metrics, HoldMetrics holdMetrics) {
+        this.holdMetrics = holdMetrics;
         this.seats = seats;
         this.pnrs = pnrs;
         this.inventory = inventory;
@@ -60,6 +62,9 @@ public class BookingService {
         try {
             BookingResult result = attempt(command, idempotencyKey);
             metrics.record(result.created() ? Outcome.CREATED : Outcome.REPLAYED);
+            if (result.created() && command.holdId() != null) {
+                holdMetrics.record(HoldMetrics.Outcome.CONVERTED);
+            }
             log.atInfo()
                     .addKeyValue("pnr.locator", result.pnr().locator())
                     .addKeyValue("pnr.segments", command.segments().size())
@@ -118,7 +123,11 @@ public class BookingService {
                                 segment.flightNumber(), segment.departureDate(), seatNumber)
                         .orElseThrow(() -> new InvalidBookingException(
                                 "Seat " + seatNumber + " does not exist on " + segment.flightNumber()));
-                seat.book(locator);
+                if (command.holdId() == null) {
+                    seat.book(locator);
+                } else {
+                    seat.bookFromHold(command.holdId(), locator, clock.instant());
+                }
             }
         }
         // Flush now so a concurrent booking of the same seat fails here, as an optimistic-lock conflict.

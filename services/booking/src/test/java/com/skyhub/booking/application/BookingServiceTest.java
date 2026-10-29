@@ -58,10 +58,12 @@ class BookingServiceTest {
     private final SeatInventoryInitializer initializer = mock(SeatInventoryInitializer.class);
     private final Map<String, SeatInventory> inventory = new HashMap<>();
 
+    private final SimpleMeterRegistry holdMetrics = new SimpleMeterRegistry();
+
     private final BookingService service = new BookingService(seats, pnrs, initializer, new SeatMapCache(new SimpleMeterRegistry()), new CreatePnrValidator(List.of(new SegmentCountRule(), new PassengerCountRule(),
                     new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
             Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
-            new BookingMetrics(new SimpleMeterRegistry()));
+            new BookingMetrics(new SimpleMeterRegistry()), new HoldMetrics(holdMetrics));
 
     @BeforeEach
     void setUp() {
@@ -183,6 +185,54 @@ class BookingServiceTest {
         assertThatExceptionOfType(SeatUnavailableException.class)
                 .isThrownBy(() -> service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY));
         verify(pnrs, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void should_turn_held_seats_into_a_booking_when_the_hold_is_valid() {
+        hold("hold-1", NOW.plusSeconds(60), "SK50111D", "SK90124A");
+
+        service.createPnr(heldCommand("hold-1", passenger("Priya", "Perera", "11D", "24A")), KEY);
+
+        assertThat(inventory.get("SK50111D").getStatus()).isEqualTo(SeatStatus.BOOKED);
+        assertThat(inventory.get("SK50111D").getHoldId()).isNull();
+        assertThat(inventory.get("SK90124A").getPnrLocator()).isEqualTo("ABC234");
+        assertThat(holdMetrics.counter("skyhub.seat.holds", "outcome", "converted").count()).isEqualTo(1);
+    }
+
+    @Test
+    void should_refuse_a_booking_whose_hold_has_expired_even_if_the_cleanup_has_not_run() {
+        hold("hold-1", NOW.minusSeconds(1), "SK50111D", "SK90124A");
+
+        assertThatExceptionOfType(SeatUnavailableException.class)
+                .isThrownBy(() -> service.createPnr(heldCommand("hold-1", passenger("Priya", "Perera", "11D", "24A")), KEY))
+                .withMessageContaining("expired");
+        verify(pnrs, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void should_refuse_a_booking_that_uses_someone_elses_hold() {
+        hold("hold-1", NOW.plusSeconds(60), "SK50111D", "SK90124A");
+
+        assertThatExceptionOfType(SeatUnavailableException.class)
+                .isThrownBy(() -> service.createPnr(heldCommand("hold-2", passenger("Priya", "Perera", "11D", "24A")), KEY));
+    }
+
+    @Test
+    void should_refuse_a_direct_booking_of_a_seat_someone_else_is_holding() {
+        hold("hold-1", NOW.plusSeconds(60), "SK50111D");
+
+        assertThatExceptionOfType(SeatUnavailableException.class)
+                .isThrownBy(() -> service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY));
+    }
+
+    private void hold(String holdId, Instant until, String... keys) {
+        for (String key : keys) {
+            inventory.get(key).hold(holdId, until);
+        }
+    }
+
+    private static CreatePnrCommand heldCommand(String holdId, PassengerCommand... passengers) {
+        return new CreatePnrCommand("priya@example.com", List.of(SK501, SK901), List.of(passengers), holdId);
     }
 
     private static CreatePnrCommand command(PassengerCommand... passengers) {

@@ -20,6 +20,7 @@ final class RequestFingerprint {
                         .collect(Collectors.joining(",")),
                 command.passengers().stream()
                         .map(p -> p.firstName().strip() + "/" + p.lastName().strip() + ":" + String.join(",", p.seats()))
-                        .collect(Collectors.joining(";"))));
+                        .collect(Collectors.joining(";")),
+                String.valueOf(command.holdId())));
     }
 }
