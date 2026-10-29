@@ -20,6 +20,8 @@ export const POLICIES = {
   booking: { name: "booking", limit: 5, windowMs: 60_000 },
   /** Lookup is the brute-force target: 6-character locators guessed with common surnames. */
   lookup: { name: "lookup", limit: 10, windowMs: 15 * 60_000 },
+  /** Cancel and change-seat, after a session is open: generous for a person, tight for a script. */
+  manage: { name: "manage", limit: 30, windowMs: 60_000 },
 } as const satisfies Record<string, Policy>;
 
 export function createRateLimiter(store: CounterStore, now: () => number = Date.now) {

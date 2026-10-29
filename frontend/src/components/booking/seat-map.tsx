@@ -50,7 +50,9 @@ export function SeatMap({ seats, selected, heldByParty, onSelect }: Props) {
                 const taken = seat.status === "BOOKED";
                 const unavailable = taken || heldBy !== undefined;
                 const cabin = seat.cabin === "BUSINESS" ? "business" : "economy";
-                const state = isSelected ? "selected" : taken ? "taken" : heldBy ? "chosen for another passenger" : "available";
+                // A seat held by someone in this booking takes priority over "taken": when managing a booking, the
+                // party's own seats are already booked, and they should read as the party's, not as a stranger's.
+                const state = isSelected ? "selected" : heldBy ? "chosen for another passenger" : taken ? "taken" : "available";
                 return (
                   <span key={seat.seatNumber} className="flex items-center">
                     <button
@@ -64,10 +66,10 @@ export function SeatMap({ seats, selected, heldByParty, onSelect }: Props) {
                         seat.cabin === "BUSINESS" ? "size-11" : "size-9",
                         isSelected
                           ? "border-copper bg-copper text-white"
-                          : taken
-                            ? "cursor-not-allowed border-sand bg-sand-soft text-muted line-through"
-                            : heldBy
-                              ? "cursor-not-allowed border-ink-soft bg-ink-soft text-ivory"
+                          : heldBy
+                            ? "cursor-not-allowed border-ink-soft bg-ink-soft text-ivory"
+                            : taken
+                              ? "cursor-not-allowed border-sand bg-sand-soft text-muted line-through"
                               : "border-sand bg-ivory hover:border-copper",
                       ].join(" ")}
                     >

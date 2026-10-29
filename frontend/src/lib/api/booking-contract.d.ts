@@ -38,6 +38,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pnrs/{locator}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prove ownership of a booking and get a short-lived manage token
+         * @description Checks the last name of any passenger on the booking. On success returns a signed token
+         *     (15 minutes) that authorises reading and changing this booking only. An unknown reference
+         *     and a wrong last name both return 404, so neither can be probed.
+         */
+        post: operations["openManageSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pnrs/{locator}": {
         parameters: {
             query?: never;
@@ -45,13 +67,49 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Retrieve a PNR
-         * @description Requires the last name of any passenger on the booking, so a guessed locator alone reveals nothing.
-         *     An unknown locator and a wrong last name both return 404.
-         */
+        /** Retrieve a booking */
         get: operations["getPnr"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pnrs/{locator}/cancellation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a booking and release its seats
+         * @description Idempotent. Cancelling an already-cancelled booking returns it unchanged.
+         */
+        post: operations["cancelPnr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pnrs/{locator}/seat-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Move one passenger to another seat on one flight
+         * @description Books the new seat and releases the old one in a single transaction.
+         */
+        put: operations["changeSeat"];
         post?: never;
         delete?: never;
         options?: never;
@@ -120,6 +178,22 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        ManageSessionRequest: {
+            lastName: string;
+        };
+        ManageSession: {
+            accessToken: string;
+            /** @example Bearer */
+            tokenType: string;
+            /** Format: date-time */
+            expiresAt: string;
+            pnr: components["schemas"]["Pnr"];
+        };
+        SeatChange: {
+            passengerIndex: number;
+            segmentIndex: number;
+            seatNumber: components["schemas"]["SeatNumber"];
+        };
         /** @description RFC 9457 problem details */
         Problem: {
             type?: string;
@@ -130,6 +204,29 @@ export interface components {
         };
     };
     responses: {
+        /** @description No booking matches */
+        PnrNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Missing, invalid or expired manage token */
+        Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content?: never;
+        };
+        /** @description The token belongs to a different booking */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content?: never;
+        };
         /** @description The flight does not operate on that date */
         FlightNotFound: {
             headers: {
@@ -159,7 +256,9 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        Locator: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -242,20 +341,100 @@ export interface operations {
             503: components["responses"]["ScheduleUnavailable"];
         };
     };
-    getPnr: {
+    openManageSession: {
         parameters: {
-            query: {
-                lastName: string;
-            };
+            query?: never;
             header?: never;
             path: {
-                locator: string;
+                locator: components["parameters"]["Locator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManageSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Session opened */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManageSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["PnrNotFound"];
+        };
+    };
+    getPnr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locator: components["parameters"]["Locator"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description PNR */
+            /** @description The booking */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pnr"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["PnrNotFound"];
+        };
+    };
+    cancelPnr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locator: components["parameters"]["Locator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cancelled booking */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pnr"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["PnrNotFound"];
+        };
+    };
+    changeSeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locator: components["parameters"]["Locator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeatChange"];
+            };
+        };
+        responses: {
+            /** @description The updated booking */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -265,8 +444,11 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            /** @description No booking matches this locator and last name */
-            404: {
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["PnrNotFound"];
+            /** @description The seat is taken, or the booking is cancelled */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
