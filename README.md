@@ -111,7 +111,7 @@ api-specs/      OpenAPI contracts, written before the code (the services generat
 services/       flight-search and booking (Spring Boot)
 frontend/       the website (Next.js)
 observability/  Prometheus rules, Grafana dashboard, Loki / Tempo / Alloy config
-docs/           design documents, decision records (ADRs), runbooks
+docs/           design documents, decision records (ADRs), runbooks, and the [roadmap](docs/ROADMAP.md) of what is done and pending
 ```
 
 ## Status and honest limits
