@@ -27,7 +27,7 @@ class FlightSearchCatalogTest {
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
     private final FlightSearchCatalog catalog = new FlightSearchCatalog(builder, BASE, new SimpleMeterRegistry());
 
-    private static final String LEG = "{\"flightNumber\":\"SK501\",\"departureTime\":\"2026-11-02T10:30:00+04:00\"}";
+    private static final String LEG = "{\"flightNumber\":\"SK501\",\"departureTime\":\"2026-11-02T10:30:00+04:00\",\"fare\":310.5,\"currency\":\"USD\"}";
 
     @Test
     void should_confirm_an_operating_flight_and_cache_the_answer() {
@@ -45,6 +45,14 @@ class FlightSearchCatalogTest {
                 .andRespond(withSuccess(LEG, MediaType.APPLICATION_JSON));
 
         assertThat(catalog.departure("SK501", DATE)).contains(Instant.parse("2026-11-02T06:30:00Z"));
+    }
+
+    @Test
+    void should_report_the_fare_as_money() {
+        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02"))
+                .andRespond(withSuccess(LEG, MediaType.APPLICATION_JSON));
+
+        assertThat(catalog.find("SK501", DATE).orElseThrow().fare()).isEqualTo(com.skyhub.booking.domain.Money.of("310.50", "USD"));
     }
 
     @Test

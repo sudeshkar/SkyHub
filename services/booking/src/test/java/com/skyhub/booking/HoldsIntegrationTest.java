@@ -146,6 +146,7 @@ class HoldsIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("""
                         {
                           %4$s
+                          "paymentToken": "tok_visa",
                           "contactEmail": "priya@example.com",
                           "segments": [
                             {"flightNumber": "SK501", "departureDate": "%1$s"},

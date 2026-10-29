@@ -54,7 +54,9 @@ final class BookingDtoMapper {
                 request.getPassengers().stream()
                         .map(p -> new PassengerCommand(p.getFirstName(), p.getLastName(), List.copyOf(p.getSeats())))
                         .toList(),
-                request.getHoldId() == null ? null : request.getHoldId().toString());
+                request.getHoldId() == null ? null : request.getHoldId().toString(),
+                request.getPaymentToken(),
+                request.getExpectedAmount());
     }
 
     static CreateHoldCommand toCommand(CreateHoldRequestDto request) {

@@ -4,12 +4,14 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.skyhub.booking.application.FlightCatalog;
+import com.skyhub.booking.application.FlightInfo;
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
+import com.skyhub.booking.domain.Money;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.time.Duration;
-import java.time.Instant;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -31,10 +33,10 @@ public class FlightSearchCatalog implements FlightCatalog {
     private static final Duration UNKNOWN_FLIGHT_TTL = Duration.ofMinutes(1);
 
     private final RestClient client;
-    private final Cache<String, Optional<Instant>> answers = Caffeine.newBuilder()
+    private final Cache<String, Optional<FlightInfo>> answers = Caffeine.newBuilder()
             .maximumSize(100_000)
-            .expireAfter(Expiry.creating((String key, Optional<Instant> departure) ->
-                    departure.isPresent() ? KNOWN_FLIGHT_TTL : UNKNOWN_FLIGHT_TTL))
+            .expireAfter(Expiry.creating((String key, Optional<FlightInfo> info) ->
+                    info.isPresent() ? KNOWN_FLIGHT_TTL : UNKNOWN_FLIGHT_TTL))
             .recordStats()
             .build();
     private final Counter operatesCalls;
@@ -61,32 +63,33 @@ public class FlightSearchCatalog implements FlightCatalog {
     }
 
     @Override
-    public Optional<Instant> departure(String flightNumber, LocalDate departureDate) {
+    public Optional<FlightInfo> find(String flightNumber, LocalDate departureDate) {
         return answers.get(flightNumber + "@" + departureDate, key -> ask(flightNumber, departureDate));
     }
 
     /** The part of flight-search's answer we use. */
-    private record Leg(OffsetDateTime departureTime) {
+    private record Leg(OffsetDateTime departureTime, BigDecimal fare, String currency) {
     }
 
-    private Optional<Instant> ask(String flightNumber, LocalDate departureDate) {
+    private Optional<FlightInfo> ask(String flightNumber, LocalDate departureDate) {
         try {
-            Optional<Instant> departure = client.get()
+            Optional<FlightInfo> info = client.get()
                     .uri("/api/v1/flights/{flightNumber}/departures/{date}", flightNumber, departureDate)
                     .exchange((request, response) -> switch (response.getStatusCode().value()) {
                         case 200 -> {
                             Leg leg = response.bodyTo(Leg.class);
-                            if (leg == null || leg.departureTime() == null) {
-                                throw new FlightCatalogUnavailableException("Flight search sent no departure time", null);
+                            if (leg == null || leg.departureTime() == null || leg.fare() == null || leg.currency() == null) {
+                                throw new FlightCatalogUnavailableException("Flight search sent an incomplete flight", null);
                             }
-                            yield Optional.of(leg.departureTime().toInstant());
+                            yield Optional.of(new FlightInfo(leg.departureTime().toInstant(),
+                                    Money.of(leg.fare(), leg.currency())));
                         }
-                        case 404 -> Optional.<Instant>empty();
+                        case 404 -> Optional.<FlightInfo>empty();
                         default -> throw new FlightCatalogUnavailableException(
                                 "Flight search answered " + response.getStatusCode().value(), null);
                     });
-            (departure.isPresent() ? operatesCalls : unknownCalls).increment();
-            return departure;
+            (info.isPresent() ? operatesCalls : unknownCalls).increment();
+            return info;
         } catch (RestClientException e) {
             unavailableCalls.increment();
             throw new FlightCatalogUnavailableException("Flight search is unreachable", e);

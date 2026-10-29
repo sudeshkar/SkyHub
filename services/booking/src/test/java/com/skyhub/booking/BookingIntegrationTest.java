@@ -48,6 +48,7 @@ class BookingIntegrationTest {
     void should_reject_a_seat_selected_twice_through_the_wired_rules() throws Exception {
         String body = """
                 {
+                  "paymentToken": "tok_visa",
                   "contactEmail": "priya@example.com",
                   "segments": [{"flightNumber": "SK501", "departureDate": "2026-11-08"}],
                   "passengers": [
@@ -123,6 +124,7 @@ class BookingIntegrationTest {
     private static MockHttpServletRequestBuilder book(String date, String firstSeat, String secondSeat, String key) {
         String body = """
                 {
+                  "paymentToken": "tok_visa",
                   "contactEmail": "priya@example.com",
                   "segments": [
                     {"flightNumber": "SK501", "departureDate": "%1$s"},

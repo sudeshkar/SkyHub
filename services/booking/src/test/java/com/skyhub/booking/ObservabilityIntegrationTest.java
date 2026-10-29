@@ -65,6 +65,7 @@ class ObservabilityIntegrationTest {
     private String book(String date, String seat) {
         String body = """
                 {
+                  "paymentToken": "tok_visa",
                   "contactEmail": "%s",
                   "segments": [{"flightNumber": "SK501", "departureDate": "%s"}],
                   "passengers": [{"firstName": "%s", "lastName": "%s", "seats": ["%s"]}]

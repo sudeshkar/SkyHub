@@ -70,7 +70,7 @@ class ConcurrentBookingTest {
 
     private Outcome attempt(String lastName) {
         try {
-            bookingService.createPnr(new CreatePnrCommand("buyer@example.com",
+            bookingService.createPnr(TestCommands.pnr("buyer@example.com",
                     List.of(new PnrSegment("SK501", DATE)),
                     List.of(new PassengerCommand("Test", lastName, List.of("12A")))), UUID.randomUUID().toString());
             return Outcome.BOOKED;

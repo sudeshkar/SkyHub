@@ -142,6 +142,7 @@ class ManageBookingIntegrationTest {
     private String book(String date, String firstSeat, String secondSeat) throws Exception {
         String body = """
                 {
+                  "paymentToken": "tok_visa",
                   "contactEmail": "priya@example.com",
                   "segments": [
                     {"flightNumber": "SK501", "departureDate": "%1$s"},
