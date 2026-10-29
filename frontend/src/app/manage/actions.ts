@@ -1,6 +1,7 @@
 "use server";
 
 import { getPnr, type Pnr } from "@/lib/api/booking";
+import { POLICIES, rateLimit } from "@/lib/rate-limit";
 
 /** `locator` is echoed back so the field keeps its value after React resets the form. */
 export type LookupState =
@@ -16,6 +17,11 @@ const LOCATOR = /^[A-Z0-9]{6}$/;
  */
 export async function lookupBooking(_previous: LookupState, form: FormData): Promise<LookupState> {
   const locator = String(form.get("locator") ?? "").trim().toUpperCase();
+  const decision = await rateLimit(POLICIES.lookup);
+  if (!decision.allowed) {
+    const minutes = Math.ceil(decision.retryAfterSeconds / 60);
+    return { status: "error", message: `Too many attempts. Please try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`, locator };
+  }
   const lastName = String(form.get("lastName") ?? "").trim();
   if (!LOCATOR.test(locator) || lastName.length === 0 || lastName.length > 50) {
     return {

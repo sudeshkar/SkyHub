@@ -88,6 +88,8 @@ export function BookingWizard({
         setNotice("One of your seats was just taken by another traveller. Please choose your seats again.");
         setStep("seats");
         router.refresh();
+      } else if (outcome.kind === "rate-limited") {
+        setNotice(`Too many booking attempts. Please wait ${outcome.retryAfterSeconds} seconds and try again.`);
       } else if (outcome.kind === "rejected") {
         setNotice(outcome.detail);
       } else {
