@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -24,6 +25,42 @@ class BookingIntegrationTest {
 
     @Autowired
     private MockMvc mvc;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Test
+    void should_store_personal_data_encrypted_and_keys_hashed() throws Exception {
+        String key = newKey();
+        String response = mvc.perform(book("2026-11-07", "17D", "29A", key)).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String locator = JsonPath.read(response, "$.locator");
+
+        var row = jdbc.queryForMap("SELECT contact_email, idempotency_key FROM pnr WHERE locator = ?", locator);
+
+        org.assertj.core.api.Assertions.assertThat((String) row.get("contact_email"))
+                .startsWith("v1:").doesNotContain("priya");
+        org.assertj.core.api.Assertions.assertThat((String) row.get("idempotency_key"))
+                .hasSize(64).isNotEqualTo(key);
+    }
+
+    @Test
+    void should_reject_a_seat_selected_twice_through_the_wired_rules() throws Exception {
+        String body = """
+                {
+                  "contactEmail": "priya@example.com",
+                  "segments": [{"flightNumber": "SK501", "departureDate": "2026-11-08"}],
+                  "passengers": [
+                    {"firstName": "Priya", "lastName": "Perera", "seats": ["18A"]},
+                    {"firstName": "Raj", "lastName": "Perera", "seats": ["18A"]}
+                  ]
+                }
+                """;
+        mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", newKey())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Seat 18A is selected twice on SK501"));
+    }
 
     @Test
     void should_book_a_two_segment_itinerary_and_retrieve_it_by_last_name() throws Exception {

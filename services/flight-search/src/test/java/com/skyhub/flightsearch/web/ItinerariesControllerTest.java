@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.skyhub.flightsearch.application.ItinerarySearchService;
+import com.skyhub.flightsearch.config.SecurityConfig;
 import com.skyhub.flightsearch.domain.Connection;
 import com.skyhub.flightsearch.domain.FlightLeg;
 import com.skyhub.flightsearch.domain.InvalidSearchException;
@@ -21,11 +22,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ItinerariesController.class)
+@Import(SecurityConfig.class)
 class ItinerariesControllerTest {
 
     private static final LocalDate MONDAY = LocalDate.of(2026, 11, 2);

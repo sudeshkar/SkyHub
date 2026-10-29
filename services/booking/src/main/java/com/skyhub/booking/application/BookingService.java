@@ -1,6 +1,7 @@
 package com.skyhub.booking.application;
 
 import com.skyhub.booking.application.view.PnrView;
+import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.LocatorGenerator;
@@ -44,8 +45,9 @@ public class BookingService {
     }
 
     public BookingResult createPnr(CreatePnrCommand command, String idempotencyKey) {
+        String keyHash = Sha256.hex(idempotencyKey);
         String fingerprint = RequestFingerprint.of(command);
-        Optional<Pnr> replay = pnrs.findByIdempotencyKey(idempotencyKey);
+        Optional<Pnr> replay = pnrs.findByIdempotencyKeyHash(keyHash);
         if (replay.isPresent()) {
             if (!replay.get().wasCreatedBy(fingerprint)) {
                 throw new IdempotencyKeyReusedException("This Idempotency-Key was already used for a different booking");
@@ -53,9 +55,10 @@ public class BookingService {
             return new BookingResult(PnrView.of(replay.get()), false);
         }
         validator.validate(command);
+        ContactEmail contactEmail = new ContactEmail(command.contactEmail());
         // Outside the booking transaction on purpose: see SeatInventoryInitializer.
         command.segments().forEach(s -> inventory.ensureInventory(s.flightNumber(), s.departureDate()));
-        return transactions.execute(status -> book(command, idempotencyKey, fingerprint));
+        return transactions.execute(status -> book(command, contactEmail, keyHash, fingerprint));
     }
 
     public PnrView findPnr(String locator, String lastName) {
@@ -65,7 +68,8 @@ public class BookingService {
                 .orElseThrow(() -> new PnrNotFoundException("No booking matches this reference and last name"));
     }
 
-    private BookingResult book(CreatePnrCommand command, String idempotencyKey, String fingerprint) {
+    private BookingResult book(CreatePnrCommand command, ContactEmail contactEmail, String keyHash,
+                               String fingerprint) {
         String locator = locators.next();
         List<PnrSegment> segments = command.segments();
         for (int i = 0; i < segments.size(); i++) {
@@ -86,8 +90,7 @@ public class BookingService {
         List<PnrPassenger> passengers = command.passengers().stream()
                 .map(p -> new PnrPassenger(p.firstName().strip(), p.lastName().strip(), p.seats()))
                 .toList();
-        Pnr pnr = Pnr.confirmed(locator, command.contactEmail().strip(), segments, passengers, clock.instant(),
-                idempotencyKey, fingerprint);
+        Pnr pnr = Pnr.confirmed(locator, contactEmail, segments, passengers, clock.instant(), keyHash, fingerprint);
         return new BookingResult(PnrView.of(pnrs.saveAndFlush(pnr)), true);
     }
 }

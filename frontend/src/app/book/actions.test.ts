@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPnr } from "@/lib/api/booking";
+import { rateLimit } from "@/lib/rate-limit";
 import { createBooking, type BookingInput } from "./actions";
 
+vi.mock("@/lib/rate-limit", () => ({ POLICIES: {}, rateLimit: vi.fn(async () => ({ allowed: true })) }));
 vi.mock("@/lib/api/booking", () => ({ createPnr: vi.fn() }));
 
 const KEY = "0f8fad5b-d9cb-469f-a165-70867728950e";
@@ -40,6 +42,13 @@ describe("createBooking", () => {
     const outcome = await createBooking(input, key);
 
     expect(outcome.kind).toBe("rejected");
+    expect(createPnr).not.toHaveBeenCalled();
+  });
+
+  it("refuses a rate-limited client without calling the API", async () => {
+    vi.mocked(rateLimit).mockResolvedValueOnce({ allowed: false, retryAfterSeconds: 30 });
+
+    expect(await createBooking(valid, KEY)).toEqual({ kind: "rate-limited", retryAfterSeconds: 30 });
     expect(createPnr).not.toHaveBeenCalled();
   });
 });

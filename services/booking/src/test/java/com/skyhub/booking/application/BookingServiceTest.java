@@ -13,7 +13,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.skyhub.booking.application.view.PnrView;
+import com.skyhub.booking.application.rules.DistinctFlightsRule;
+import com.skyhub.booking.application.rules.NoSharedSeatsRule;
+import com.skyhub.booking.application.rules.OneSeatPerFlightRule;
+import com.skyhub.booking.application.rules.PassengerCountRule;
+import com.skyhub.booking.application.rules.SegmentCountRule;
 import com.skyhub.booking.domain.Cabin;
+import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.Pnr;
@@ -52,7 +58,8 @@ class BookingServiceTest {
     private final SeatInventoryInitializer initializer = mock(SeatInventoryInitializer.class);
     private final Map<String, SeatInventory> inventory = new HashMap<>();
 
-    private final BookingService service = new BookingService(seats, pnrs, initializer, new CreatePnrValidator(), () -> "ABC234",
+    private final BookingService service = new BookingService(seats, pnrs, initializer, new CreatePnrValidator(List.of(new SegmentCountRule(), new PassengerCountRule(),
+                    new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
             Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction());
 
     @BeforeEach
@@ -66,7 +73,7 @@ class BookingServiceTest {
         when(seats.findByFlightNumberAndDepartureDateAndSeatNumber(anyString(), eq(DATE), anyString()))
                 .thenAnswer(call -> Optional.ofNullable(
                         inventory.get(call.<String>getArgument(0) + call.<String>getArgument(2))));
-        when(pnrs.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
+        when(pnrs.findByIdempotencyKeyHash(anyString())).thenReturn(Optional.empty());
         when(pnrs.saveAndFlush(any(Pnr.class))).thenAnswer(call -> call.getArgument(0));
     }
 
@@ -107,10 +114,10 @@ class BookingServiceTest {
     @Test
     void should_return_existing_pnr_when_idempotency_key_is_replayed() {
         var command = command(passenger("Priya", "Perera", "11D", "24A"));
-        var existing = Pnr.confirmed("XYZ789", "priya@example.com", List.of(SK501, SK901),
+        var existing = Pnr.confirmed("XYZ789", new ContactEmail("priya@example.com"), List.of(SK501, SK901),
                 List.of(new PnrPassenger("Priya", "Perera", List.of("11D", "24A"))), NOW, KEY,
                 RequestFingerprint.of(command));
-        when(pnrs.findByIdempotencyKey(KEY)).thenReturn(Optional.of(existing));
+        when(pnrs.findByIdempotencyKeyHash(Sha256.hex(KEY))).thenReturn(Optional.of(existing));
 
         var result = service.createPnr(command, KEY);
 
@@ -122,9 +129,9 @@ class BookingServiceTest {
 
     @Test
     void should_reject_idempotency_key_reused_for_a_different_request() {
-        var existing = Pnr.confirmed("XYZ789", "someone@example.com", List.of(SK501),
+        var existing = Pnr.confirmed("XYZ789", new ContactEmail("someone@example.com"), List.of(SK501),
                 List.of(new PnrPassenger("Ann", "Silva", List.of("11D"))), NOW, KEY, "other-request");
-        when(pnrs.findByIdempotencyKey(KEY)).thenReturn(Optional.of(existing));
+        when(pnrs.findByIdempotencyKeyHash(Sha256.hex(KEY))).thenReturn(Optional.of(existing));
 
         assertThatExceptionOfType(IdempotencyKeyReusedException.class)
                 .isThrownBy(() -> service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY));
@@ -179,7 +186,7 @@ class BookingServiceTest {
 
     @Test
     void should_find_pnr_by_locator_and_last_name() {
-        var pnr = Pnr.confirmed("ABC234", "priya@example.com", List.of(SK501),
+        var pnr = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(SK501),
                 List.of(new PnrPassenger("Priya", "Perera", List.of("11D"))), NOW, KEY, "fingerprint");
         when(pnrs.findByLocator("ABC234")).thenReturn(Optional.of(pnr));
 

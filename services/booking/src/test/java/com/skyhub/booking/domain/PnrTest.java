@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class PnrTest {
 
-    private final Pnr pnr = Pnr.confirmed("ABC234", "priya@example.com",
+    private final Pnr pnr = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"),
             List.of(new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), new PnrSegment("SK901", LocalDate.of(2026, 11, 2))),
             List.of(new PnrPassenger("Priya", "Perera", List.of("11D", "24A")),
                     new PnrPassenger("Raj", "O'Neil", List.of("11E", "24B"))),

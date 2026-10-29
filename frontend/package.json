@@ -9,13 +9,14 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "api:types": "openapi-typescript ../api-specs/flight-search-api.yaml -o src/lib/api/flight-search.d.ts && openapi-typescript ../api-specs/booking-api.yaml -o src/lib/api/booking-contract.d.ts"
   },
   "dependencies": {
     "next": "16.4.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "redis": "^6.3.1"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

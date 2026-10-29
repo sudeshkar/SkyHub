@@ -1,6 +1,9 @@
 "use server";
 
 import { createPnr, type BookingOutcome, type Segment } from "@/lib/api/booking";
+import { POLICIES, rateLimit } from "@/lib/rate-limit";
+
+export type CreateBookingResult = BookingOutcome | { kind: "rate-limited"; retryAfterSeconds: number };
 
 export type BookingInput = {
   contactEmail: string;
@@ -14,7 +17,10 @@ const SEAT = /^[0-9]{1,2}[A-K]$/;
 const IDEMPOTENCY_KEY = /^[0-9a-f-]{36}$/;
 
 /** Server Actions are public HTTP endpoints, so the input is checked again here, never trusted. */
-export async function createBooking(input: BookingInput, idempotencyKey: string): Promise<BookingOutcome> {
+export async function createBooking(input: BookingInput, idempotencyKey: string): Promise<CreateBookingResult> {
+  const decision = await rateLimit(POLICIES.booking);
+  if (!decision.allowed) return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
+
   const contactEmail = input.contactEmail.trim();
   const valid =
     IDEMPOTENCY_KEY.test(idempotencyKey) &&

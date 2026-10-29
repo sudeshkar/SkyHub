@@ -12,3 +12,5 @@ An ADR records one significant decision: the context, the decision, and its cons
 | 0006 | Cache search results in Redis with a 5-minute TTL | ✍️ To write |
 | 0007 | REST for queries, events for side effects | ✍️ To write |
 | 0008 | `Idempotency-Key` on `POST /pnrs` | ✍️ To write |
+| [0009](0009-rate-limiting-at-the-edge.md) | Rate limiting at the edge with a sliding window counter | Accepted |
+| [0010](0010-encrypt-personal-data-at-rest.md) | Encrypt personal data at rest; hash what is only compared | Accepted |

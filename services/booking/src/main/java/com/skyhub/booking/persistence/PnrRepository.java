@@ -8,5 +8,5 @@ public interface PnrRepository extends JpaRepository<Pnr, Long> {
 
     Optional<Pnr> findByLocator(String locator);
 
-    Optional<Pnr> findByIdempotencyKey(String idempotencyKey);
+    Optional<Pnr> findByIdempotencyKeyHash(String idempotencyKeyHash);
 }
