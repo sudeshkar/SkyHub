@@ -408,3 +408,54 @@ Designed so every connection rule has a test case.
 | CMB → JFK | SK501 + SK901, 220m, **DXB → DWC transfer** |
 | BOM → JFK | SK203 + SK901 (170m at DWC) and SK201 + SK901 (260m, transfer) |
 | CMB → JFK with DWC inactive | no results |
+
+## 8. Design patterns and SOLID
+
+Every pattern here solves a concrete problem in the code; none is added "just in case".
+
+| Pattern | Where | Problem it solves |
+|---|---|---|
+| Strategy | `LocatorGenerator` (`RandomLocatorGenerator`) | Tests use a fixed locator; the format can change without touching `BookingService` |
+| Factory method | `Pnr.confirmed`, `SeatInventory.available`, `Itinerary.direct/oneStop` | Objects are only created in a valid state |
+| Value object | `ContactEmail`, `PnrSegment`, `FlightLeg`, `Connection` | Validation and behaviour (masking) live with the data; immutable |
+| Aggregate | `Pnr` owns its passengers, segments and seats | One consistency boundary per transaction |
+| Repository | Spring Data repositories | Persistence hidden behind collection-like interfaces |
+| Adapter | Controllers implement interfaces generated from OpenAPI | The HTTP contract and the application stay independent |
+| Mapper | `BookingDtoMapper`, `ItineraryMapper`, `PnrView.of` | Entities never cross the API boundary |
+| Chain of rules | `BookingRule` beans collected into `CreatePnrValidator` | A new rule is a new class |
+| Template | `TransactionOperations` | Explicit transaction boundaries, testable without Spring |
+| Converter | `ContactEmailConverter` | Encryption applied wherever a `ContactEmail` is stored, invisible to the domain |
+
+| Principle | How it shows up |
+|---|---|
+| Single responsibility | Workflow (`BookingService`), rules (`BookingRule`s), inventory setup (`SeatInventoryInitializer`) and crypto (`PiiCipher`) are separate classes |
+| Open/closed | New hub: configuration. New booking rule: new class. New locator format: new strategy |
+| Liskov substitution | Any `LocatorGenerator`, `CounterStore` or `TransactionOperations` works in place of another; the tests rely on it |
+| Interface segregation | One-method interfaces: `LocatorGenerator`, `BookingRule`, `CounterStore` |
+| Dependency inversion | Services receive `Clock`, `LocatorGenerator`, `TransactionOperations` and rules through constructors |
+
+**Deliberately not abstracted yet** (rule of three: abstract at the second real variant):
+
+| Today | When it changes | Then |
+|---|---|---|
+| One `SeatLayout` | A second aircraft type | `SeatLayoutProvider` keyed by aircraft type |
+| One-stop search with nested loops over small lists | Two-stop itineraries | Graph search (BFS bounded by stops) over an in-memory timetable index |
+| Application uses Spring Data repositories directly | A second persistence technology | Repository ports owned by the application layer |
+
+## 9. Security
+
+| Threat | Control | Where |
+|---|---|---|
+| Unintended endpoints exposed | Spring Security deny-by-default; only contract endpoints permitted; stateless, no sessions | `SecurityConfig` in both services |
+| Booking reference guessing | Same 404 for unknown reference and wrong last name; 10 lookups per 15 minutes per client | `BookingService.findPnr`, `lookupBooking` |
+| Request flooding | Sliding-window-counter limits in Redis keyed by hashed client IP: search 60/min, booking 5/min | `proxy.ts`, Server Actions |
+| Personal data leaked from the database | Contact email encrypted with AES-256-GCM, random IV, versioned for key rotation | `PiiCipher`, `ContactEmailConverter` |
+| Personal data leaked in responses or logs | Email masked in every response; `ContactEmail.toString()` is masked | `ContactEmail`, `PnrView` |
+| Stolen idempotency keys reused | Keys stored as SHA-256 and bound to a request fingerprint; reuse with another body gets 422 | `Sha256`, `RequestFingerprint` |
+| Internal details in errors | RFC 9457 problem details with fixed messages; generic 500 | `ApiExceptionHandler` |
+| Tampered client input | Server Actions re-validate everything; the Java API validates again against the contract | `actions.ts`, generated validation |
+| Personal data in URLs | Manage booking is a POST, so the last name never appears in a URL, history or access log | `ManageForm` |
+
+Rate limits run where the real client IP is visible: the Next.js server now, the Kong gateway later. Inside the Java services every request comes from the Next.js server, so per-IP limits there would throttle everyone together. Limits count once per request (in the proxy or an action), never during render, which can run more than once.
+
+Not yet in place: authentication for staff tools (JWT via the gateway), a manage-booking session token (arrives with the first manage operation), and service-to-service authentication (mTLS or signed tokens).
