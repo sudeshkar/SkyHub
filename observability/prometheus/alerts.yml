@@ -65,6 +65,30 @@ groups:
           summary: "Many failed manage-booking lookups (over 12 per minute for 5 minutes)"
           runbook: "docs/runbooks/README.md#bookingreferenceguessing"
 
+      - alert: SeatHoldsAbandoned
+        expr: |
+          sum(increase(skyhub_seat_holds_total{outcome="expired"}[1h])) > 50
+            and
+          sum(increase(skyhub_seat_holds_total{outcome="expired"}[1h]))
+            / clamp_min(sum(increase(skyhub_seat_holds_total{outcome=~"expired|converted"}[1h])), 1) > 0.9
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Over 90% of seat holds expire instead of becoming bookings (50+ in the last hour)"
+          runbook: "docs/runbooks/README.md#seatholdsabandoned"
+
+      - alert: CheckInRefusedHigh
+        expr: |
+          sum(increase(skyhub_check_ins_total{outcome="refused"}[15m])) > 20
+            and
+          sum(increase(skyhub_check_ins_total{outcome="refused"}[15m]))
+            / clamp_min(sum(increase(skyhub_check_ins_total[15m])), 1) > 0.5
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Over half of check-in requests are refused as outside the window (20+ in 15 minutes)"
+          runbook: "docs/runbooks/README.md#checkinrefusedhigh"
+
       - alert: ServiceDown
         expr: up == 0
         for: 1m
