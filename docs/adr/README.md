@@ -16,3 +16,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0010](0010-encrypt-personal-data-at-rest.md) | Encrypt personal data at rest; hash what is only compared | Accepted |
 | [0011](0011-manage-booking-with-a-short-lived-token.md) | Manage a booking with a short-lived, booking-scoped token | Accepted |
 | [0012](0012-seat-holds-that-expire.md) | Seat holds that expire | Accepted |
+| [0013](0013-online-check-in-and-boarding-passes.md) | Online check-in and signed boarding passes | Accepted |

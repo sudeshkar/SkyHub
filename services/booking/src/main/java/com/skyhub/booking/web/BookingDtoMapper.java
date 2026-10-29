@@ -2,6 +2,8 @@ package com.skyhub.booking.web;
 
 import com.skyhub.booking.api.model.CabinDto;
 import com.skyhub.booking.api.model.CreatePnrRequestDto;
+import com.skyhub.booking.api.model.BoardingPassDto;
+import com.skyhub.booking.api.model.BoardingPassesDto;
 import com.skyhub.booking.api.model.CreateHoldRequestDto;
 import com.skyhub.booking.api.model.HoldDto;
 import com.skyhub.booking.api.model.HoldItemDto;
@@ -14,6 +16,7 @@ import com.skyhub.booking.api.model.SeatDto;
 import com.skyhub.booking.api.model.SeatMapDto;
 import com.skyhub.booking.api.model.SeatStatusDto;
 import com.skyhub.booking.api.model.SegmentDto;
+import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.CreateHoldCommand;
 import com.skyhub.booking.application.CreatePnrCommand;
 import com.skyhub.booking.application.HeldSeat;
@@ -50,6 +53,13 @@ final class BookingDtoMapper {
     static CreateHoldCommand toCommand(CreateHoldRequestDto request) {
         return new CreateHoldCommand(request.getItems().stream()
                 .map(i -> new HeldSeat(i.getFlightNumber(), i.getDepartureDate(), i.getSeatNumber()))
+                .toList());
+    }
+
+    static BoardingPassesDto toDto(CheckInResult result) {
+        return new BoardingPassesDto(result.passes().stream()
+                .map(p -> new BoardingPassDto(p.passengerName(), p.locator(), p.flightNumber(), p.departureDate(),
+                        p.seatNumber(), p.sequence(), p.barcode()))
                 .toList());
     }
 

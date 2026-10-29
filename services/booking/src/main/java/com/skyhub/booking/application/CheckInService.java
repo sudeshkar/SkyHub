@@ -1,0 +1,158 @@
+package com.skyhub.booking.application;
+
+import com.skyhub.booking.application.CheckInMetrics.Outcome;
+import com.skyhub.booking.domain.CheckIn;
+import com.skyhub.booking.domain.CheckInClosedException;
+import com.skyhub.booking.domain.CheckInWindow;
+import com.skyhub.booking.domain.FlightNotFoundException;
+import com.skyhub.booking.domain.InvalidBookingException;
+import com.skyhub.booking.domain.NotCheckedInException;
+import com.skyhub.booking.domain.Pnr;
+import com.skyhub.booking.domain.PnrNotFoundException;
+import com.skyhub.booking.domain.PnrPassenger;
+import com.skyhub.booking.domain.PnrSegment;
+import com.skyhub.booking.persistence.CheckInRepository;
+import com.skyhub.booking.persistence.PnrRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.IntStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
+
+/**
+ * Online check-in (ADR-0013): the whole party on one flight at a time, inside the check-in window, with
+ * boarding numbers that never repeat. Authorisation (who may touch which booking) is the security layer's job.
+ */
+@Service
+public class CheckInService {
+
+    private static final Logger log = LoggerFactory.getLogger(CheckInService.class);
+
+    private final PnrRepository pnrs;
+    private final CheckInRepository checkIns;
+    private final BoardingSequence sequence;
+    private final FlightCatalog flights;
+    private final BoardingPassSigner signer;
+    private final Clock clock;
+    private final TransactionOperations transactions;
+    private final CheckInWindow window;
+    private final CheckInMetrics metrics;
+
+    public CheckInService(PnrRepository pnrs, CheckInRepository checkIns, BoardingSequence sequence, FlightCatalog flights,
+                          BoardingPassSigner signer, Clock clock, TransactionOperations transactions,
+                          CheckInWindow window, CheckInMetrics metrics) {
+        this.pnrs = pnrs;
+        this.checkIns = checkIns;
+        this.sequence = sequence;
+        this.flights = flights;
+        this.signer = signer;
+        this.clock = clock;
+        this.transactions = transactions;
+        this.window = window;
+        this.metrics = metrics;
+    }
+
+    public CheckInResult checkIn(String locator, int segmentIndex) {
+        Pnr pnr = pnrs.findByLocator(locator).orElseThrow(CheckInService::notFound);
+        pnr.requireActive();
+        PnrSegment flight = flightAt(pnr, segmentIndex);
+
+        // Checking in twice is not an error and must not renumber anyone, even after the window has closed.
+        List<CheckIn> existing = rows(locator, segmentIndex);
+        if (!existing.isEmpty()) {
+            return replay(pnr, flight, existing);
+        }
+
+        // Outside the transaction: this may be an HTTP call to flight-search.
+        Instant departure = flights.departure(flight.flightNumber(), flight.departureDate())
+                .orElseThrow(() -> new FlightNotFoundException(
+                        flight.flightNumber() + " does not operate on " + flight.departureDate()));
+        try {
+            window.requireOpen(departure, clock.instant());
+        } catch (CheckInClosedException e) {
+            metrics.record(Outcome.REFUSED);
+            throw e;
+        }
+
+        try {
+            List<CheckIn> created = transactions.execute(status -> create(locator, segmentIndex, flight));
+            metrics.record(Outcome.CHECKED_IN);
+            log.atInfo()
+                    .addKeyValue("pnr.locator", locator)
+                    .addKeyValue("flight", flight.flightNumber())
+                    .addKeyValue("check_in.passengers", created.size())
+                    .log("Checked in");
+            return new CheckInResult(passes(pnr, flight, created), true);
+        } catch (DataIntegrityViolationException lostRace) {
+            // Another request checked this flight in first. The unique key stopped ours and rolled back its numbers.
+            List<CheckIn> winners = rows(locator, segmentIndex);
+            if (winners.isEmpty()) {
+                throw lostRace;
+            }
+            return replay(pnr, flight, winners);
+        }
+    }
+
+    public CheckInResult boardingPasses(String locator, int segmentIndex) {
+        Pnr pnr = pnrs.findByLocator(locator).orElseThrow(CheckInService::notFound);
+        pnr.requireActive();
+        PnrSegment flight = flightAt(pnr, segmentIndex);
+        List<CheckIn> existing = rows(locator, segmentIndex);
+        if (existing.isEmpty()) {
+            throw new NotCheckedInException("This flight is not checked in yet");
+        }
+        return new CheckInResult(passes(pnr, flight, existing), false);
+    }
+
+    private List<CheckIn> create(String locator, int segmentIndex, PnrSegment flight) {
+        // Look again inside the transaction: the booking may have been cancelled since we first read it.
+        Pnr pnr = pnrs.findByLocator(locator).orElseThrow(CheckInService::notFound);
+        pnr.requireActive();
+        int party = pnr.getPassengers().size();
+        int first = sequence.reserve(flight.flightNumber(), flight.departureDate(), party);
+        Instant now = clock.instant();
+        List<CheckIn> rows = IntStream.range(0, party)
+                .mapToObj(p -> CheckIn.of(locator, segmentIndex, p, first + p, now))
+                .toList();
+        return checkIns.saveAllAndFlush(rows);
+    }
+
+    private CheckInResult replay(Pnr pnr, PnrSegment flight, List<CheckIn> existing) {
+        metrics.record(Outcome.REPLAYED);
+        return new CheckInResult(passes(pnr, flight, existing), false);
+    }
+
+    private List<CheckIn> rows(String locator, int segmentIndex) {
+        return checkIns.findByLocatorAndSegmentIndexOrderByPassengerIndexAsc(locator, segmentIndex);
+    }
+
+    private List<BoardingPass> passes(Pnr pnr, PnrSegment flight, List<CheckIn> rows) {
+        return rows.stream().map(row -> pass(pnr, flight, row)).toList();
+    }
+
+    private BoardingPass pass(Pnr pnr, PnrSegment flight, CheckIn row) {
+        PnrPassenger passenger = pnr.getPassengers().get(row.getPassengerIndex());
+        String name = (passenger.getLastName() + "/" + passenger.getFirstName()).toUpperCase(Locale.ROOT);
+        String seat = pnr.seatOf(row.getPassengerIndex(), row.getSegmentIndex());
+        String payload = "M1%s %s %s %s %s %04d".formatted(
+                name, pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat, row.getBoardingSequence());
+        return new BoardingPass(name, pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat,
+                row.getBoardingSequence(), signer.sign(payload));
+    }
+
+    private static PnrSegment flightAt(Pnr pnr, int segmentIndex) {
+        if (segmentIndex < 0 || segmentIndex >= pnr.getSegments().size()) {
+            throw new InvalidBookingException("This booking has no flight " + segmentIndex);
+        }
+        return pnr.getSegments().get(segmentIndex);
+    }
+
+    private static PnrNotFoundException notFound() {
+        return new PnrNotFoundException("No booking matches this reference");
+    }
+}

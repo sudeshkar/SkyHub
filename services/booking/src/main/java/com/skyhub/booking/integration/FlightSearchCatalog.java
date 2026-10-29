@@ -9,14 +9,17 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /**
- * Adapter: asks the flight-search service whether a flight operates, and caches the answer.
+ * Adapter: asks the flight-search service whether a flight operates and when it leaves, and caches the answer.
  * "Yes" is cached for an hour (timetables change rarely); "no" for a minute, so a flood of made-up
  * flight numbers cannot turn into a flood of calls. Concurrent lookups of the same flight share one
  * call (Caffeine computes each key once). Failures are never cached.
@@ -28,9 +31,10 @@ public class FlightSearchCatalog implements FlightCatalog {
     private static final Duration UNKNOWN_FLIGHT_TTL = Duration.ofMinutes(1);
 
     private final RestClient client;
-    private final Cache<String, Boolean> answers = Caffeine.newBuilder()
+    private final Cache<String, Optional<Instant>> answers = Caffeine.newBuilder()
             .maximumSize(100_000)
-            .expireAfter(Expiry.creating((String key, Boolean operates) -> operates ? KNOWN_FLIGHT_TTL : UNKNOWN_FLIGHT_TTL))
+            .expireAfter(Expiry.creating((String key, Optional<Instant> departure) ->
+                    departure.isPresent() ? KNOWN_FLIGHT_TTL : UNKNOWN_FLIGHT_TTL))
             .recordStats()
             .build();
     private final Counter operatesCalls;
@@ -57,22 +61,32 @@ public class FlightSearchCatalog implements FlightCatalog {
     }
 
     @Override
-    public boolean operates(String flightNumber, LocalDate departureDate) {
+    public Optional<Instant> departure(String flightNumber, LocalDate departureDate) {
         return answers.get(flightNumber + "@" + departureDate, key -> ask(flightNumber, departureDate));
     }
 
-    private boolean ask(String flightNumber, LocalDate departureDate) {
+    /** The part of flight-search's answer we use. */
+    private record Leg(OffsetDateTime departureTime) {
+    }
+
+    private Optional<Instant> ask(String flightNumber, LocalDate departureDate) {
         try {
-            boolean operates = client.get()
+            Optional<Instant> departure = client.get()
                     .uri("/api/v1/flights/{flightNumber}/departures/{date}", flightNumber, departureDate)
                     .exchange((request, response) -> switch (response.getStatusCode().value()) {
-                        case 200 -> true;
-                        case 404 -> false;
+                        case 200 -> {
+                            Leg leg = response.bodyTo(Leg.class);
+                            if (leg == null || leg.departureTime() == null) {
+                                throw new FlightCatalogUnavailableException("Flight search sent no departure time", null);
+                            }
+                            yield Optional.of(leg.departureTime().toInstant());
+                        }
+                        case 404 -> Optional.<Instant>empty();
                         default -> throw new FlightCatalogUnavailableException(
                                 "Flight search answered " + response.getStatusCode().value(), null);
                     });
-            (operates ? operatesCalls : unknownCalls).increment();
-            return operates;
+            (departure.isPresent() ? operatesCalls : unknownCalls).increment();
+            return departure;
         } catch (RestClientException e) {
             unavailableCalls.increment();
             throw new FlightCatalogUnavailableException("Flight search is unreachable", e);
