@@ -16,13 +16,12 @@ export default function Home() {
   return (
     <>
       {/*
-        Hero proportions (design the photo for these): 4:3 on phones, 2:1 from 640px, 3:1 from 1024px,
-        never taller than 40rem. The photo is scaled to cover the box, so on narrower boxes the left and
-        right edges are trimmed and on very wide screens the top and bottom are. Keep the subject in the
-        middle: see docs/design/05-hero-image.md.
+        Hero proportions (design the photo for these): the photo's own 8:3 shape from 640px up, so nothing is
+        cropped on tablets and desktops; 16:9 on phones, which trims the sides; never taller than 48rem, which
+        trims the top and bottom on very wide screens. See docs/design/05-hero-image.md.
       */}
       <section className="bg-ink">
-        <div className="relative aspect-[4/3] max-h-[40rem] w-full sm:aspect-[2/1] lg:aspect-[3/1]">
+        <div className="relative aspect-video max-h-[48rem] w-full sm:aspect-[8/3]">
           <Image
             src={heroImage}
             alt="A smiling traveller holding a passport beside an aircraft at the gate as the sun sets over the airport. SkyHub: your journey, our priority."
@@ -30,7 +29,7 @@ export default function Home() {
             preload
             placeholder="blur"
             sizes="100vw"
-            className="object-cover object-[50%_25%]"
+            className="object-cover object-[70%_20%] sm:object-[50%_20%]"
           />
         </div>
       </section>
