@@ -18,6 +18,8 @@ export const POLICIES = {
   search: { name: "search", limit: 60, windowMs: 60_000 },
   /** Booking writes rows and holds seats. */
   booking: { name: "booking", limit: 5, windowMs: 60_000 },
+  /** Holds lock seats for ten minutes, so they are tight: a script must not be able to lock a whole flight. */
+  hold: { name: "hold", limit: 6, windowMs: 60_000 },
   /** Lookup is the brute-force target: 6-character locators guessed with common surnames. */
   lookup: { name: "lookup", limit: 10, windowMs: 15 * 60_000 },
   /** Cancel and change-seat, after a session is open: generous for a person, tight for a script. */

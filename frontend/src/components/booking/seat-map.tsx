@@ -48,11 +48,18 @@ export function SeatMap({ seats, selected, heldByParty, onSelect }: Props) {
                 const heldBy = heldByParty.get(seat.seatNumber);
                 const isSelected = selected === seat.seatNumber;
                 const taken = seat.status === "BOOKED";
-                const unavailable = taken || heldBy !== undefined;
+                const heldElsewhere = seat.status === "HELD"; // someone else is checking out with it
+                const unavailable = taken || heldElsewhere || heldBy !== undefined;
                 const cabin = seat.cabin === "BUSINESS" ? "business" : "economy";
                 // A seat held by someone in this booking takes priority over "taken": when managing a booking, the
                 // party's own seats are already booked, and they should read as the party's, not as a stranger's.
-                const state = isSelected ? "selected" : heldBy ? "chosen for another passenger" : taken ? "taken" : "available";
+                const state = isSelected ? "selected" : heldBy
+                  ? "chosen for another passenger"
+                  : heldElsewhere
+                    ? "held by another traveller"
+                    : taken
+                      ? "taken"
+                      : "available";
                 return (
                   <span key={seat.seatNumber} className="flex items-center">
                     <button
@@ -68,12 +75,14 @@ export function SeatMap({ seats, selected, heldByParty, onSelect }: Props) {
                           ? "border-copper bg-copper text-white"
                           : heldBy
                             ? "cursor-not-allowed border-ink-soft bg-ink-soft text-ivory"
-                            : taken
-                              ? "cursor-not-allowed border-sand bg-sand-soft text-muted line-through"
-                              : "border-sand bg-ivory hover:border-copper",
+                            : heldElsewhere
+                              ? "cursor-not-allowed border-sand bg-sand-soft text-muted"
+                              : taken
+                                ? "cursor-not-allowed border-sand bg-sand-soft text-muted line-through"
+                                : "border-sand bg-ivory hover:border-copper",
                       ].join(" ")}
                     >
-                      {isSelected ? seat.letter : heldBy ?? (taken ? "×" : seat.letter)}
+                      {isSelected ? seat.letter : heldBy ?? (taken ? "×" : heldElsewhere ? "·" : seat.letter)}
                     </button>
                     {seat.letter === AISLE_AFTER && <span className="w-5" aria-hidden="true" />}
                   </span>
