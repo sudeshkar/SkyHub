@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ScrollJourney } from "@/components/scroll-journey";
 import { SearchForm } from "@/components/search-form";
 import heroImage from "@/assets/hero-sunset-airport.jpg";
 
@@ -67,8 +66,6 @@ export default function Home() {
           ))}
         </ul>
       </section>
-
-      <ScrollJourney />
     </>
   );
 }
