@@ -1,0 +1,146 @@
+package com.skyhub.booking.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.skyhub.booking.domain.ContactEmail;
+import com.skyhub.booking.domain.Disruption;
+import com.skyhub.booking.domain.DisruptionType;
+import com.skyhub.booking.domain.InvalidBookingException;
+import com.skyhub.booking.domain.Pnr;
+import com.skyhub.booking.domain.PnrNotFoundException;
+import com.skyhub.booking.domain.PnrPassenger;
+import com.skyhub.booking.domain.PnrSegment;
+import com.skyhub.booking.persistence.DisruptionRepository;
+import com.skyhub.booking.persistence.PnrRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class DisruptionServiceTest {
+
+    private static final LocalDate DATE = LocalDate.of(2026, 11, 2);
+    private static final Instant NOW = Instant.parse("2026-11-01T08:00:00Z");
+    private static final Instant REVISED = Instant.parse("2026-11-02T14:30:00Z");
+
+    private final DisruptionRepository disruptions = mock(DisruptionRepository.class);
+    private final PnrRepository pnrs = mock(PnrRepository.class);
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private DisruptionService service;
+
+    @BeforeEach
+    void setUp() {
+        when(disruptions.save(any(Disruption.class))).thenAnswer(call -> call.getArgument(0));
+        when(disruptions.findByFlightNumberAndDepartureDate(any(), any())).thenReturn(Optional.empty());
+        when(pnrs.countActiveOnFlight("SK501", DATE)).thenReturn(42L);
+        service = new DisruptionService(disruptions, pnrs, Clock.fixed(NOW, ZoneOffset.UTC), new DisruptionMetrics(registry));
+    }
+
+    private static RecordDisruptionCommand delay(Instant revised, String reason) {
+        return new RecordDisruptionCommand("SK501", DATE, DisruptionType.DELAYED, revised, reason);
+    }
+
+    @Test
+    void should_record_a_delay_and_report_how_many_bookings_are_affected() {
+        int affected = service.record(delay(REVISED, "  Late inbound aircraft  "));
+
+        assertThat(affected).isEqualTo(42);
+        var saved = org.mockito.ArgumentCaptor.forClass(Disruption.class);
+        verify(disruptions).save(saved.capture());
+        assertThat(saved.getValue().getType()).isEqualTo(DisruptionType.DELAYED);
+        assertThat(saved.getValue().getRevisedDeparture()).isEqualTo(REVISED);
+        assertThat(saved.getValue().getReason()).isEqualTo("Late inbound aircraft");
+        assertThat(saved.getValue().getRecordedAt()).isEqualTo(NOW);
+        assertThat(registry.counter("skyhub.disruptions", "type", "delayed").count()).isEqualTo(1);
+    }
+
+    @Test
+    void should_record_a_cancellation() {
+        service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, null, null));
+
+        var saved = org.mockito.ArgumentCaptor.forClass(Disruption.class);
+        verify(disruptions).save(saved.capture());
+        assertThat(saved.getValue().getType()).isEqualTo(DisruptionType.CANCELLED);
+        assertThat(saved.getValue().getRevisedDeparture()).isNull();
+        assertThat(saved.getValue().getReason()).isEmpty();
+    }
+
+    @Test
+    void should_replace_the_earlier_record_for_the_same_flight_instead_of_adding_another() {
+        Disruption earlier = Disruption.delayed("SK501", DATE, REVISED, "Late aircraft", NOW.minusSeconds(600));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(earlier));
+
+        service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, null, "Aircraft grounded"));
+
+        assertThat(earlier.getType()).isEqualTo(DisruptionType.CANCELLED);
+        assertThat(earlier.getRevisedDeparture()).isNull();
+        assertThat(earlier.getReason()).isEqualTo("Aircraft grounded");
+        assertThat(earlier.getRecordedAt()).isEqualTo(NOW);
+        verify(disruptions).save(earlier);
+    }
+
+    @Test
+    void should_update_the_record_the_other_operator_created_first_when_both_record_at_once() {
+        Disruption winner = Disruption.delayed("SK501", DATE, REVISED, "First", NOW.minusSeconds(1));
+        when(disruptions.save(any(Disruption.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_disruption_flight"))
+                .thenAnswer(call -> call.getArgument(0));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(winner));
+
+        service.record(delay(REVISED.plusSeconds(1800), "Second"));
+
+        assertThat(winner.getReason()).isEqualTo("Second");
+        assertThat(winner.getRevisedDeparture()).isEqualTo(REVISED.plusSeconds(1800));
+    }
+
+    @Test
+    void should_refuse_requests_that_make_no_sense_and_save_nothing() {
+        assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.record(delay(null, "x")))
+                .withMessageContaining("revised departure");
+        assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(
+                        () -> service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, REVISED, "x")))
+                .withMessageContaining("cancelled");
+        assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.record(delay(REVISED, "x".repeat(201))))
+                .withMessageContaining("200");
+        verify(disruptions, never()).save(any());
+    }
+
+    @Test
+    void should_list_only_the_disrupted_flights_of_a_booking_with_their_position() {
+        Pnr pnr = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"),
+                List.of(new PnrSegment("SK501", DATE), new PnrSegment("SK901", DATE)),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("11D", "24A"))), NOW, "hash", "fingerprint");
+        when(pnrs.findByLocator("ABC234")).thenReturn(Optional.of(pnr));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK901", DATE))
+                .thenReturn(Optional.of(Disruption.delayed("SK901", DATE, REVISED, "Weather", NOW)));
+
+        List<BookingDisruption> items = service.forBooking("ABC234");
+
+        assertThat(items).hasSize(1);
+        assertThat(items.getFirst().segmentIndex()).isEqualTo(1);
+        assertThat(items.getFirst().flightNumber()).isEqualTo("SK901");
+        assertThat(items.getFirst().revisedDeparture()).isEqualTo(REVISED);
+        assertThat(items.getFirst().reason()).isEqualTo("Weather");
+    }
+
+    @Test
+    void should_not_know_an_unknown_booking() {
+        when(pnrs.findByLocator(eq("ZZZZZZ"))).thenReturn(Optional.empty());
+
+        assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.forBooking("ZZZZZZ"));
+    }
+}

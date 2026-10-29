@@ -4,6 +4,8 @@ import com.skyhub.booking.application.CheckInMetrics.Outcome;
 import com.skyhub.booking.domain.CheckIn;
 import com.skyhub.booking.domain.CheckInClosedException;
 import com.skyhub.booking.domain.CheckInWindow;
+import com.skyhub.booking.domain.Disruption;
+import com.skyhub.booking.domain.FlightCancelledException;
 import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.NotCheckedInException;
@@ -12,6 +14,7 @@ import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.persistence.CheckInRepository;
+import com.skyhub.booking.persistence.DisruptionRepository;
 import com.skyhub.booking.persistence.PnrRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -36,6 +39,7 @@ public class CheckInService {
     private final PnrRepository pnrs;
     private final CheckInRepository checkIns;
     private final BoardingSequence sequence;
+    private final DisruptionRepository disruptions;
     private final FlightCatalog flights;
     private final BoardingPassSigner signer;
     private final Clock clock;
@@ -43,12 +47,13 @@ public class CheckInService {
     private final CheckInWindow window;
     private final CheckInMetrics metrics;
 
-    public CheckInService(PnrRepository pnrs, CheckInRepository checkIns, BoardingSequence sequence, FlightCatalog flights,
-                          BoardingPassSigner signer, Clock clock, TransactionOperations transactions,
+    public CheckInService(PnrRepository pnrs, CheckInRepository checkIns, BoardingSequence sequence,
+                          DisruptionRepository disruptions, FlightCatalog flights, BoardingPassSigner signer, Clock clock, TransactionOperations transactions,
                           CheckInWindow window, CheckInMetrics metrics) {
         this.pnrs = pnrs;
         this.checkIns = checkIns;
         this.sequence = sequence;
+        this.disruptions = disruptions;
         this.flights = flights;
         this.signer = signer;
         this.clock = clock;
@@ -68,10 +73,7 @@ public class CheckInService {
             return replay(pnr, flight, existing);
         }
 
-        // Outside the transaction: this may be an HTTP call to flight-search.
-        Instant departure = flights.departure(flight.flightNumber(), flight.departureDate())
-                .orElseThrow(() -> new FlightNotFoundException(
-                        flight.flightNumber() + " does not operate on " + flight.departureDate()));
+        Instant departure = departureOf(flight);
         try {
             window.requireOpen(departure, clock.instant());
         } catch (CheckInClosedException e) {
@@ -96,6 +98,23 @@ public class CheckInService {
             }
             return replay(pnr, flight, winners);
         }
+    }
+
+    /** A disruption beats the timetable: a cancelled flight has no check-in, a delayed one uses its revised time. */
+    private Instant departureOf(PnrSegment flight) {
+        Disruption disruption = disruptions.findByFlightNumberAndDepartureDate(flight.flightNumber(), flight.departureDate())
+                .orElse(null);
+        if (disruption != null && disruption.isCancelled()) {
+            metrics.record(Outcome.REFUSED);
+            throw new FlightCancelledException(flight.flightNumber() + " on " + flight.departureDate() + " is cancelled");
+        }
+        if (disruption != null) {
+            return disruption.getRevisedDeparture();
+        }
+        // Outside the transaction: this may be an HTTP call to flight-search.
+        return flights.departure(flight.flightNumber(), flight.departureDate())
+                .orElseThrow(() -> new FlightNotFoundException(
+                        flight.flightNumber() + " does not operate on " + flight.departureDate()));
     }
 
     public CheckInResult boardingPasses(String locator, int segmentIndex) {
