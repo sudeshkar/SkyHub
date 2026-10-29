@@ -12,6 +12,7 @@ tags:
   - name: Pnrs
   - name: ManageBooking
   - name: Holds
+  - name: CheckIn
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -261,6 +262,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /api/v1/pnrs/{locator}/check-ins:
+    post:
+      tags: [CheckIn]
+      operationId: checkIn
+      summary: Check in every passenger on one flight and get their boarding passes
+      description: |
+        Open from 24 hours to 60 minutes before departure. Idempotent: checking in again returns the same
+        passes and does not renumber anyone. A flight that is checked in can no longer have its seats changed.
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInRequest'
+      responses:
+        '201':
+          description: Checked in now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPasses'
+        '200':
+          description: Already checked in; the same passes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPasses'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
+        '409':
+          description: Check-in is not open yet, is closed, or the booking is cancelled
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
+
+  /api/v1/pnrs/{locator}/check-ins/{segmentIndex}:
+    get:
+      tags: [CheckIn]
+      operationId: getBoardingPasses
+      summary: The boarding passes of a flight that is checked in
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+        - name: segmentIndex
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 3
+      responses:
+        '200':
+          description: The boarding passes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPasses'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such booking, or this flight is not checked in
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The booking is cancelled
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
   securitySchemes:
     manageToken:
@@ -456,6 +545,50 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    CheckInRequest:
+      type: object
+      required: [segmentIndex]
+      properties:
+        segmentIndex:
+          type: integer
+          minimum: 0
+          maximum: 3
+
+    BoardingPass:
+      type: object
+      required: [passengerName, locator, flightNumber, departureDate, seatNumber, sequence, barcode]
+      properties:
+        passengerName:
+          type: string
+          description: SURNAME/FIRSTNAME, upper case, as printed on the pass
+          example: PERERA/PRIYA
+        locator:
+          type: string
+          example: ABC234
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+        seatNumber:
+          $ref: '#/components/schemas/SeatNumber'
+        sequence:
+          type: integer
+          minimum: 1
+          description: Boarding sequence number on this flight, in order of check-in
+        barcode:
+          type: string
+          description: Signed payload for the gate scanner. Any change to the pass invalidates it.
+
+    BoardingPasses:
+      type: object
+      required: [passes]
+      properties:
+        passes:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardingPass'
 
     ManageSessionRequest:
       type: object

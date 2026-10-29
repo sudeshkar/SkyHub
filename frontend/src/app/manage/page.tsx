@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ManageView } from "@/components/manage/manage-view";
-import { getManagedPnr } from "@/lib/api/booking";
+import { getBoardingPasses, getManagedPnr, type BoardingPass } from "@/lib/api/booking";
 import { readSession } from "@/lib/manage-session";
 import { ManageForm } from "./manage-form";
 
@@ -26,7 +26,17 @@ async function ManageContent() {
   if (!session) return <LookupIntro />;
 
   const result = await getManagedPnr(session.locator, session.token);
-  if (result.kind === "ok") return <ManageView pnr={result.pnr} />;
+  if (result.kind === "ok") {
+    // One cheap lookup per flight: a 404 just means that flight is not checked in yet.
+    const outcomes = await Promise.all(
+      result.pnr.segments.map((_, index) => getBoardingPasses(session.locator, session.token, index)),
+    );
+    const boardingPasses: Record<number, BoardingPass[]> = {};
+    outcomes.forEach((outcome, index) => {
+      if (outcome.kind === "ok") boardingPasses[index] = outcome.passes;
+    });
+    return <ManageView pnr={result.pnr} boardingPasses={boardingPasses} />;
+  }
   if (result.kind === "unavailable") {
     return (
       <p role="alert" className="mt-8 text-danger">
