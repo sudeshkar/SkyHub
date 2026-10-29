@@ -1,0 +1,167 @@
+openapi: 3.0.3
+info:
+  title: SkyHub Flight Search API
+  version: 1.0.0
+  description: |
+    Itinerary search across the SkyHub hub network (DXB and DWC).
+    All times are UTC (ISO-8601). Clients convert to local airport time for display.
+servers:
+  - url: http://localhost:8081
+tags:
+  - name: Hubs
+  - name: Itineraries
+
+paths:
+  /api/v1/hubs:
+    get:
+      tags: [Hubs]
+      operationId: listHubs
+      summary: List configured hubs
+      responses:
+        '200':
+          description: Hubs in configuration order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Hub'
+
+  /api/v1/itineraries:
+    get:
+      tags: [Itineraries]
+      operationId: searchItineraries
+      summary: Search direct and one-stop itineraries
+      parameters:
+        - name: origin
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/AirportCode'
+        - name: destination
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/AirportCode'
+        - name: date
+          in: query
+          required: true
+          description: Departure date of the first leg (UTC)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Itineraries sorted by departure, then total duration
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Itinerary'
+        '400':
+          description: Invalid search
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+components:
+  schemas:
+    AirportCode:
+      type: string
+      pattern: '^[A-Z]{3}$'
+      example: CMB
+
+    Hub:
+      type: object
+      required: [code, name, active]
+      properties:
+        code:
+          type: string
+          example: DXB
+        name:
+          type: string
+          example: Dubai International
+        active:
+          type: boolean
+
+    FlightLeg:
+      type: object
+      required: [flightNumber, origin, destination, departureTime, arrivalTime, aircraftType]
+      properties:
+        flightNumber:
+          type: string
+          example: SK501
+        origin:
+          type: string
+          example: CMB
+        destination:
+          type: string
+          example: DXB
+        departureTime:
+          type: string
+          format: date-time
+        arrivalTime:
+          type: string
+          format: date-time
+        aircraftType:
+          type: string
+          example: A350
+
+    Connection:
+      type: object
+      required: [arrivalAirport, departureAirport, layoverMinutes, requiresAirportTransfer, transferMinutes]
+      properties:
+        arrivalAirport:
+          type: string
+          example: DXB
+        departureAirport:
+          type: string
+          example: DWC
+        layoverMinutes:
+          type: integer
+          example: 220
+        requiresAirportTransfer:
+          type: boolean
+        transferMinutes:
+          type: integer
+          example: 120
+
+    Itinerary:
+      type: object
+      required: [legs, connections, stops, totalDurationMinutes, fareFrom, currency]
+      properties:
+        legs:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlightLeg'
+        connections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Connection'
+        stops:
+          type: integer
+        totalDurationMinutes:
+          type: integer
+        fareFrom:
+          type: number
+          example: 620.00
+        currency:
+          type: string
+          example: USD
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string

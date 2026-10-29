@@ -1,0 +1,253 @@
+openapi: 3.0.3
+info:
+  title: SkyHub Booking API
+  version: 1.0.0
+  description: Seat maps and passenger name records (PNRs).
+servers:
+  - url: http://localhost:8082
+tags:
+  - name: SeatMaps
+  - name: Pnrs
+
+paths:
+  /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
+    get:
+      tags: [SeatMaps]
+      operationId: getSeatMap
+      summary: Seat map for one flight on one date
+      parameters:
+        - $ref: '#/components/parameters/FlightNumber'
+        - $ref: '#/components/parameters/DepartureDate'
+      responses:
+        '200':
+          description: Seat map
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeatMap'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/pnrs:
+    post:
+      tags: [Pnrs]
+      operationId: createPnr
+      summary: Book seats and create a PNR
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Client-generated key; repeating it returns the original PNR instead of booking again
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePnrRequest'
+      responses:
+        '201':
+          description: PNR created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pnr'
+        '200':
+          description: Replay of an earlier request with the same Idempotency-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pnr'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: A requested seat is no longer available
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/pnrs/{locator}:
+    get:
+      tags: [Pnrs]
+      operationId: getPnr
+      summary: Retrieve a PNR
+      parameters:
+        - name: locator
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{6}$'
+      responses:
+        '200':
+          description: PNR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pnr'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+components:
+  parameters:
+    FlightNumber:
+      name: flightNumber
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Z0-9]{2}[0-9]{1,4}$'
+        example: SK501
+    DepartureDate:
+      name: departureDate
+      in: path
+      required: true
+      schema:
+        type: string
+        format: date
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    Cabin:
+      type: string
+      enum: [BUSINESS, ECONOMY]
+
+    SeatStatus:
+      type: string
+      enum: [AVAILABLE, BOOKED]
+
+    Seat:
+      type: object
+      required: [seatNumber, cabin, status]
+      properties:
+        seatNumber:
+          type: string
+          example: 11D
+        cabin:
+          $ref: '#/components/schemas/Cabin'
+        status:
+          $ref: '#/components/schemas/SeatStatus'
+
+    SeatMap:
+      type: object
+      required: [flightNumber, departureDate, seats]
+      properties:
+        flightNumber:
+          type: string
+        departureDate:
+          type: string
+          format: date
+        seats:
+          type: array
+          items:
+            $ref: '#/components/schemas/Seat'
+
+    PassengerRequest:
+      type: object
+      required: [firstName, lastName, seatNumber]
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 50
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 50
+        seatNumber:
+          type: string
+          pattern: '^[0-9]{1,2}[A-K]$'
+
+    CreatePnrRequest:
+      type: object
+      required: [contactEmail, flightNumber, departureDate, passengers]
+      properties:
+        contactEmail:
+          type: string
+          format: email
+          maxLength: 254
+        flightNumber:
+          type: string
+          pattern: '^[A-Z0-9]{2}[0-9]{1,4}$'
+        departureDate:
+          type: string
+          format: date
+        passengers:
+          type: array
+          minItems: 1
+          maxItems: 9
+          items:
+            $ref: '#/components/schemas/PassengerRequest'
+
+    Passenger:
+      type: object
+      required: [firstName, lastName, seatNumber]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        seatNumber:
+          type: string
+
+    PnrStatus:
+      type: string
+      enum: [CONFIRMED, CANCELLED]
+
+    Pnr:
+      type: object
+      required: [locator, status, contactEmail, flightNumber, departureDate, createdAt, passengers]
+      properties:
+        locator:
+          type: string
+          example: ABC234
+        status:
+          $ref: '#/components/schemas/PnrStatus'
+        contactEmail:
+          type: string
+        flightNumber:
+          type: string
+        departureDate:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        passengers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Passenger'
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
