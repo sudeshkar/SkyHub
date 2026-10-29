@@ -131,16 +131,4 @@ Metrics (Micrometer → Prometheus), structured JSON logs (→ Loki) and traces 
 
 ## 10. Roadmap
 
-Delivered as thin vertical slices, each tested end to end and merged separately.
-
-| Slice | Scope | Status |
-|---|---|---|
-| 1 | Flight search: API, multi-hub connections, Next.js results | Done |
-| 2 | Booking: seat maps, multi-segment PNRs, manage booking | Done |
-| 3 | Security: Spring Security, rate limiting, encryption at rest | Done |
-| 4 | Performance: in-memory timetable, flight checks, seat-map cache, load tests | In review (#3) |
-| 5 | Observability: Prometheus, Grafana, Loki, Tempo, SLOs, alerts, runbooks | In review (Next.js tracing next) |
-| 6 | Seat holds with expiry, cancel and change seat (manage-booking JWT) | Planned |
-| 7 | Kafka + outbox: notification and loyalty-miles services | Planned |
-| 8 | Kong gateway, Kubernetes + Helm, SonarQube gate | Planned |
-| 9 | Python disruption agent on Groq, MCP server, eval suite | Planned |
+Delivered as thin vertical slices, each tested end to end and merged separately. The slices done, the ones next and the loose ends live in [`docs/ROADMAP.md`](../ROADMAP.md), which is kept up to date.
