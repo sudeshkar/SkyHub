@@ -1,5 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import { SearchForm } from "@/components/search-form";
+import heroImage from "@/assets/hero-sunset-airport.jpg";
 
 const SAMPLE_ROUTES = [
   { origin: "CMB", destination: "JFK", label: "Colombo to New York", note: "Changes airport in Dubai" },
@@ -13,23 +15,36 @@ const SAMPLE_DATE = "2026-11-02";
 export default function Home() {
   return (
     <>
-      <section className="bg-ink pb-24 pt-14 text-ivory">
-        <div className="mx-auto max-w-5xl px-4">
-          <h1 className="max-w-2xl font-display text-4xl leading-tight sm:text-5xl">
-            Two Dubai airports. One journey.
-          </h1>
-          <p className="mt-4 max-w-xl text-lg text-sand">
-            Connect through Dubai International (DXB) or Al Maktoum (DWC). If your connection changes airport, you
-            will see it before you book.
-          </p>
+      {/*
+        Hero proportions (design the photo for these): 4:3 on phones, 2:1 from 640px, 3:1 from 1024px,
+        never taller than 40rem. The photo is scaled to cover the box, so on narrower boxes the left and
+        right edges are trimmed and on very wide screens the top and bottom are. Keep the subject in the
+        middle: see docs/design/05-hero-image.md.
+      */}
+      <section className="bg-ink">
+        <div className="relative aspect-[4/3] max-h-[40rem] w-full sm:aspect-[2/1] lg:aspect-[3/1]">
+          <Image
+            src={heroImage}
+            alt="A smiling traveller holding a passport beside an aircraft at the gate as the sun sets over the airport. SkyHub: your journey, our priority."
+            fill
+            preload
+            placeholder="blur"
+            sizes="100vw"
+            className="object-cover object-[50%_25%]"
+          />
         </div>
       </section>
 
-      <section aria-labelledby="search-heading" className="mx-auto -mt-14 max-w-5xl px-4">
-        <div className="rounded-lg bg-white p-6 shadow-[0_1px_3px_rgb(15_27_45/0.12)]">
-          <h2 id="search-heading" className="mb-4 text-lg font-semibold">
-            Find a flight
-          </h2>
+      {/* relative + z-10: the photo above is positioned, so without this it paints over the card's top edge. */}
+      <section aria-labelledby="search-heading" className="relative z-10 mx-auto -mt-12 max-w-5xl px-4">
+        <div className="rounded-lg bg-white p-6 shadow-[0_2px_12px_rgb(15_27_45/0.18)]">
+          <h1 id="search-heading" className="font-display text-2xl leading-tight sm:text-3xl">
+            Two Dubai airports. One journey.
+          </h1>
+          <p className="mb-5 mt-2 max-w-2xl text-muted">
+            Connect through Dubai International (DXB) or Al Maktoum (DWC). If your connection changes airport, you
+            will see it before you book.
+          </p>
           <SearchForm />
         </div>
       </section>
