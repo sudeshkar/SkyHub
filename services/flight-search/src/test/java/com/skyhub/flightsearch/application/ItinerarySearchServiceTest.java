@@ -2,8 +2,6 @@ package com.skyhub.flightsearch.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.skyhub.flightsearch.domain.AirportTransfer;
 import com.skyhub.flightsearch.domain.FlightSchedule;
@@ -11,7 +9,7 @@ import com.skyhub.flightsearch.domain.Hub;
 import com.skyhub.flightsearch.domain.HubNetwork;
 import com.skyhub.flightsearch.domain.Itinerary;
 import com.skyhub.flightsearch.domain.InvalidSearchException;
-import com.skyhub.flightsearch.persistence.FlightScheduleRepository;
+import com.skyhub.flightsearch.domain.Timetable;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -25,7 +23,6 @@ class ItinerarySearchServiceTest {
     private static final LocalDate MONDAY = LocalDate.of(2026, 11, 2);
 
     private final List<FlightSchedule> timetable = new ArrayList<>();
-    private final FlightScheduleRepository repository = mock(FlightScheduleRepository.class);
 
     @Test
     void should_return_direct_flight() {
@@ -147,17 +144,8 @@ class ItinerarySearchServiceTest {
     }
 
     private List<Itinerary> search(String origin, String destination, HubNetwork network) {
-        when(repository.findByOrigin(origin)).thenReturn(byOrigin(origin));
-        when(repository.findByDestination(destination)).thenReturn(byDestination(destination));
-        return new ItinerarySearchService(repository, network).search(origin, destination, MONDAY);
-    }
-
-    private List<FlightSchedule> byOrigin(String origin) {
-        return timetable.stream().filter(s -> s.getOrigin().equals(origin)).toList();
-    }
-
-    private List<FlightSchedule> byDestination(String destination) {
-        return timetable.stream().filter(s -> s.getDestination().equals(destination)).toList();
+        Timetable snapshot = Timetable.of(timetable);
+        return new ItinerarySearchService(() -> snapshot, network).search(origin, destination, MONDAY);
     }
 
     private void givenSchedule(String number, String from, String to, String departs, int minutes) {

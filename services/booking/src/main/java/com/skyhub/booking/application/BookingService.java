@@ -27,17 +27,19 @@ public class BookingService {
     private final SeatInventoryRepository seats;
     private final PnrRepository pnrs;
     private final SeatInventoryInitializer inventory;
+    private final SeatMapCache seatMaps;
     private final CreatePnrValidator validator;
     private final LocatorGenerator locators;
     private final Clock clock;
     private final TransactionOperations transactions;
 
     public BookingService(SeatInventoryRepository seats, PnrRepository pnrs, SeatInventoryInitializer inventory,
-                          CreatePnrValidator validator, LocatorGenerator locators, Clock clock,
+                          SeatMapCache seatMaps, CreatePnrValidator validator, LocatorGenerator locators, Clock clock,
                           TransactionOperations transactions) {
         this.seats = seats;
         this.pnrs = pnrs;
         this.inventory = inventory;
+        this.seatMaps = seatMaps;
         this.validator = validator;
         this.locators = locators;
         this.clock = clock;
@@ -58,7 +60,12 @@ public class BookingService {
         ContactEmail contactEmail = new ContactEmail(command.contactEmail());
         // Outside the booking transaction on purpose: see SeatInventoryInitializer.
         command.segments().forEach(s -> inventory.ensureInventory(s.flightNumber(), s.departureDate()));
-        return transactions.execute(status -> book(command, contactEmail, keyHash, fingerprint));
+        try {
+            return transactions.execute(status -> book(command, contactEmail, keyHash, fingerprint));
+        } finally {
+            // Seats changed (or a conflict showed this instance's map is stale): show fresh maps next time.
+            command.segments().forEach(s -> seatMaps.invalidate(s.flightNumber(), s.departureDate()));
+        }
     }
 
     public PnrView findPnr(String locator, String lastName) {

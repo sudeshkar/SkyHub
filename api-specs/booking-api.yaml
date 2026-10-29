@@ -39,6 +39,10 @@ paths:
                 $ref: '#/components/schemas/SeatMap'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/FlightNotFound'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
 
   /api/v1/pnrs:
     post:
@@ -79,6 +83,10 @@ paths:
                 $ref: '#/components/schemas/Pnr'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/FlightNotFound'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
         '409':
           description: A requested seat is no longer available
           content:
@@ -126,6 +134,22 @@ paths:
 
 components:
   responses:
+    FlightNotFound:
+      description: The flight does not operate on that date
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ScheduleUnavailable:
+      description: The timetable could not be checked; retry later
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     BadRequest:
       description: Invalid request
       content:

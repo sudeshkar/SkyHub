@@ -24,7 +24,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(GET, "/api/v1/hubs", "/api/v1/itineraries").permitAll()
+                        .requestMatchers(GET, "/api/v1/hubs", "/api/v1/itineraries", "/api/v1/flights/*/departures/*").permitAll()
                         .requestMatchers(GET, "/actuator/health/**").permitAll()
                         .anyRequest().denyAll())
                 .build();

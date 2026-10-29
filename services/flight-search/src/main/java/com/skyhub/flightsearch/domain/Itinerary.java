@@ -1,12 +1,11 @@
 package com.skyhub.flightsearch.domain;
 
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-public record Itinerary(List<FlightLeg> legs, List<Connection> connections) implements Serializable {
+public record Itinerary(List<FlightLeg> legs, List<Connection> connections) {
 
     public Itinerary {
         legs = List.copyOf(legs);

@@ -1,5 +1,6 @@
 package com.skyhub.flightsearch.web;
 
+import com.skyhub.flightsearch.domain.FlightNotFoundException;
 import com.skyhub.flightsearch.domain.InvalidSearchException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidSearchException.class)
     ProblemDetail handleInvalidSearch(InvalidSearchException ex) {
         return problem("Invalid search", ex.getMessage());
+    }
+
+    @ExceptionHandler(FlightNotFoundException.class)
+    ProblemDetail handleFlightNotFound(FlightNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Flight not found");
+        return problem;
     }
 
     @ExceptionHandler(ConstraintViolationException.class)

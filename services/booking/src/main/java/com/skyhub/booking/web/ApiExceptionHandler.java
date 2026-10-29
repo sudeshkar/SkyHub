@@ -1,5 +1,7 @@
 package com.skyhub.booking.web;
 
+import com.skyhub.booking.application.FlightCatalogUnavailableException;
+import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.PnrNotFoundException;
@@ -10,8 +12,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -57,6 +61,21 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(IdempotencyKeyReusedException.class)
     ProblemDetail handleKeyReused(IdempotencyKeyReusedException ex) {
         return problem(HttpStatus.UNPROCESSABLE_CONTENT, "Idempotency-Key reused", ex.getMessage());
+    }
+
+    @ExceptionHandler(FlightNotFoundException.class)
+    ProblemDetail handleFlightNotFound(FlightNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Flight not found", ex.getMessage());
+    }
+
+    /** The timetable could not be checked. Nothing was created; the client may retry shortly. */
+    @ExceptionHandler(FlightCatalogUnavailableException.class)
+    ResponseEntity<ProblemDetail> handleCatalogUnavailable(FlightCatalogUnavailableException ex) {
+        log.warn("Flight catalog unavailable", ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, "5")
+                .body(problem(HttpStatus.SERVICE_UNAVAILABLE, "Schedule unavailable",
+                        "We couldn't check the flight schedule. Please try again shortly."));
     }
 
     @ExceptionHandler(PnrNotFoundException.class)

@@ -1,7 +1,14 @@
 server:
+  tomcat:
+    # Default is 100 requests per connection, after which Tomcat closes it and clients reconnect.
+    # Behind a load balancer that keeps connections open, that churn costs throughput.
+    max-keep-alive-requests: 10000
   port: 8081
 
 spring:
+  autoconfigure:
+    # No users or logins in this service; don't create Spring Security's default in-memory user.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   application:
     name: flight-search
   threads:
@@ -15,15 +22,6 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-  cache:
-    type: redis
-    cache-names: itineraries
-    redis:
-      time-to-live: 5m
   mvc:
     problemdetails:
       enabled: true
@@ -40,6 +38,9 @@ management:
 
 # Hub network — see docs/adr/0001-multi-hub-configuration.md
 skyhub:
+  # In-memory timetable (ADR-0006): reloaded on this interval; searches never query the database.
+  timetable:
+    refresh-interval: PT5M
   hubs:
     - code: DXB
       name: Dubai International

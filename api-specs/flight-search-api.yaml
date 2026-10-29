@@ -10,6 +10,7 @@ servers:
 tags:
   - name: Hubs
   - name: Itineraries
+  - name: Flights
 
 paths:
   /api/v1/hubs:
@@ -61,6 +62,40 @@ paths:
                   $ref: '#/components/schemas/Itinerary'
         '400':
           description: Invalid search
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/flights/{flightNumber}/departures/{departureDate}:
+    get:
+      tags: [Flights]
+      operationId: getDeparture
+      summary: One flight on one date, if it operates
+      description: Used by the booking service to confirm a flight exists before creating its seat inventory.
+      parameters:
+        - name: flightNumber
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{2}[0-9]{1,4}$'
+        - name: departureDate
+          in: path
+          required: true
+          description: UTC departure date
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The flight operates on this date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlightLeg'
+        '404':
+          description: No such flight on this date
           content:
             application/problem+json:
               schema:

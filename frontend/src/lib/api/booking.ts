@@ -30,11 +30,12 @@ async function problemDetail(response: Response, fallback: string): Promise<stri
   return problem?.detail ?? fallback;
 }
 
-export async function getSeatMap(segment: Segment): Promise<SeatMap | null> {
+export async function getSeatMap(segment: Segment): Promise<SeatMap | "not-found" | "unavailable"> {
   const response = await call(
     `/api/v1/flights/${encodeURIComponent(segment.flightNumber)}/departures/${segment.departureDate}/seats`,
   );
-  return response?.ok ? ((await response.json()) as SeatMap) : null;
+  if (response?.ok) return (await response.json()) as SeatMap;
+  return response?.status === 404 ? "not-found" : "unavailable";
 }
 
 export async function createPnr(request: CreatePnrRequest, idempotencyKey: string): Promise<BookingOutcome> {
@@ -48,7 +49,7 @@ export async function createPnr(request: CreatePnrRequest, idempotencyKey: strin
   if (response.status === 409) {
     return { kind: "seat-taken", detail: await problemDetail(response, "A selected seat was just taken.") };
   }
-  if (response.status === 400 || response.status === 422) {
+  if (response.status === 400 || response.status === 404 || response.status === 422) {
     return { kind: "rejected", detail: await problemDetail(response, "Please check your details.") };
   }
   return { kind: "unavailable" };

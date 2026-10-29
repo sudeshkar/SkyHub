@@ -20,7 +20,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 /** Full booking flow against real PostgreSQL. Each test uses its own flight date so tests stay independent. */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(PostgresTestcontainer.class)
+@Import({PostgresTestcontainer.class, TestFlightCatalog.class})
 class BookingIntegrationTest {
 
     @Autowired
@@ -139,5 +139,16 @@ class BookingIntegrationTest {
                 }
                 """.formatted(date, firstSeat, secondSeat);
         return post("/api/v1/pnrs").header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON).content(body);
+    }
+
+    @Test
+    void should_return_404_and_create_no_seats_for_a_flight_that_does_not_operate() throws Exception {
+        mvc.perform(get("/api/v1/flights/SK999/departures/2026-11-02/seats"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Flight not found"));
+
+        Integer rows = jdbc.queryForObject(
+                "SELECT count(*) FROM seat_inventory WHERE flight_number = 'SK999'", Integer.class);
+        org.assertj.core.api.Assertions.assertThat(rows).isZero();
     }
 }

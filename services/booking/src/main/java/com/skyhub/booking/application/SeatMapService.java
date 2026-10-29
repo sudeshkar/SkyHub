@@ -11,17 +11,21 @@ public class SeatMapService {
 
     private final SeatInventoryRepository seats;
     private final SeatInventoryInitializer inventory;
+    private final SeatMapCache cache;
 
-    public SeatMapService(SeatInventoryRepository seats, SeatInventoryInitializer inventory) {
+    public SeatMapService(SeatInventoryRepository seats, SeatInventoryInitializer inventory, SeatMapCache cache) {
         this.seats = seats;
         this.inventory = inventory;
+        this.cache = cache;
     }
 
     public List<SeatView> seatMap(String flightNumber, LocalDate departureDate) {
-        inventory.ensureInventory(flightNumber, departureDate);
-        return seats.findByFlightNumberAndDepartureDateOrderByRowNumberAscLetterAsc(flightNumber, departureDate)
-                .stream()
-                .map(SeatView::of)
-                .toList();
+        return cache.get(flightNumber, departureDate, () -> {
+            inventory.ensureInventory(flightNumber, departureDate);
+            return seats.findByFlightNumberAndDepartureDateOrderByRowNumberAscLetterAsc(flightNumber, departureDate)
+                    .stream()
+                    .map(SeatView::of)
+                    .toList();
+        });
     }
 }

@@ -1,30 +1,25 @@
 package com.skyhub.flightsearch;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Full stack against real PostgreSQL and Redis, using the seed timetable (docs/design/02-lld.md §7). */
+/** Full stack against real PostgreSQL, using the seed timetable (docs/design/02-lld.md §7). */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({PostgresTestcontainer.class, RedisTestcontainer.class})
+@Import(PostgresTestcontainer.class)
 class FlightSearchIntegrationTest {
 
     @Autowired
     private MockMvc mvc;
-
-    @Autowired
-    private CacheManager cacheManager;
 
     @Test
     void should_connect_cmb_to_jfk_with_dxb_to_dwc_transfer() throws Exception {
@@ -61,12 +56,17 @@ class FlightSearchIntegrationTest {
     }
 
     @Test
-    void should_cache_search_results_in_redis() throws Exception {
-        mvc.perform(get("/api/v1/itineraries").param("origin", "CMB").param("destination", "LHR")
-                        .param("date", "2026-11-04"))
-                .andExpect(status().isOk());
+    void should_confirm_a_flight_that_operates_and_allow_caching() throws Exception {
+        mvc.perform(get("/api/v1/flights/SK411/departures/2026-11-02"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "max-age=60, public"))
+                .andExpect(jsonPath("$.origin").value("DWC"))
+                .andExpect(jsonPath("$.departureTime").value("2026-11-02T11:00:00Z"));
+    }
 
-        var cached = cacheManager.getCache("itineraries").get("CMB:LHR:2026-11-04", List.class);
-        assertThat(cached).hasSize(1);
+    @Test
+    void should_return_404_for_a_flight_that_does_not_operate() throws Exception {
+        mvc.perform(get("/api/v1/flights/SK411/departures/2026-11-03")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/flights/SK999/departures/2026-11-02")).andExpect(status().isNotFound());
     }
 }

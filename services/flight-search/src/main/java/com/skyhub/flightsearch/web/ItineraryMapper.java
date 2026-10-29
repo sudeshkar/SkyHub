@@ -9,8 +9,12 @@ import com.skyhub.flightsearch.domain.FlightLeg;
 import com.skyhub.flightsearch.domain.Hub;
 import com.skyhub.flightsearch.domain.Itinerary;
 import java.time.Duration;
+import org.springframework.http.CacheControl;
 
 final class ItineraryMapper {
+
+    /** Timetable data changes rarely; browsers and CDNs may reuse it for a minute. Never used for seat stock. */
+    static final CacheControl TIMETABLE_CACHING = CacheControl.maxAge(Duration.ofSeconds(60)).cachePublic();
 
     private ItineraryMapper() {
     }
@@ -29,7 +33,7 @@ final class ItineraryMapper {
         return new HubDto(hub.code(), hub.name(), hub.active());
     }
 
-    private static FlightLegDto toDto(FlightLeg leg) {
+    static FlightLegDto toDto(FlightLeg leg) {
         return new FlightLegDto(leg.flightNumber(), leg.origin(), leg.destination(), leg.departure(), leg.arrival(),
                 leg.aircraftType());
     }

@@ -19,8 +19,10 @@ public class ItinerariesController implements ItinerariesApi {
 
     @Override
     public ResponseEntity<List<ItineraryDto>> searchItineraries(String origin, String destination, LocalDate date) {
-        return ResponseEntity.ok(searchService.search(origin, destination, date).stream()
-                .map(ItineraryMapper::toDto)
-                .toList());
+        return ResponseEntity.ok()
+                .cacheControl(ItineraryMapper.TIMETABLE_CACHING)
+                .body(searchService.search(origin, destination, date).stream()
+                        .map(ItineraryMapper::toDto)
+                        .toList());
     }
 }
