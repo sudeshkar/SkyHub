@@ -43,6 +43,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** Overview → *Booking → flight-search calls* (`unavailable`); is flight-search up (*ServiceDown*)?
 **Mitigate:** restore flight-search; no booking data is at risk (nothing is created while the check fails).
 
+## BookingReferenceGuessing
+
+**Means:** more than 12 failed "open my booking" attempts per minute for 5 minutes. Someone may be guessing booking references with common surnames. Real users mistype occasionally; this volume is not them.
+**Confirm:** Overview → *Manage actions* (`session_denied` climbing against `session_opened`); in Loki: `{service="booking"} |= "Manage session denied"`.
+**Mitigate:** the Next.js server already limits lookups to 10 per 15 minutes per client, so a flood means many clients: tighten that limit or block the source at the gateway. No booking is exposed by failed attempts (a wrong name and an unknown reference look identical). If `session_opened` also rises abnormally, treat it as a possible compromise and check recent `Manage session opened` logs.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.
