@@ -2,9 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { cancelBooking, changeSeat, closeSession, loadSeatMap, type ManageActionResult } from "@/app/manage/actions";
-import type { Pnr, SeatMap as SeatMapData } from "@/lib/api/booking";
+import {
+  cancelBooking,
+  changeSeat,
+  checkInFlight,
+  closeSession,
+  loadSeatMap,
+  type CheckInActionResult,
+  type ManageActionResult,
+} from "@/app/manage/actions";
+import type { BoardingPass, Pnr, SeatMap as SeatMapData } from "@/lib/api/booking";
 import { SeatMap } from "@/components/booking/seat-map";
+import { BoardingPassCard } from "./boarding-pass-card";
 
 type Editing = { passenger: number; segment: number; map: SeatMapData | null; choice: string };
 type Notice = { tone: "ok" | "error"; text: string };
@@ -31,8 +40,28 @@ function failureText(result: Exclude<ManageActionResult, { kind: "ok" }>): strin
   }
 }
 
-export function ManageView({ pnr }: { pnr: Pnr }) {
+/** Plain-language message when check-in did not happen. */
+function checkInFailure(result: Exclude<CheckInActionResult, { kind: "ok" }>): string {
+  switch (result.kind) {
+    case "closed":
+    case "cancelled":
+    case "rejected":
+      return result.detail;
+    case "unauthorized":
+      return "Your session has ended. Enter your booking details again to continue.";
+    case "rate-limited":
+      return `Too many requests. Please wait ${result.retryAfterSeconds} seconds and try again.`;
+    case "not-found":
+      return "We couldn't find that booking any more.";
+    default:
+      return "We couldn't reach the booking service, so you are not checked in yet. Please try again.";
+  }
+}
+
+/** `boardingPasses` maps a flight's position in the booking to its passes, for flights already checked in. */
+export function ManageView({ pnr, boardingPasses = {} }: { pnr: Pnr; boardingPasses?: Record<number, BoardingPass[]> }) {
   const router = useRouter();
+  const [passes, setPasses] = useState<Record<number, BoardingPass[]>>(boardingPasses);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -48,6 +77,21 @@ export function ManageView({ pnr }: { pnr: Pnr }) {
     setNotice({ tone: "error", text: failureText(result) });
     if (result.kind === "unauthorized") router.refresh(); // the page now shows the lookup form
     return false;
+  }
+
+  function checkIn(segment: number) {
+    setNotice(null);
+    startTransition(async () => {
+      const result = await checkInFlight(segment);
+      if (result.kind === "ok") {
+        setPasses((current) => ({ ...current, [segment]: result.passes }));
+        setEditing((current) => (current?.segment === segment ? null : current));
+        setNotice({ tone: "ok", text: `Checked in for ${pnr.segments[segment].flightNumber}.` });
+        return;
+      }
+      setNotice({ tone: "error", text: checkInFailure(result) });
+      if (result.kind === "unauthorized") router.refresh(); // the page now shows the lookup form
+    });
   }
 
   function openPicker(passenger: number, segment: number) {
@@ -130,9 +174,26 @@ export function ManageView({ pnr }: { pnr: Pnr }) {
       <section aria-label="Flights and seats" className="space-y-8">
         {pnr.segments.map((segment, s) => (
           <div key={`${segment.flightNumber}-${segment.departureDate}`}>
-            <h2 className="font-mono text-lg">
-              {segment.flightNumber} <span className="text-muted">· {segment.departureDate}</span>
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-mono text-lg">
+                {segment.flightNumber} <span className="text-muted">· {segment.departureDate}</span>
+              </h2>
+              {passes[s] ? (
+                <p className="text-sm font-semibold text-copper">Checked in</p>
+              ) : (
+                !cancelled && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => checkIn(s)}
+                    aria-label={`Check in for ${segment.flightNumber}`}
+                    className="rounded-md border border-copper px-4 py-1.5 text-sm font-semibold text-copper hover:bg-sand-soft disabled:opacity-50"
+                  >
+                    Check in
+                  </button>
+                )
+              )}
+            </div>
             <ul className="mt-3 divide-y divide-sand rounded-lg border border-sand bg-white">
               {pnr.passengers.map((passenger, p) => (
                 <li key={`${passenger.firstName}-${passenger.lastName}-${p}`} className="flex items-center justify-between gap-4 px-5 py-3">
@@ -143,7 +204,7 @@ export function ManageView({ pnr }: { pnr: Pnr }) {
                     <span className="font-mono text-sm">Seat {passenger.seats[s]}</span>
                     <button
                       type="button"
-                      disabled={cancelled || pending}
+                      disabled={cancelled || pending || Boolean(passes[s])}
                       onClick={() => openPicker(p, s)}
                       aria-label={`Change seat for ${passenger.firstName} ${passenger.lastName} on ${segment.flightNumber}`}
                       className="text-sm text-copper hover:text-copper-strong disabled:cursor-not-allowed disabled:text-muted"
@@ -154,6 +215,13 @@ export function ManageView({ pnr }: { pnr: Pnr }) {
                 </li>
               ))}
             </ul>
+            {passes[s] && !cancelled && (
+              <ul aria-label={`Boarding passes for ${segment.flightNumber}`} className="mt-3 grid gap-3 sm:grid-cols-2">
+                {passes[s].map((pass) => (
+                  <BoardingPassCard key={pass.barcode} pass={pass} />
+                ))}
+              </ul>
+            )}
           </div>
         ))}
       </section>

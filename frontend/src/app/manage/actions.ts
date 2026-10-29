@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 import {
   cancelPnr,
   changeSeat as changeSeatCall,
+  checkIn as checkInCall,
   getSeatMap,
   openManageSession,
+  type CheckInOutcome,
   type ManageOutcome,
   type SeatMap,
   type Segment,
@@ -103,6 +105,24 @@ export async function changeSeat(change: {
       seatNumber: change.seatNumber,
     }),
   );
+}
+
+export type CheckInActionResult = CheckInOutcome | { kind: "rate-limited"; retryAfterSeconds: number };
+
+/** Checks in every passenger on one flight of the open booking and returns their boarding passes. */
+export async function checkInFlight(segmentIndex: number): Promise<CheckInActionResult> {
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex > 3) {
+    return { kind: "rejected", detail: "Choose one of your flights." };
+  }
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
+
+  const session = await readSession();
+  if (!session) return { kind: "unauthorized" };
+
+  const outcome = await checkInCall(session.locator, session.token, segmentIndex);
+  if (outcome.kind === "unauthorized") await clearSession();
+  return outcome;
 }
 
 /** Seat maps are public, so no session is needed; the input is still checked. */

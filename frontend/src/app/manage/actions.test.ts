@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cancelPnr, changeSeat as changeSeatCall, openManageSession, type Pnr } from "@/lib/api/booking";
+import {
+  cancelPnr,
+  changeSeat as changeSeatCall,
+  checkIn as checkInCall,
+  openManageSession,
+  type Pnr,
+} from "@/lib/api/booking";
 import { clearSession, readSession, saveSession } from "@/lib/manage-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { cancelBooking, changeSeat, closeSession, lookupBooking } from "./actions";
+import { cancelBooking, changeSeat, checkInFlight, closeSession, lookupBooking } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: { lookup: {}, manage: {} }, rateLimit: vi.fn() }));
 vi.mock("@/lib/manage-session", () => ({ readSession: vi.fn(), saveSession: vi.fn(), clearSession: vi.fn() }));
@@ -10,6 +16,7 @@ vi.mock("@/lib/api/booking", () => ({
   openManageSession: vi.fn(),
   cancelPnr: vi.fn(),
   changeSeat: vi.fn(),
+  checkIn: vi.fn(),
   getSeatMap: vi.fn(),
 }));
 // redirect() works by throwing; the real one is not available outside a request.
@@ -138,5 +145,52 @@ describe("changeSeat", () => {
   ])("rejects %j without calling the API", async (change) => {
     expect((await changeSeat(change)).kind).toBe("rejected");
     expect(changeSeatCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkInFlight", () => {
+  const PASSES = [
+    {
+      passengerName: "PERERA/PRIYA", locator: "YUFHBD", flightNumber: "SK501", departureDate: "2026-11-02",
+      seatNumber: "11D", sequence: 7, barcode: "signed",
+    },
+  ];
+
+  beforeEach(() => vi.mocked(readSession).mockResolvedValue(SESSION));
+
+  it("checks in the flight with the booking's own token", async () => {
+    vi.mocked(checkInCall).mockResolvedValue({ kind: "ok", passes: PASSES, created: true });
+
+    expect(await checkInFlight(0)).toEqual({ kind: "ok", passes: PASSES, created: true });
+    expect(checkInCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 0);
+  });
+
+  it.each([[-1], [4], [1.5], [Number.NaN]])("rejects flight index %s without calling the API", async (index) => {
+    expect((await checkInFlight(index)).kind).toBe("rejected");
+    expect(checkInCall).not.toHaveBeenCalled();
+  });
+
+  it("needs a session", async () => {
+    vi.mocked(readSession).mockResolvedValue(null);
+
+    expect(await checkInFlight(0)).toEqual({ kind: "unauthorized" });
+    expect(checkInCall).not.toHaveBeenCalled();
+  });
+
+  it("passes the closed-window message through and drops a dead token", async () => {
+    vi.mocked(checkInCall).mockResolvedValueOnce({ kind: "closed", detail: "Check-in opens at 2026-11-01T10:00:00Z" });
+    expect(await checkInFlight(0)).toEqual({ kind: "closed", detail: "Check-in opens at 2026-11-01T10:00:00Z" });
+    expect(clearSession).not.toHaveBeenCalled();
+
+    vi.mocked(checkInCall).mockResolvedValueOnce({ kind: "unauthorized" });
+    await checkInFlight(0);
+    expect(clearSession).toHaveBeenCalled();
+  });
+
+  it("is rate limited", async () => {
+    vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 9 });
+
+    expect(await checkInFlight(0)).toEqual({ kind: "rate-limited", retryAfterSeconds: 9 });
+    expect(checkInCall).not.toHaveBeenCalled();
   });
 });

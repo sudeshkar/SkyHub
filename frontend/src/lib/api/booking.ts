@@ -153,6 +153,62 @@ async function managed(path: string, token: string, init: RequestInit = {}): Pro
   }
 }
 
+export type BoardingPass = components["schemas"]["BoardingPass"];
+
+export type CheckInOutcome =
+  | { kind: "ok"; passes: BoardingPass[]; created: boolean }
+  | { kind: "unauthorized" }
+  | { kind: "not-found" }
+  | { kind: "closed"; detail: string } // not open yet, or already closed
+  | { kind: "cancelled"; detail: string }
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+async function passesOutcome(response: Response | null, okStatuses: number[]): Promise<CheckInOutcome> {
+  if (!response) return { kind: "unavailable" };
+  if (okStatuses.includes(response.status)) {
+    const body = (await response.json()) as components["schemas"]["BoardingPasses"];
+    return { kind: "ok", passes: body.passes, created: response.status === 201 };
+  }
+  switch (response.status) {
+    case 401:
+    case 403:
+      return { kind: "unauthorized" };
+    case 404:
+      return { kind: "not-found" };
+    case 409: {
+      const problem = (await response.json().catch(() => null)) as Problem | null;
+      const detail = problem?.detail ?? "Check-in is not possible right now.";
+      return problem?.title === "Booking cancelled" ? { kind: "cancelled", detail } : { kind: "closed", detail };
+    }
+    case 400:
+    case 422:
+      return { kind: "rejected", detail: await problemDetail(response, "Please check your details.") };
+    default:
+      return { kind: "unavailable" };
+  }
+}
+
+/** Checks in every passenger on one flight. Repeating it returns the same passes. */
+export async function checkIn(locator: string, token: string, segmentIndex: number): Promise<CheckInOutcome> {
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ segmentIndex }),
+    cache: "no-store",
+  });
+  return passesOutcome(response, [200, 201]);
+}
+
+/** "not-found" here means the flight is not checked in (or the booking is gone). */
+export async function getBoardingPasses(locator: string, token: string, segmentIndex: number): Promise<CheckInOutcome> {
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins/${segmentIndex}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  return passesOutcome(response, [200]);
+}
+
 export function getManagedPnr(locator: string, token: string): Promise<ManageOutcome> {
   return managed(`/api/v1/pnrs/${encodeURIComponent(locator)}`, token);
 }
