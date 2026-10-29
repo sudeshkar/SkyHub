@@ -127,16 +127,20 @@ Each decision has (or will have) an ADR in [`docs/adr`](../adr/README.md).
 
 ## 9. Observability
 
-- Spring Boot Actuator: `/actuator/health` (liveness/readiness) and `/actuator/info`.
-- Structured logs with a correlation ID per request (Phase 2).
-- Metrics → Prometheus → Grafana; traces via OpenTelemetry (Phase 4).
+Metrics (Micrometer → Prometheus), structured JSON logs (→ Loki) and traces (OpenTelemetry → Tempo), all viewed in Grafana and correlated by one trace ID across Next.js, booking and flight-search. Dashboards and alerts are provisioned as code, with SLOs for search and booking. Full design: [04-observability.md](04-observability.md).
 
 ## 10. Roadmap
 
-| Phase | Scope |
-|---|---|
-| 1 | flight-search + booking, Docker Compose, CI |
-| 2 | Next.js UI, Kong gateway, JWT auth, correlation IDs, seat holds |
-| 3 | Kafka, outbox, notification and loyalty-miles services |
-| 4 | Kubernetes + Helm, SonarQube gate, OpenTelemetry, Grafana, load tests |
-| 5 | Python disruption agent on Groq, MCP server, eval suite |
+Delivered as thin vertical slices, each tested end to end and merged separately.
+
+| Slice | Scope | Status |
+|---|---|---|
+| 1 | Flight search: API, multi-hub connections, Next.js results | Done |
+| 2 | Booking: seat maps, multi-segment PNRs, manage booking | Done |
+| 3 | Security: Spring Security, rate limiting, encryption at rest | Done |
+| 4 | Performance: in-memory timetable, flight checks, seat-map cache, load tests | In review (#3) |
+| 5 | **Observability: Prometheus, Grafana, Loki, Tempo, SLOs, alerts, runbooks** | **Next** |
+| 6 | Seat holds with expiry, cancel and change seat (manage-booking JWT) | Planned |
+| 7 | Kafka + outbox: notification and loyalty-miles services | Planned |
+| 8 | Kong gateway, Kubernetes + Helm, SonarQube gate | Planned |
+| 9 | Python disruption agent on Groq, MCP server, eval suite | Planned |
