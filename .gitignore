@@ -1,0 +1,22 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Secrets
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend (Phase 2)
+node_modules/
+.next/

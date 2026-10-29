@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.2</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.skyhub</groupId>
+    <artifactId>skyhub-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>SkyHub</name>
+    <description>Multi-hub airline booking platform</description>
+
+    <modules>
+        <module>services/flight-search</module>
+        <!-- <module>services/booking</module>  next slice -->
+
+    </modules>
+
+    <properties>
+        <java.version>25</java.version>
+        <openapi-generator.version>7.26.0</openapi-generator.version>
+        <archunit.version>1.5.1</archunit.version>
+        <api-specs.dir>${maven.multiModuleProjectDirectory}/api-specs</api-specs.dir>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- API-first: controllers implement interfaces generated from api-specs/*.yaml -->
+                <plugin>
+                    <groupId>org.openapitools</groupId>
+                    <artifactId>openapi-generator-maven-plugin</artifactId>
+                    <version>${openapi-generator.version}</version>
+                    <executions>
+                        <execution>
+                            <id>generate-api</id>
+                            <goals>
+                                <goal>generate</goal>
+                            </goals>
+                            <configuration>
+                                <generatorName>spring</generatorName>
+                                <modelNameSuffix>Dto</modelNameSuffix>
+                                <generateSupportingFiles>false</generateSupportingFiles>
+                                <generateApiTests>false</generateApiTests>
+                                <generateModelTests>false</generateModelTests>
+                                <generateApiDocumentation>false</generateApiDocumentation>
+                                <generateModelDocumentation>false</generateModelDocumentation>
+                                <configOptions>
+                                    <interfaceOnly>true</interfaceOnly>
+                                    <useSpringBoot3>true</useSpringBoot3>
+                                    <useTags>true</useTags>
+                                    <skipDefaultInterface>true</skipDefaultInterface>
+                                    <openApiNullable>false</openApiNullable>
+                                    <documentationProvider>none</documentationProvider>
+                                    <annotationLibrary>none</annotationLibrary>
+                                    <useBeanValidation>true</useBeanValidation>
+                                    <dateLibrary>java8</dateLibrary>
+                                </configOptions>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
