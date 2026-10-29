@@ -13,6 +13,7 @@ tags:
   - name: ManageBooking
   - name: Holds
   - name: CheckIn
+  - name: Disruptions
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -310,6 +311,57 @@ paths:
         '503':
           $ref: '#/components/responses/ScheduleUnavailable'
 
+  /api/v1/ops/disruptions:
+    post:
+      tags: [Disruptions]
+      operationId: recordDisruption
+      summary: Record a delay or cancellation of one flight on one date
+      description: |
+        Idempotent: recording again for the same flight and date replaces the earlier record, so a retry or a
+        correction is the same request. Returns how many active bookings are on the flight.
+      security:
+        - opsKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordDisruptionRequest'
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisruptionRecorded'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/pnrs/{locator}/disruptions:
+    get:
+      tags: [Disruptions]
+      operationId: getDisruptions
+      summary: Delays and cancellations on the flights of this booking
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      responses:
+        '200':
+          description: Possibly empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingDisruptions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
+
   /api/v1/pnrs/{locator}/check-ins/{segmentIndex}:
     get:
       tags: [CheckIn]
@@ -352,6 +404,11 @@ paths:
 
 components:
   securitySchemes:
+    opsKey:
+      type: apiKey
+      in: header
+      name: X-Ops-Key
+      description: Operations credential (SKYHUB_OPS_KEY). Held by operations tooling only; never sent by the website.
     manageToken:
       type: http
       scheme: bearer
@@ -406,6 +463,71 @@ components:
       type: string
       pattern: '^[A-Z0-9]{2}[0-9]{1,4}$'
       example: SK501
+
+    DisruptionType:
+      type: string
+      enum: [DELAYED, CANCELLED]
+
+    RecordDisruptionRequest:
+      type: object
+      required: [flightNumber, departureDate, type]
+      properties:
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+          description: The flight's scheduled departure date (UTC)
+        type:
+          $ref: '#/components/schemas/DisruptionType'
+        revisedDeparture:
+          type: string
+          format: date-time
+          description: Required for DELAYED, must be omitted for CANCELLED
+        reason:
+          type: string
+          maxLength: 200
+          description: Shown to travellers. Keep it free of personal data.
+
+    DisruptionRecorded:
+      type: object
+      required: [affectedBookings]
+      properties:
+        affectedBookings:
+          type: integer
+          minimum: 0
+          description: Active bookings on this flight and date
+
+    Disruption:
+      type: object
+      required: [segmentIndex, flightNumber, departureDate, type]
+      properties:
+        segmentIndex:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Position of the flight in this booking
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+        type:
+          $ref: '#/components/schemas/DisruptionType'
+        revisedDeparture:
+          type: string
+          format: date-time
+        reason:
+          type: string
+
+    BookingDisruptions:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Disruption'
 
     SeatNumber:
       type: string

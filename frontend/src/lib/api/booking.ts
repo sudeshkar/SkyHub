@@ -209,6 +209,18 @@ export async function getBoardingPasses(locator: string, token: string, segmentI
   return passesOutcome(response, [200]);
 }
 
+export type Disruption = components["schemas"]["Disruption"];
+
+/** A failure here must not break the page, so it quietly means "nothing to show". */
+export async function getDisruptions(locator: string, token: string): Promise<Disruption[]> {
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/disruptions`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!response?.ok) return [];
+  return ((await response.json()) as components["schemas"]["BookingDisruptions"]).items;
+}
+
 export function getManagedPnr(locator: string, token: string): Promise<ManageOutcome> {
   return managed(`/api/v1/pnrs/${encodeURIComponent(locator)}`, token);
 }

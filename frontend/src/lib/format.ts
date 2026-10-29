@@ -54,3 +54,16 @@ export function formatMoney(amount: number, currency: string): string {
     maximumFractionDigits: 0,
   }).format(amount);
 }
+
+/** "2 Nov, 14:30 UTC": an instant in UTC with the zone spelled out. */
+export function utcDateTime(isoInstant: string): string {
+  const text = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(isoInstant));
+  return `${text} UTC`;
+}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cancelBooking, changeSeat, checkInFlight, loadSeatMap } from "@/app/manage/actions";
 import type { Pnr, SeatMap } from "@/lib/api/booking";
@@ -134,6 +134,44 @@ describe("ManageView", () => {
       render(<ManageView pnr={{ ...PNR, status: "CANCELLED" }} />);
 
       expect(screen.queryByRole("button", { name: /Check in for/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("disruptions", () => {
+    const DELAY = {
+      segmentIndex: 1, flightNumber: "SK901", departureDate: "2026-11-02", type: "DELAYED" as const,
+      revisedDeparture: "2026-11-02T14:30:00Z", reason: "Late inbound aircraft",
+    };
+    const CANCELLED = {
+      segmentIndex: 0, flightNumber: "SK501", departureDate: "2026-11-02", type: "CANCELLED" as const,
+      reason: "Aircraft grounded",
+    };
+
+    it("tells the traveller about a delay, with the new time and the reason", () => {
+      render(<ManageView pnr={PNR} disruptions={[DELAY]} />);
+
+      const notice = screen.getByRole("status", { name: "SK901 is delayed" });
+      expect(notice).toHaveTextContent(/14:30 UTC/);
+      expect(notice).toHaveTextContent("Late inbound aircraft");
+      expect(screen.getByRole("button", { name: "Check in for SK501" })).toBeInTheDocument(); // other flight unaffected
+    });
+
+    it("says a flight is cancelled, offers a new search and takes away check-in", () => {
+      render(<ManageView pnr={PNR} disruptions={[CANCELLED]} />);
+
+      const notice = screen.getByRole("alert", { name: "SK501 is cancelled" });
+      expect(notice).toHaveTextContent("Aircraft grounded");
+      expect(within(notice).getByRole("link", { name: "Search for another flight" })).toHaveAttribute("href", "/");
+      expect(screen.queryByRole("button", { name: "Check in for SK501" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Check in for SK901" })).toBeInTheDocument();
+    });
+
+    it("shows nothing extra when all is well", () => {
+      render(<ManageView pnr={PNR} disruptions={[]} />);
+
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.queryByText(/delayed/i)).not.toBeInTheDocument();
     });
   });
 

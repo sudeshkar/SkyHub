@@ -24,7 +24,10 @@ import com.skyhub.booking.domain.Pnr;
 import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
+import com.skyhub.booking.domain.Disruption;
+import com.skyhub.booking.domain.FlightCancelledException;
 import com.skyhub.booking.persistence.CheckInRepository;
+import com.skyhub.booking.persistence.DisruptionRepository;
 import com.skyhub.booking.persistence.PnrRepository;
 import com.skyhub.booking.security.HmacBoardingPassSigner;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -50,6 +53,7 @@ class CheckInServiceTest {
     private final PnrRepository pnrs = mock(PnrRepository.class);
     private final CheckInRepository checkIns = mock(CheckInRepository.class);
     private final BoardingSequence sequence = mock(BoardingSequence.class);
+    private final DisruptionRepository disruptions = mock(DisruptionRepository.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final HmacBoardingPassSigner signer = new HmacBoardingPassSigner("0123456789abcdef0123456789abcdef".getBytes());
     private final List<CheckIn> stored = new ArrayList<>();
@@ -76,7 +80,8 @@ class CheckInServiceTest {
             return rows;
         });
         when(sequence.reserve(eq("SK501"), eq(DATE), eq(2))).thenReturn(7);
-        service = new CheckInService(pnrs, checkIns, sequence, (flight, date) -> departure, signer,
+        when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty());
+        service = new CheckInService(pnrs, checkIns, sequence, disruptions, (flight, date) -> departure, signer,
                 Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
                 new CheckInWindow(Duration.ofHours(24), Duration.ofMinutes(60)), new CheckInMetrics(registry));
     }
@@ -154,6 +159,46 @@ class CheckInServiceTest {
         departure = Optional.of(NOW.plus(Duration.ofMinutes(30)));
 
         assertThat(service.checkIn("ABC234", 0).passes()).hasSize(2);
+    }
+
+    @Test
+    void should_work_out_the_window_from_the_revised_time_of_a_delayed_flight() {
+        // The timetable says it leaves in 30 minutes (window closed), but it has been delayed to 5 hours from now.
+        departure = Optional.of(NOW.plus(Duration.ofMinutes(30)));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(
+                Disruption.delayed("SK501", DATE, NOW.plus(Duration.ofHours(5)), "Late aircraft", NOW)));
+
+        assertThat(service.checkIn("ABC234", 0).created()).isTrue();
+    }
+
+    @Test
+    void should_keep_check_in_closed_until_the_delayed_flights_window_opens() {
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(
+                Disruption.delayed("SK501", DATE, NOW.plus(Duration.ofHours(30)), "Late aircraft", NOW)));
+
+        assertThatExceptionOfType(CheckInClosedException.class).isThrownBy(() -> service.checkIn("ABC234", 0))
+                .withMessageContaining("opens");
+        verify(sequence, never()).reserve(anyString(), any(), anyInt());
+    }
+
+    @Test
+    void should_refuse_check_in_for_a_cancelled_flight() {
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(
+                Disruption.cancelled("SK501", DATE, "Aircraft grounded", NOW)));
+
+        assertThatExceptionOfType(FlightCancelledException.class).isThrownBy(() -> service.checkIn("ABC234", 0))
+                .withMessageContaining("SK501");
+        verify(sequence, never()).reserve(anyString(), any(), anyInt());
+        assertThat(count("refused")).isEqualTo(1);
+    }
+
+    @Test
+    void should_not_disturb_the_other_flight_of_the_booking() {
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(
+                Disruption.cancelled("SK501", DATE, "Aircraft grounded", NOW)));
+        when(sequence.reserve(eq("SK901"), eq(DATE), eq(2))).thenReturn(1);
+
+        assertThat(service.checkIn("ABC234", 1).passes()).hasSize(2);
     }
 
     @Test

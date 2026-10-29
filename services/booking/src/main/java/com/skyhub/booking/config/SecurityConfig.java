@@ -5,8 +5,10 @@ import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.http.HttpMethod.PUT;
 
+import com.skyhub.booking.security.OpsKeyAuthorization;
 import com.skyhub.booking.security.OwnsBookingAuthorization;
 import jakarta.servlet.DispatcherType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -24,8 +26,14 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
 
+    /** Closed to everyone unless an operations key is configured. */
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    OpsKeyAuthorization opsKeyAuthorization(@Value("${skyhub.security.ops-key:}") String key) {
+        return new OpsKeyAuthorization(key);
+    }
+
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http, OpsKeyAuthorization opsKey) throws Exception {
         OwnsBookingAuthorization ownsBooking = new OwnsBookingAuthorization();
         return http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -44,6 +52,8 @@ public class SecurityConfig {
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/cancellation").access(ownsBooking)
                         .requestMatchers(PUT, "/api/v1/pnrs/{locator}/seat-assignments").access(ownsBooking)
+                        .requestMatchers(POST, "/api/v1/ops/disruptions").access(opsKey)
+                        .requestMatchers(GET, "/api/v1/pnrs/{locator}/disruptions").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/check-ins").access(ownsBooking)
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}/check-ins/{segmentIndex}").access(ownsBooking)
                         // Actuator is only served on the management port, which is never exposed publicly.

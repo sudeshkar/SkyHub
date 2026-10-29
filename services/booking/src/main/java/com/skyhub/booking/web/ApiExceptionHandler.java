@@ -5,6 +5,7 @@ import com.skyhub.booking.domain.AlreadyCheckedInException;
 import com.skyhub.booking.domain.BookingCancelledException;
 import com.skyhub.booking.domain.CheckInClosedException;
 import com.skyhub.booking.domain.NotCheckedInException;
+import com.skyhub.booking.domain.FlightCancelledException;
 import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
@@ -75,6 +76,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(CheckInClosedException.class)
     ProblemDetail handleCheckInClosed(CheckInClosedException ex) {
         return problem(HttpStatus.CONFLICT, "Check-in unavailable", ex.getMessage());
+    }
+
+    @ExceptionHandler(FlightCancelledException.class)
+    ProblemDetail handleFlightCancelled(FlightCancelledException ex) {
+        return problem(HttpStatus.CONFLICT, "Flight cancelled", ex.getMessage());
     }
 
     @ExceptionHandler(AlreadyCheckedInException.class)
