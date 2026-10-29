@@ -3,6 +3,8 @@ package com.skyhub.booking.application;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.skyhub.booking.application.view.SeatView;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
@@ -23,7 +25,12 @@ public class SeatMapCache {
     private final Cache<String, List<SeatView>> maps = Caffeine.newBuilder()
             .maximumSize(10_000)
             .expireAfterWrite(TTL)
+            .recordStats()
             .build();
+
+    public SeatMapCache(MeterRegistry registry) {
+        CaffeineCacheMetrics.monitor(registry, maps, "seatMaps");
+    }
 
     public List<SeatView> get(String flightNumber, LocalDate departureDate, Supplier<List<SeatView>> loader) {
         return maps.get(key(flightNumber, departureDate), k -> List.copyOf(loader.get()));

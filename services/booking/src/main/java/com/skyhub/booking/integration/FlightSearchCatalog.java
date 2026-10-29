@@ -5,12 +5,12 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.skyhub.booking.application.FlightCatalog;
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
-import java.net.http.HttpClient;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.time.Duration;
 import java.time.LocalDate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -24,8 +24,6 @@ import org.springframework.web.client.RestClientException;
 @Component
 public class FlightSearchCatalog implements FlightCatalog {
 
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(1);
-    private static final Duration READ_TIMEOUT = Duration.ofSeconds(2);
     private static final Duration KNOWN_FLIGHT_TTL = Duration.ofHours(1);
     private static final Duration UNKNOWN_FLIGHT_TTL = Duration.ofMinutes(1);
 
@@ -33,21 +31,29 @@ public class FlightSearchCatalog implements FlightCatalog {
     private final Cache<String, Boolean> answers = Caffeine.newBuilder()
             .maximumSize(100_000)
             .expireAfter(Expiry.creating((String key, Boolean operates) -> operates ? KNOWN_FLIGHT_TTL : UNKNOWN_FLIGHT_TTL))
+            .recordStats()
             .build();
+    private final Counter operatesCalls;
+    private final Counter unknownCalls;
+    private final Counter unavailableCalls;
 
-    @Autowired
-    public FlightSearchCatalog(@Value("${skyhub.flight-search.url:http://localhost:8081}") String baseUrl) {
-        this(RestClient.builder().requestFactory(timeouts()), baseUrl);
+    /** Uses Spring's builder, which is instrumented: calls are timed and carry the trace context. */
+    public FlightSearchCatalog(RestClient.Builder builder,
+                               @Value("${skyhub.flight-search.url:http://localhost:8081}") String baseUrl,
+                               MeterRegistry registry) {
+        // Timeouts come from spring.http.clients.* in application.yml.
+        this.client = builder.clone().baseUrl(baseUrl).build();
+        this.operatesCalls = calls(registry, "operates");
+        this.unknownCalls = calls(registry, "unknown");
+        this.unavailableCalls = calls(registry, "unavailable");
+        CaffeineCacheMetrics.monitor(registry, answers, "flightCatalog");
     }
 
-    FlightSearchCatalog(RestClient.Builder builder, String baseUrl) {
-        this.client = builder.baseUrl(baseUrl).build();
-    }
-
-    private static JdkClientHttpRequestFactory timeouts() {
-        var factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build());
-        factory.setReadTimeout(READ_TIMEOUT);
-        return factory;
+    private static Counter calls(MeterRegistry registry, String result) {
+        return Counter.builder("skyhub.flight.catalog.calls")
+                .description("Calls from booking to flight-search, by result")
+                .tag("result", result)
+                .register(registry);
     }
 
     @Override
@@ -57,7 +63,7 @@ public class FlightSearchCatalog implements FlightCatalog {
 
     private boolean ask(String flightNumber, LocalDate departureDate) {
         try {
-            return client.get()
+            boolean operates = client.get()
                     .uri("/api/v1/flights/{flightNumber}/departures/{date}", flightNumber, departureDate)
                     .exchange((request, response) -> switch (response.getStatusCode().value()) {
                         case 200 -> true;
@@ -65,8 +71,14 @@ public class FlightSearchCatalog implements FlightCatalog {
                         default -> throw new FlightCatalogUnavailableException(
                                 "Flight search answered " + response.getStatusCode().value(), null);
                     });
+            (operates ? operatesCalls : unknownCalls).increment();
+            return operates;
         } catch (RestClientException e) {
+            unavailableCalls.increment();
             throw new FlightCatalogUnavailableException("Flight search is unreachable", e);
+        } catch (FlightCatalogUnavailableException e) {
+            unavailableCalls.increment();
+            throw e;
         }
     }
 }

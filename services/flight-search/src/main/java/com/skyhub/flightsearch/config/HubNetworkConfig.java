@@ -3,11 +3,17 @@ package com.skyhub.flightsearch.config;
 import com.skyhub.flightsearch.domain.AirportTransfer;
 import com.skyhub.flightsearch.domain.Hub;
 import com.skyhub.flightsearch.domain.HubNetwork;
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 public class HubNetworkConfig {
+
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
+    }
 
     @Bean
     HubNetwork hubNetwork(HubProperties properties) {

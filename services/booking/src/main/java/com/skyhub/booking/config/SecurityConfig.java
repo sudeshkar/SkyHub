@@ -32,7 +32,8 @@ public class SecurityConfig {
                         .requestMatchers(GET, "/api/v1/flights/*/departures/*/seats").permitAll()
                         .requestMatchers(POST, "/api/v1/pnrs").permitAll()
                         .requestMatchers(GET, "/api/v1/pnrs/*").permitAll()
-                        .requestMatchers(GET, "/actuator/health/**").permitAll()
+                        // Actuator is only served on the management port, which is never exposed publicly.
+                        .requestMatchers(GET, "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .anyRequest().denyAll())
                 .build();
     }

@@ -25,7 +25,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(GET, "/api/v1/hubs", "/api/v1/itineraries", "/api/v1/flights/*/departures/*").permitAll()
-                        .requestMatchers(GET, "/actuator/health/**").permitAll()
+                        // Actuator is only served on the management port, which is never exposed publicly.
+                        .requestMatchers(GET, "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .anyRequest().denyAll())
                 .build();
     }
