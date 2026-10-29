@@ -3,6 +3,7 @@ import { Fraunces, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
 import logo from "@/assets/skyhub-logo.png";
+import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -50,11 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
         <main className="flex-1">{children}</main>
-        <footer className="border-t border-sand">
-          <p className="mx-auto max-w-5xl px-4 py-6 text-sm text-muted">
-            SkyHub is a portfolio project, not a real airline. Times are shown in each airport&apos;s local time.
-          </p>
-        </footer>
+        <SiteFooter />
       </body>
     </html>
   );
