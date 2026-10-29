@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
-import { createBooking, holdSeats, releaseSeats } from "@/app/book/actions";
-import type { Pnr, SeatMap as SeatMapData, Segment } from "@/lib/api/booking";
+import { createBooking, holdSeats, quoteTrip, releaseSeats } from "@/app/book/actions";
+import type { Pnr, QuoteOutcome, SeatMap as SeatMapData, Segment } from "@/lib/api/booking";
+import { formatPrice } from "@/lib/format";
 import { HoldCountdown } from "./hold-countdown";
+import { DEFAULT_PAYMENT_TOKEN, PaymentSummary } from "./payment-summary";
 import { SeatMap } from "./seat-map";
 
 type Step = "seats" | "passengers" | "review" | "done";
@@ -44,7 +46,10 @@ export function BookingWizard({
   );
   const [email, setEmail] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [booked, setBooked] = useState<Pnr | null>(null);
+  const [booked, setBooked] = useState<{ pnr: Pnr; paid: string } | null>(null);
+  // The price the server worked out for this trip; null while it is being worked out.
+  const [quote, setQuote] = useState<QuoteOutcome | null>(null);
+  const [paymentToken, setPaymentToken] = useState<string>(DEFAULT_PAYMENT_TOKEN);
   // Set while the chosen seats are held for this traveller, so nobody else can take them mid-checkout.
   const [hold, setHold] = useState<{ id: string; expiresAt: string } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -101,17 +106,30 @@ export function BookingWizard({
     router.refresh(); // show the current seat map
   }
 
+  function fetchQuote() {
+    setQuote(null);
+    startTransition(async () => {
+      const result = await quoteTrip(segments, passengerCount);
+      setQuote(result.kind === "quoted" ? result : { kind: "unavailable" });
+    });
+  }
+
   function goToReview(event: React.FormEvent) {
     event.preventDefault();
     idempotencyKey.current = crypto.randomUUID();
     setNotice(null);
     setStep("review");
+    fetchQuote();
   }
 
   function confirm() {
+    if (quote?.kind !== "quoted") return;
+    const shown = quote;
     startTransition(async () => {
       const outcome = await createBooking(
         {
+          paymentToken,
+          expectedAmount: shown.amount,
           holdId: hold?.id,
           contactEmail: email,
           segments,
@@ -121,8 +139,19 @@ export function BookingWizard({
       );
       if (outcome.kind === "booked") {
         setHold(null);
-        setBooked(outcome.pnr);
+        setBooked({ pnr: outcome.pnr, paid: formatPrice(shown.amount, shown.currency) });
         setStep("done");
+      } else if (outcome.kind === "declined") {
+        // A definite "no": the next try is a new attempt, so it gets a new key.
+        idempotencyKey.current = crypto.randomUUID();
+        setNotice(`${outcome.detail}. You have not been charged. Choose another payment method and try again.`);
+      } else if (outcome.kind === "price-changed") {
+        idempotencyKey.current = crypto.randomUUID();
+        setNotice(`${outcome.detail} Check the new total and confirm again.`);
+        fetchQuote();
+      } else if (outcome.kind === "payment-unavailable") {
+        // Safe to retry with the same key: the payment provider never charges one key twice.
+        setNotice("We couldn't reach the payment provider. You have not been charged. Please try again in a moment.");
       } else if (outcome.kind === "seat-taken") {
         setHold(null);
         setSeats(seats.map((row) => row.map(() => "")));
@@ -140,7 +169,7 @@ export function BookingWizard({
   }
 
   if (step === "done" && booked) {
-    return <Confirmation pnr={booked} />;
+    return <Confirmation pnr={booked.pnr} paid={booked.paid} />;
   }
 
   const seatMap = seatMaps[segmentIndex];
@@ -303,6 +332,7 @@ export function BookingWizard({
               <dd>{email}</dd>
             </div>
           </dl>
+          <PaymentSummary quote={quote} method={paymentToken} onMethodChange={setPaymentToken} disabled={pending} />
           <div className="flex gap-4">
             <button
               type="button"
@@ -314,11 +344,11 @@ export function BookingWizard({
             </button>
             <button
               type="button"
-              disabled={pending}
+              disabled={pending || quote?.kind !== "quoted"}
               onClick={confirm}
               className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60"
             >
-              {pending ? "Booking…" : "Confirm booking"}
+              {pending ? "Processing…" : quote?.kind === "quoted" ? `Pay ${formatPrice(quote.amount, quote.currency)} and book` : "Pay and book"}
             </button>
           </div>
         </section>
@@ -327,7 +357,7 @@ export function BookingWizard({
   );
 }
 
-function Confirmation({ pnr }: { pnr: Pnr }) {
+function Confirmation({ pnr, paid }: { pnr: Pnr; paid: string }) {
   return (
     <section aria-labelledby="done-heading" className="max-w-xl rounded-lg border border-sand bg-white p-8">
       <p className="text-sm font-semibold text-copper">Booking confirmed</p>
@@ -337,7 +367,10 @@ function Confirmation({ pnr }: { pnr: Pnr }) {
       <p className="mt-4 font-mono text-4xl tracking-[0.3em]" aria-label={`Booking reference ${pnr.locator.split("").join(" ")}`}>
         {pnr.locator}
       </p>
-      <p className="mt-4 text-muted">
+      <p className="mt-4 text-sm">
+        Paid <span className="font-mono font-semibold">{paid}</span>
+      </p>
+      <p className="mt-2 text-muted">
         Confirmation sent to {pnr.contactEmail}. Keep this reference and a passenger&apos;s last name to manage the
         booking.
       </p>

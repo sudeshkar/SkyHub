@@ -71,8 +71,33 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Book seats on every segment and create a PNR */
+        /**
+         * Pay for, and book, seats on every segment and create a PNR
+         * @description The server works out the price and charges `paymentToken` before booking (ADR-0015). If booking then
+         *     fails, the charge is refunded. The same `Idempotency-Key` never charges twice. If `expectedAmount` is
+         *     sent and differs from the server's price, nothing is charged and the answer is 409.
+         */
         post: operations["createPnr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The price of a trip, worked out by the server
+         * @description The same calculation that `POST /pnrs` charges. Fares come from the flight schedule.
+         */
+        post: operations["quote"];
         delete?: never;
         options?: never;
         head?: never;
@@ -307,7 +332,27 @@ export interface components {
             /** @description One seat per segment, in segment order */
             seats: components["schemas"]["SeatNumber"][];
         };
+        QuoteRequest: {
+            segments: components["schemas"]["Segment"][];
+            passengerCount: number;
+        };
+        Quote: {
+            /**
+             * @description Total for all passengers on all flights
+             * @example 1240
+             */
+            amount: number;
+            /** @example USD */
+            currency: string;
+        };
         CreatePnrRequest: {
+            /**
+             * @description Issued to the browser by the payment provider; card details never reach SkyHub.
+             *     The mock provider knows tok_visa (approved), tok_declined and tok_provider_down.
+             */
+            paymentToken: string;
+            /** @description The price the traveller was shown. If it differs from the server's price the booking is refused. */
+            expectedAmount?: number;
             /**
              * Format: uuid
              * @description Hold made earlier for these exact seats. Without it, the seats are booked directly.
@@ -581,8 +626,17 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            /** @description The payment was declined; nothing was booked */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             404: components["responses"]["FlightNotFound"];
-            /** @description A requested seat is no longer available */
+            /** @description A requested seat is no longer available (any charge was refunded), or the price changed */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -591,6 +645,33 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            503: components["responses"]["ScheduleUnavailable"];
+        };
+    };
+    quote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description The price */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["FlightNotFound"];
             503: components["responses"]["ScheduleUnavailable"];
         };
     };

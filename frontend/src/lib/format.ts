@@ -47,6 +47,11 @@ export function formatSearchDate(isoDate: string): string {
   }).format(new Date(`${isoDate}T00:00:00Z`));
 }
 
+/** An exact price to the cent, e.g. "$861.00": what will actually be charged, unlike the rounded "from" fares. */
+export function formatPrice(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+}
+
 export function formatMoney(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",

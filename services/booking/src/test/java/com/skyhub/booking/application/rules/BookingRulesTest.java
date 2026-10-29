@@ -1,5 +1,6 @@
 package com.skyhub.booking.application.rules;
 
+import com.skyhub.booking.TestCommands;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
@@ -20,7 +21,7 @@ class BookingRulesTest {
     private static final PassengerCommand RAJ = new PassengerCommand("Raj", "Perera", List.of("11E", "24B"));
 
     private static CreatePnrCommand booking(List<PnrSegment> segments, List<PassengerCommand> passengers) {
-        return new CreatePnrCommand("priya@example.com", segments, passengers);
+        return TestCommands.pnr("priya@example.com", segments, passengers);
     }
 
     @Test

@@ -89,6 +89,25 @@ groups:
           summary: "Over half of check-in requests are refused as outside the window (20+ in 15 minutes)"
           runbook: "docs/runbooks/README.md#checkinrefusedhigh"
 
+      - alert: RefundFailed
+        expr: sum(increase(skyhub_payments_total{outcome="refund_failed"}[10m])) > 0
+        labels: { severity: page }
+        annotations:
+          summary: "A refund failed after a failed booking: a traveller has been charged and has no booking"
+          runbook: "docs/runbooks/README.md#refundfailed"
+
+      - alert: PaymentProviderUnavailable
+        expr: |
+          sum(increase(skyhub_payments_total{outcome="unavailable"}[10m])) > 10
+            and
+          sum(increase(skyhub_payments_total{outcome="unavailable"}[10m]))
+            / clamp_min(sum(increase(skyhub_payments_total{outcome=~"unavailable|captured|declined"}[10m])), 1) > 0.5
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "Over half of payment attempts cannot reach the payment provider (10+ in 10 minutes)"
+          runbook: "docs/runbooks/README.md#paymentproviderunavailable"
+
       - alert: ServiceDown
         expr: up == 0
         for: 1m

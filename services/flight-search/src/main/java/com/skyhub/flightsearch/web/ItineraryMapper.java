@@ -35,7 +35,7 @@ final class ItineraryMapper {
 
     static FlightLegDto toDto(FlightLeg leg) {
         return new FlightLegDto(leg.flightNumber(), leg.origin(), leg.destination(), leg.departure(), leg.arrival(),
-                leg.aircraftType());
+                leg.aircraftType(), leg.fare(), leg.currency());
     }
 
     private static ConnectionDto toDto(Connection connection) {

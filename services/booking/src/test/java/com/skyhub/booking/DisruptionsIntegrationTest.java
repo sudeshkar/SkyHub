@@ -160,6 +160,7 @@ class DisruptionsIntegrationTest {
     private String book(String flight, String date, String seat) throws Exception {
         String body = """
                 {
+                  "paymentToken": "tok_visa",
                   "contactEmail": "priya@example.com",
                   "segments": [{"flightNumber": "%s", "departureDate": "%s"}],
                   "passengers": [{"firstName": "Priya", "lastName": "Perera", "seats": ["%s"]}]

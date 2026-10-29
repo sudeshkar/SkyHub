@@ -5,10 +5,15 @@ import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.LocatorGenerator;
+import com.skyhub.booking.domain.Money;
+import com.skyhub.booking.domain.Payment;
+import com.skyhub.booking.domain.PaymentDeclinedException;
 import com.skyhub.booking.domain.Pnr;
+import com.skyhub.booking.domain.PriceChangedException;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.SeatInventory;
+import com.skyhub.booking.persistence.PaymentRepository;
 import com.skyhub.booking.persistence.PnrRepository;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
 import com.skyhub.booking.application.BookingMetrics.Outcome;
@@ -42,10 +47,20 @@ public class BookingService {
     private final TransactionOperations transactions;
     private final BookingMetrics metrics;
     private final HoldMetrics holdMetrics;
+    private final PricingService pricing;
+    private final PaymentGateway gateway;
+    private final PaymentRepository payments;
+    private final PaymentMetrics paymentMetrics;
 
     public BookingService(SeatInventoryRepository seats, PnrRepository pnrs, SeatInventoryInitializer inventory,
                           SeatMapCache seatMaps, CreatePnrValidator validator, LocatorGenerator locators, Clock clock,
-                          TransactionOperations transactions, BookingMetrics metrics, HoldMetrics holdMetrics) {
+                          TransactionOperations transactions, BookingMetrics metrics, HoldMetrics holdMetrics,
+                          PricingService pricing, PaymentGateway gateway, PaymentRepository payments,
+                          PaymentMetrics paymentMetrics) {
+        this.pricing = pricing;
+        this.gateway = gateway;
+        this.payments = payments;
+        this.paymentMetrics = paymentMetrics;
         this.holdMetrics = holdMetrics;
         this.seats = seats;
         this.pnrs = pnrs;
@@ -77,7 +92,8 @@ public class BookingService {
                     .addKeyValue("flights", flightNumbers(command))
                     .log("Booking refused: seat taken");
             throw e;
-        } catch (InvalidBookingException | FlightNotFoundException | IdempotencyKeyReusedException e) {
+        } catch (InvalidBookingException | FlightNotFoundException | IdempotencyKeyReusedException
+                 | PaymentDeclinedException | PriceChangedException e) {
             metrics.record(Outcome.REJECTED);
             log.atInfo().addKeyValue("reason", e.getClass().getSimpleName()).log("Booking rejected");
             throw e;
@@ -102,16 +118,61 @@ public class BookingService {
         ContactEmail contactEmail = new ContactEmail(command.contactEmail());
         // Outside the booking transaction on purpose: see SeatInventoryInitializer.
         command.segments().forEach(s -> inventory.ensureInventory(s.flightNumber(), s.departureDate()));
+        // The price is the server's, never the request's (ADR-0015).
+        Money price = pricing.quote(command.segments(), command.passengers().size());
+        requireExpectedPrice(command, price);
+        // Outside the booking transaction: this is a network call. The key is derived from the Idempotency-Key, so a
+        // retry after a crash between "charged" and "booked" finds this charge instead of making another.
+        PaymentGateway.Charge charge = charge(command.paymentToken(), price, "booking-" + keyHash);
         try {
-            return transactions.execute(status -> book(command, contactEmail, keyHash, fingerprint));
+            return transactions.execute(status -> book(command, contactEmail, keyHash, fingerprint, charge));
+        } catch (RuntimeException failed) {
+            refund(charge); // paid but not booked: give the money back, then report the real failure
+            throw failed;
         } finally {
             // Seats changed (or a conflict showed this instance's map is stale): show fresh maps next time.
             command.segments().forEach(s -> seatMaps.invalidate(s.flightNumber(), s.departureDate()));
         }
     }
 
+    private void requireExpectedPrice(CreatePnrCommand command, Money price) {
+        if (command.expectedAmount() != null && command.expectedAmount().compareTo(price.amount()) != 0) {
+            paymentMetrics.record(PaymentMetrics.Outcome.PRICE_CHANGED);
+            throw new PriceChangedException("The price is now " + price.amount() + " " + price.currency() + ", not "
+                    + command.expectedAmount().setScale(2, java.math.RoundingMode.HALF_UP) + ". Nothing was charged.");
+        }
+    }
+
+    private PaymentGateway.Charge charge(String paymentToken, Money price, String chargeKey) {
+        try {
+            PaymentGateway.Charge charge = gateway.charge(paymentToken, price, chargeKey);
+            paymentMetrics.record(PaymentMetrics.Outcome.CAPTURED);
+            return charge;
+        } catch (PaymentDeclinedException e) {
+            paymentMetrics.record(PaymentMetrics.Outcome.DECLINED);
+            throw e;
+        } catch (PaymentUnavailableException e) {
+            paymentMetrics.record(PaymentMetrics.Outcome.UNAVAILABLE);
+            throw e;
+        }
+    }
+
+    /** Never throws: the caller is already reporting a failure, and a refund error must not hide it. */
+    private void refund(PaymentGateway.Charge charge) {
+        try {
+            gateway.refund(charge.id());
+            paymentMetrics.record(PaymentMetrics.Outcome.REFUNDED);
+            log.atInfo().addKeyValue("payment.charge", charge.id()).log("Charge refunded after a failed booking");
+        } catch (RuntimeException refundFailed) {
+            paymentMetrics.record(PaymentMetrics.Outcome.REFUND_FAILED);
+            // Money taken, no booking, refund failed: a person must fix this (runbook: RefundFailed).
+            log.atError().addKeyValue("payment.charge", charge.id()).setCause(refundFailed)
+                    .log("Refund failed after a failed booking; the traveller has been charged");
+        }
+    }
+
     private BookingResult book(CreatePnrCommand command, ContactEmail contactEmail, String keyHash,
-                               String fingerprint) {
+                               String fingerprint, PaymentGateway.Charge charge) {
         String locator = locators.next();
         List<PnrSegment> segments = command.segments();
         for (int i = 0; i < segments.size(); i++) {
@@ -137,6 +198,8 @@ public class BookingService {
                 .map(p -> new PnrPassenger(p.firstName().strip(), p.lastName().strip(), p.seats()))
                 .toList();
         Pnr pnr = Pnr.confirmed(locator, contactEmail, segments, passengers, clock.instant(), keyHash, fingerprint);
-        return new BookingResult(PnrView.of(pnrs.saveAndFlush(pnr)), true);
+        Pnr saved = pnrs.saveAndFlush(pnr);
+        payments.saveAndFlush(Payment.captured(locator, charge.id(), charge.amount(), clock.instant()));
+        return new BookingResult(PnrView.of(saved), true);
     }
 }

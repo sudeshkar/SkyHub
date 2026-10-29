@@ -12,15 +12,16 @@ import java.util.Optional;
 public interface FlightCatalog {
 
     /**
-     * @return when the flight leaves, or empty if it does not operate on that date
+     * @return the flight's departure time and fare, or empty if it does not operate on that date
      * @throws FlightCatalogUnavailableException when the timetable cannot be checked right now
      */
-    Optional<Instant> departure(String flightNumber, LocalDate departureDate);
+    Optional<FlightInfo> find(String flightNumber, LocalDate departureDate);
 
-    /**
-     * @throws FlightCatalogUnavailableException when the timetable cannot be checked right now
-     */
+    default Optional<Instant> departure(String flightNumber, LocalDate departureDate) {
+        return find(flightNumber, departureDate).map(FlightInfo::departure);
+    }
+
     default boolean operates(String flightNumber, LocalDate departureDate) {
-        return departure(flightNumber, departureDate).isPresent();
+        return find(flightNumber, departureDate).isPresent();
     }
 }

@@ -1,10 +1,13 @@
 package com.skyhub.booking.web;
 
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
+import com.skyhub.booking.application.PaymentUnavailableException;
 import com.skyhub.booking.domain.AlreadyCheckedInException;
 import com.skyhub.booking.domain.BookingCancelledException;
 import com.skyhub.booking.domain.CheckInClosedException;
 import com.skyhub.booking.domain.NotCheckedInException;
+import com.skyhub.booking.domain.PaymentDeclinedException;
+import com.skyhub.booking.domain.PriceChangedException;
 import com.skyhub.booking.domain.FlightCancelledException;
 import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
@@ -71,6 +74,26 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(BookingCancelledException.class)
     ProblemDetail handleCancelled(BookingCancelledException ex) {
         return problem(HttpStatus.CONFLICT, "Booking cancelled", ex.getMessage());
+    }
+
+    @ExceptionHandler(PaymentDeclinedException.class)
+    ProblemDetail handlePaymentDeclined(PaymentDeclinedException ex) {
+        return problem(HttpStatus.PAYMENT_REQUIRED, "Payment declined", ex.getMessage());
+    }
+
+    @ExceptionHandler(PriceChangedException.class)
+    ProblemDetail handlePriceChanged(PriceChangedException ex) {
+        return problem(HttpStatus.CONFLICT, "Price changed", ex.getMessage());
+    }
+
+    /** The provider could not be reached. Nothing was charged and nothing was booked; the client may retry. */
+    @ExceptionHandler(PaymentUnavailableException.class)
+    ResponseEntity<ProblemDetail> handlePaymentUnavailable(PaymentUnavailableException ex) {
+        log.warn("Payment provider unavailable", ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, "5")
+                .body(problem(HttpStatus.SERVICE_UNAVAILABLE, "Payment unavailable",
+                        "We couldn't reach the payment provider. You have not been charged. Please try again shortly."));
     }
 
     @ExceptionHandler(CheckInClosedException.class)

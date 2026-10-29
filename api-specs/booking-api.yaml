@@ -103,7 +103,11 @@ paths:
     post:
       tags: [Pnrs]
       operationId: createPnr
-      summary: Book seats on every segment and create a PNR
+      summary: Pay for, and book, seats on every segment and create a PNR
+      description: |
+        The server works out the price and charges `paymentToken` before booking (ADR-0015). If booking then
+        fails, the charge is refunded. The same `Idempotency-Key` never charges twice. If `expectedAmount` is
+        sent and differs from the server's price, nothing is charged and the answer is 409.
       parameters:
         - name: Idempotency-Key
           in: header
@@ -142,12 +146,44 @@ paths:
           $ref: '#/components/responses/FlightNotFound'
         '503':
           $ref: '#/components/responses/ScheduleUnavailable'
-        '409':
-          description: A requested seat is no longer available
+        '402':
+          description: The payment was declined; nothing was booked
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: A requested seat is no longer available (any charge was refunded), or the price changed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/quotes:
+    post:
+      tags: [Pnrs]
+      operationId: quote
+      summary: The price of a trip, worked out by the server
+      description: The same calculation that `POST /pnrs` charges. Fares come from the flight schedule.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+      responses:
+        '200':
+          description: The price
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/FlightNotFound'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
 
   /api/v1/pnrs/{locator}/sessions:
     post:
@@ -602,10 +638,46 @@ components:
           items:
             $ref: '#/components/schemas/SeatNumber'
 
+    QuoteRequest:
+      type: object
+      required: [segments, passengerCount]
+      properties:
+        segments:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/Segment'
+        passengerCount:
+          type: integer
+          minimum: 1
+          maximum: 9
+
+    Quote:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: number
+          description: Total for all passengers on all flights
+          example: 1240.00
+        currency:
+          type: string
+          example: USD
+
     CreatePnrRequest:
       type: object
-      required: [contactEmail, segments, passengers]
+      required: [contactEmail, segments, passengers, paymentToken]
       properties:
+        paymentToken:
+          type: string
+          pattern: '^tok_[a-z0-9_]{1,40}$'
+          description: |
+            Issued to the browser by the payment provider; card details never reach SkyHub.
+            The mock provider knows tok_visa (approved), tok_declined and tok_provider_down.
+        expectedAmount:
+          type: number
+          description: The price the traveller was shown. If it differs from the server's price the booking is refused.
         holdId:
           type: string
           format: uuid

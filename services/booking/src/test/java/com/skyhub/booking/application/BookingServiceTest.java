@@ -1,5 +1,6 @@
 package com.skyhub.booking.application;
 
+import com.skyhub.booking.TestCommands;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,13 +23,18 @@ import com.skyhub.booking.domain.Cabin;
 import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
+import com.skyhub.booking.domain.Money;
+import com.skyhub.booking.domain.Payment;
+import com.skyhub.booking.domain.PaymentDeclinedException;
 import com.skyhub.booking.domain.Pnr;
+import com.skyhub.booking.domain.PriceChangedException;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.SeatInventory;
 import com.skyhub.booking.domain.SeatSpec;
 import com.skyhub.booking.domain.SeatStatus;
 import com.skyhub.booking.domain.SeatUnavailableException;
+import com.skyhub.booking.persistence.PaymentRepository;
 import com.skyhub.booking.persistence.PnrRepository;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -59,11 +65,18 @@ class BookingServiceTest {
     private final Map<String, SeatInventory> inventory = new HashMap<>();
 
     private final SimpleMeterRegistry holdMetrics = new SimpleMeterRegistry();
+    private final SimpleMeterRegistry paymentRegistry = new SimpleMeterRegistry();
+    private final PaymentGateway gateway = mock(PaymentGateway.class);
+    private final PaymentRepository payments = mock(PaymentRepository.class);
+    /** Every flight costs 100.00 USD a passenger, so SK501 + SK901 for one passenger is 200.00. */
+    private final PricingService pricing = new PricingService(
+            (flight, date) -> Optional.of(new FlightInfo(NOW.plusSeconds(18000), Money.of("100.00", "USD"))));
 
     private final BookingService service = new BookingService(seats, pnrs, initializer, new SeatMapCache(new SimpleMeterRegistry()), new CreatePnrValidator(List.of(new SegmentCountRule(), new PassengerCountRule(),
                     new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
             Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
-            new BookingMetrics(new SimpleMeterRegistry()), new HoldMetrics(holdMetrics));
+            new BookingMetrics(new SimpleMeterRegistry()), new HoldMetrics(holdMetrics),
+            pricing, gateway, payments, new PaymentMetrics(paymentRegistry));
 
     @BeforeEach
     void setUp() {
@@ -78,6 +91,118 @@ class BookingServiceTest {
                         inventory.get(call.<String>getArgument(0) + call.<String>getArgument(2))));
         when(pnrs.findByIdempotencyKeyHash(anyString())).thenReturn(Optional.empty());
         when(pnrs.saveAndFlush(any(Pnr.class))).thenAnswer(call -> call.getArgument(0));
+        when(payments.saveAndFlush(any(Payment.class))).thenAnswer(call -> call.getArgument(0));
+        when(gateway.charge(eq("tok_visa"), any(Money.class), anyString()))
+                .thenAnswer(call -> new PaymentGateway.Charge("ch_1", call.getArgument(1)));
+    }
+
+    private double payment(String outcome) {
+        return paymentRegistry.counter("skyhub.payments", "outcome", outcome).count();
+    }
+
+    private CreatePnrCommand paidWith(String token, java.math.BigDecimal expected) {
+        return new CreatePnrCommand("priya@example.com", List.of(SK501, SK901),
+                List.of(passenger("Priya", "Perera", "11D", "24A")), null, token, expected);
+    }
+
+    @Test
+    void should_charge_the_price_the_server_worked_out_before_booking_and_record_the_payment() {
+        service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY);
+
+        var order = inOrder(gateway, pnrs, payments);
+        order.verify(gateway).charge("tok_visa", Money.of("200.00", "USD"), "booking-" + Sha256.hex(KEY));
+        order.verify(pnrs).saveAndFlush(any(Pnr.class));
+        var saved = org.mockito.ArgumentCaptor.forClass(Payment.class);
+        order.verify(payments).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getLocator()).isEqualTo("ABC234");
+        assertThat(saved.getValue().getChargeId()).isEqualTo("ch_1");
+        assertThat(saved.getValue().getAmount()).isEqualTo(Money.of("200.00", "USD"));
+        assertThat(payment("captured")).isEqualTo(1);
+    }
+
+    @Test
+    void should_charge_for_every_passenger() {
+        service.createPnr(command(passenger("Priya", "Perera", "11D", "24A"), passenger("Raj", "Perera", "11E", "24B")), KEY);
+
+        verify(gateway).charge(eq("tok_visa"), eq(Money.of("400.00", "USD")), anyString());
+    }
+
+    @Test
+    void should_book_nothing_when_the_payment_is_declined() {
+        when(gateway.charge(eq("tok_declined"), any(Money.class), anyString()))
+                .thenThrow(new PaymentDeclinedException("Your card was declined"));
+
+        assertThatExceptionOfType(PaymentDeclinedException.class)
+                .isThrownBy(() -> service.createPnr(paidWith("tok_declined", null), KEY));
+
+        assertThat(inventory.get("SK50111D").getStatus()).isEqualTo(SeatStatus.AVAILABLE);
+        verify(pnrs, never()).saveAndFlush(any());
+        verify(gateway, never()).refund(anyString());
+        assertThat(payment("declined")).isEqualTo(1);
+    }
+
+    @Test
+    void should_book_nothing_when_the_provider_is_down() {
+        when(gateway.charge(eq("tok_provider_down"), any(Money.class), anyString()))
+                .thenThrow(new PaymentUnavailableException("no answer", null));
+
+        assertThatExceptionOfType(PaymentUnavailableException.class)
+                .isThrownBy(() -> service.createPnr(paidWith("tok_provider_down", null), KEY));
+
+        verify(pnrs, never()).saveAndFlush(any());
+        assertThat(payment("unavailable")).isEqualTo(1);
+    }
+
+    @Test
+    void should_refuse_without_charging_when_the_price_the_traveller_saw_is_not_the_price() {
+        assertThatExceptionOfType(PriceChangedException.class)
+                .isThrownBy(() -> service.createPnr(paidWith("tok_visa", new java.math.BigDecimal("150.00")), KEY))
+                .withMessageContaining("200.00");
+
+        verify(gateway, never()).charge(anyString(), any(Money.class), anyString());
+        assertThat(payment("price_changed")).isEqualTo(1);
+    }
+
+    @Test
+    void should_accept_the_expected_price_however_many_decimals_it_is_written_with() {
+        assertThat(service.createPnr(paidWith("tok_visa", new java.math.BigDecimal("200")), KEY).created()).isTrue();
+    }
+
+    @Test
+    void should_refund_the_charge_when_the_seat_is_gone_after_paying() {
+        inventory.get("SK90124A").book("OTHER1");
+
+        assertThatExceptionOfType(SeatUnavailableException.class)
+                .isThrownBy(() -> service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY));
+
+        verify(gateway).refund("ch_1");
+        verify(payments, never()).saveAndFlush(any());
+        assertThat(payment("refunded")).isEqualTo(1);
+    }
+
+    @Test
+    void should_still_report_the_real_failure_and_raise_the_alarm_when_the_refund_fails() {
+        inventory.get("SK90124A").book("OTHER1");
+        org.mockito.Mockito.doThrow(new PaymentUnavailableException("no answer", null)).when(gateway).refund("ch_1");
+
+        assertThatExceptionOfType(SeatUnavailableException.class)
+                .isThrownBy(() -> service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY));
+
+        assertThat(payment("refund_failed")).isEqualTo(1);
+        assertThat(payment("refunded")).isZero();
+    }
+
+    @Test
+    void should_not_charge_again_for_a_replayed_request() {
+        Pnr existing = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(SK501, SK901),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("11D", "24A"))), NOW, Sha256.hex(KEY),
+                RequestFingerprint.of(command(passenger("Priya", "Perera", "11D", "24A"))));
+        when(pnrs.findByIdempotencyKeyHash(Sha256.hex(KEY))).thenReturn(Optional.of(existing));
+
+        var result = service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY);
+
+        assertThat(result.created()).isFalse();
+        verifyNoInteractions(gateway);
     }
 
     @Test
@@ -161,13 +286,13 @@ class BookingServiceTest {
         var ten = Collections.nCopies(10, passenger("Priya", "Perera", "11D", "24A"));
 
         assertThatExceptionOfType(InvalidBookingException.class)
-                .isThrownBy(() -> service.createPnr(new CreatePnrCommand("priya@example.com", List.of(SK501, SK901), ten), KEY));
+                .isThrownBy(() -> service.createPnr(TestCommands.pnr("priya@example.com", List.of(SK501, SK901), ten), KEY));
     }
 
     @Test
     void should_reject_the_same_flight_twice() {
         assertThatExceptionOfType(InvalidBookingException.class)
-                .isThrownBy(() -> service.createPnr(new CreatePnrCommand("priya@example.com", List.of(SK501, SK501),
+                .isThrownBy(() -> service.createPnr(TestCommands.pnr("priya@example.com", List.of(SK501, SK501),
                         List.of(passenger("Priya", "Perera", "11D", "24A"))), KEY));
     }
 
@@ -232,11 +357,11 @@ class BookingServiceTest {
     }
 
     private static CreatePnrCommand heldCommand(String holdId, PassengerCommand... passengers) {
-        return new CreatePnrCommand("priya@example.com", List.of(SK501, SK901), List.of(passengers), holdId);
+        return TestCommands.pnr("priya@example.com", List.of(SK501, SK901), List.of(passengers), holdId);
     }
 
     private static CreatePnrCommand command(PassengerCommand... passengers) {
-        return new CreatePnrCommand("priya@example.com", List.of(SK501, SK901), List.of(passengers));
+        return TestCommands.pnr("priya@example.com", List.of(SK501, SK901), List.of(passengers));
     }
 
     private static PassengerCommand passenger(String first, String last, String... seats) {

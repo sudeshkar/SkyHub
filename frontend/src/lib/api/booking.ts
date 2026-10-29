@@ -10,8 +10,13 @@ type Problem = components["schemas"]["Problem"];
 export type BookingOutcome =
   | { kind: "booked"; pnr: Pnr }
   | { kind: "seat-taken"; detail: string }
+  | { kind: "declined"; detail: string } // the payment was refused; nothing was booked
+  | { kind: "price-changed"; detail: string } // nothing was charged
+  | { kind: "payment-unavailable" } // the payment provider did not answer; nothing was charged
   | { kind: "rejected"; detail: string }
   | { kind: "unavailable" };
+
+export type QuoteOutcome = { kind: "quoted"; amount: number; currency: string } | { kind: "unavailable" };
 
 // Server-side only: the browser never calls the Java service directly.
 const API_URL = process.env.SKYHUB_BOOKING_API_URL ?? "http://localhost:8082";
@@ -38,6 +43,19 @@ export async function getSeatMap(segment: Segment): Promise<SeatMap | "not-found
   return response?.status === 404 ? "not-found" : "unavailable";
 }
 
+/** The price of a trip as the booking service works it out (the same number it will charge). */
+export async function getQuote(segments: Segment[], passengerCount: number): Promise<QuoteOutcome> {
+  const response = await call("/api/v1/quotes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ segments, passengerCount }),
+    cache: "no-store",
+  });
+  if (!response?.ok) return { kind: "unavailable" };
+  const quote = (await response.json()) as components["schemas"]["Quote"];
+  return { kind: "quoted", amount: quote.amount, currency: quote.currency };
+}
+
 export async function createPnr(request: CreatePnrRequest, idempotencyKey: string): Promise<BookingOutcome> {
   const response = await call("/api/v1/pnrs", {
     method: "POST",
@@ -46,8 +64,18 @@ export async function createPnr(request: CreatePnrRequest, idempotencyKey: strin
   });
   if (!response) return { kind: "unavailable" };
   if (response.ok) return { kind: "booked", pnr: (await response.json()) as Pnr };
+  if (response.status === 402) {
+    return { kind: "declined", detail: await problemDetail(response, "Your payment was declined.") };
+  }
   if (response.status === 409) {
-    return { kind: "seat-taken", detail: await problemDetail(response, "A selected seat was just taken.") };
+    const problem = (await response.json().catch(() => null)) as Problem | null;
+    return problem?.title === "Price changed"
+      ? { kind: "price-changed", detail: problem.detail ?? "The price has changed." }
+      : { kind: "seat-taken", detail: problem?.detail ?? "A selected seat was just taken." };
+  }
+  if (response.status === 503) {
+    const problem = (await response.json().catch(() => null)) as Problem | null;
+    return problem?.title === "Payment unavailable" ? { kind: "payment-unavailable" } : { kind: "unavailable" };
   }
   if (response.status === 400 || response.status === 404 || response.status === 422) {
     return { kind: "rejected", detail: await problemDetail(response, "Please check your details.") };

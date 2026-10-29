@@ -62,6 +62,9 @@ class SecurityConfigTest {
     private BookingService bookingService;
 
     @MockitoBean
+    private com.skyhub.booking.application.PricingService pricing;
+
+    @MockitoBean
     private ManageBookingService manageBooking;
 
     private String bearer(String locator) {

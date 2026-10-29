@@ -47,6 +47,7 @@ public class SecurityConfig {
                         .requestMatchers(GET, "/api/v1/flights/*/departures/*/seats").permitAll()
                         .requestMatchers(POST, "/api/v1/holds").permitAll()
                         .requestMatchers(DELETE, "/api/v1/holds/{holdId}").permitAll()
+                        .requestMatchers(POST, "/api/v1/quotes").permitAll()
                         .requestMatchers(POST, "/api/v1/pnrs").permitAll()
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/sessions").permitAll()
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}").access(ownsBooking)

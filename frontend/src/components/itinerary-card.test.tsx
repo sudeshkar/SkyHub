@@ -7,8 +7,8 @@ import { segmentsOf } from "./journey-bar";
 // Same shape and values the API returns for CMB → JFK on 2026-11-02.
 const viaTransfer: Itinerary = {
   legs: [
-    { flightNumber: "SK501", origin: "CMB", destination: "DXB", departureTime: "2026-11-02T02:00:00Z", arrivalTime: "2026-11-02T06:50:00Z", aircraftType: "A350" },
-    { flightNumber: "SK901", origin: "DWC", destination: "JFK", departureTime: "2026-11-02T10:30:00Z", arrivalTime: "2026-11-03T00:30:00Z", aircraftType: "B777" },
+    { flightNumber: "SK501", origin: "CMB", destination: "DXB", departureTime: "2026-11-02T02:00:00Z", arrivalTime: "2026-11-02T06:50:00Z", aircraftType: "A350", fare: 620, currency: "USD" },
+    { flightNumber: "SK901", origin: "DWC", destination: "JFK", departureTime: "2026-11-02T10:30:00Z", arrivalTime: "2026-11-03T00:30:00Z", aircraftType: "B777", fare: 620, currency: "USD" },
   ],
   connections: [
     { arrivalAirport: "DXB", departureAirport: "DWC", layoverMinutes: 220, requiresAirportTransfer: true, transferMinutes: 120 },
@@ -21,7 +21,7 @@ const viaTransfer: Itinerary = {
 
 const direct: Itinerary = {
   legs: [
-    { flightNumber: "SK001", origin: "DXB", destination: "LHR", departureTime: "2026-11-02T08:30:00Z", arrivalTime: "2026-11-02T16:20:00Z", aircraftType: "A380" },
+    { flightNumber: "SK001", origin: "DXB", destination: "LHR", departureTime: "2026-11-02T08:30:00Z", arrivalTime: "2026-11-02T16:20:00Z", aircraftType: "A380", fare: 540, currency: "USD" },
   ],
   connections: [],
   stops: 0,
