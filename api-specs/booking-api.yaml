@@ -2,7 +2,9 @@ openapi: 3.0.3
 info:
   title: SkyHub Booking API
   version: 1.0.0
-  description: Seat maps and passenger name records (PNRs).
+  description: |
+    Seat maps and passenger name records (PNRs). A PNR holds every segment of an itinerary
+    (e.g. CMB→DXB and DWC→JFK) and one seat per passenger per segment.
 servers:
   - url: http://localhost:8082
 tags:
@@ -16,8 +18,18 @@ paths:
       operationId: getSeatMap
       summary: Seat map for one flight on one date
       parameters:
-        - $ref: '#/components/parameters/FlightNumber'
-        - $ref: '#/components/parameters/DepartureDate'
+        - name: flightNumber
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/FlightNumber'
+        - name: departureDate
+          in: path
+          required: true
+          description: UTC departure date of the flight
+          schema:
+            type: string
+            format: date
       responses:
         '200':
           description: Seat map
@@ -32,15 +44,15 @@ paths:
     post:
       tags: [Pnrs]
       operationId: createPnr
-      summary: Book seats and create a PNR
+      summary: Book seats on every segment and create a PNR
       parameters:
         - name: Idempotency-Key
           in: header
-          required: false
-          description: Client-generated key; repeating it returns the original PNR instead of booking again
+          required: true
+          description: Client-generated key (e.g. a UUID). Repeating it returns the original PNR instead of booking again.
           schema:
             type: string
-            minLength: 1
+            minLength: 8
             maxLength: 64
       requestBody:
         required: true
@@ -79,6 +91,9 @@ paths:
       tags: [Pnrs]
       operationId: getPnr
       summary: Retrieve a PNR
+      description: |
+        Requires the last name of any passenger on the booking, so a guessed locator alone reveals nothing.
+        An unknown locator and a wrong last name both return 404.
       parameters:
         - name: locator
           in: path
@@ -86,6 +101,13 @@ paths:
           schema:
             type: string
             pattern: '^[A-Z0-9]{6}$'
+        - name: lastName
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
       responses:
         '200':
           description: PNR
@@ -93,31 +115,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Pnr'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
-          description: Not found
+          description: No booking matches this locator and last name
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
 
 components:
-  parameters:
-    FlightNumber:
-      name: flightNumber
-      in: path
-      required: true
-      schema:
-        type: string
-        pattern: '^[A-Z0-9]{2}[0-9]{1,4}$'
-        example: SK501
-    DepartureDate:
-      name: departureDate
-      in: path
-      required: true
-      schema:
-        type: string
-        format: date
-
   responses:
     BadRequest:
       description: Invalid request
@@ -127,6 +134,16 @@ components:
             $ref: '#/components/schemas/Problem'
 
   schemas:
+    FlightNumber:
+      type: string
+      pattern: '^[A-Z0-9]{2}[0-9]{1,4}$'
+      example: SK501
+
+    SeatNumber:
+      type: string
+      pattern: '^[0-9]{1,2}[A-K]$'
+      example: 11D
+
     Cabin:
       type: string
       enum: [BUSINESS, ECONOMY]
@@ -137,11 +154,14 @@ components:
 
     Seat:
       type: object
-      required: [seatNumber, cabin, status]
+      required: [seatNumber, row, letter, cabin, status]
       properties:
         seatNumber:
+          $ref: '#/components/schemas/SeatNumber'
+        row:
+          type: integer
+        letter:
           type: string
-          example: 11D
         cabin:
           $ref: '#/components/schemas/Cabin'
         status:
@@ -158,12 +178,23 @@ components:
           format: date
         seats:
           type: array
+          description: Ordered by row, then letter
           items:
             $ref: '#/components/schemas/Seat'
 
+    Segment:
+      type: object
+      required: [flightNumber, departureDate]
+      properties:
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+
     PassengerRequest:
       type: object
-      required: [firstName, lastName, seatNumber]
+      required: [firstName, lastName, seats]
       properties:
         firstName:
           type: string
@@ -173,24 +204,28 @@ components:
           type: string
           minLength: 1
           maxLength: 50
-        seatNumber:
-          type: string
-          pattern: '^[0-9]{1,2}[A-K]$'
+        seats:
+          type: array
+          description: One seat per segment, in segment order
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/SeatNumber'
 
     CreatePnrRequest:
       type: object
-      required: [contactEmail, flightNumber, departureDate, passengers]
+      required: [contactEmail, segments, passengers]
       properties:
         contactEmail:
           type: string
           format: email
           maxLength: 254
-        flightNumber:
-          type: string
-          pattern: '^[A-Z0-9]{2}[0-9]{1,4}$'
-        departureDate:
-          type: string
-          format: date
+        segments:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/Segment'
         passengers:
           type: array
           minItems: 1
@@ -200,14 +235,17 @@ components:
 
     Passenger:
       type: object
-      required: [firstName, lastName, seatNumber]
+      required: [firstName, lastName, seats]
       properties:
         firstName:
           type: string
         lastName:
           type: string
-        seatNumber:
-          type: string
+        seats:
+          type: array
+          description: One seat per segment, in segment order
+          items:
+            type: string
 
     PnrStatus:
       type: string
@@ -215,7 +253,7 @@ components:
 
     Pnr:
       type: object
-      required: [locator, status, contactEmail, flightNumber, departureDate, createdAt, passengers]
+      required: [locator, status, contactEmail, segments, passengers, createdAt]
       properties:
         locator:
           type: string
@@ -224,18 +262,17 @@ components:
           $ref: '#/components/schemas/PnrStatus'
         contactEmail:
           type: string
-        flightNumber:
-          type: string
-        departureDate:
-          type: string
-          format: date
-        createdAt:
-          type: string
-          format: date-time
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Segment'
         passengers:
           type: array
           items:
             $ref: '#/components/schemas/Passenger'
+        createdAt:
+          type: string
+          format: date-time
 
     Problem:
       type: object

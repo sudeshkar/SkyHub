@@ -3,7 +3,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ItineraryCard } from "@/components/itinerary-card";
 import { airport } from "@/lib/airports";
-import { searchItineraries } from "@/lib/api/search";
+import { searchItineraries, type Itinerary } from "@/lib/api/search";
+import { encodeSegments, parsePassengers } from "@/lib/booking-params";
 import { formatSearchDate } from "@/lib/format";
 import { parseSearch } from "@/lib/search-params";
 
@@ -28,7 +29,13 @@ async function Results({ searchParams }: Pick<PageProps<"/search">, "searchParam
   }
 
   const { origin, destination, date } = parsed.query;
+  const params = await searchParams;
+  const passengers = parsePassengers(params.pax);
   const result = await searchItineraries(parsed.query);
+  const bookHref = (itinerary: Itinerary) =>
+    `/book?legs=${encodeSegments(
+      itinerary.legs.map((leg) => ({ flightNumber: leg.flightNumber, departureDate: leg.departureTime.slice(0, 10) })),
+    )}&pax=${passengers}`;
 
   return (
     <>
@@ -74,6 +81,7 @@ async function Results({ searchParams }: Pick<PageProps<"/search">, "searchParam
             <ItineraryCard
               key={itinerary.legs.map((leg) => `${leg.flightNumber}@${leg.departureTime}`).join("+")}
               itinerary={itinerary}
+              bookHref={bookHref(itinerary)}
             />
           ))}
         </section>

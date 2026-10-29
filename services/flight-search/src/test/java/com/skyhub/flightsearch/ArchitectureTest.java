@@ -33,6 +33,12 @@ class ArchitectureTest {
             .that().resideInAPackage("com.skyhub.flightsearch.web..")
             .should().dependOnClassesThat().resideInAPackage("com.skyhub.flightsearch.persistence..");
 
+    /** Entities never cross the API boundary: the web layer sees only domain values and generated DTOs. */
+    @ArchTest
+    static final ArchRule web_never_touches_entities = noClasses()
+            .that().resideInAPackage("com.skyhub.flightsearch.web..")
+            .should().dependOnClassesThat().areAnnotatedWith(jakarta.persistence.Entity.class);
+
     @ArchTest
     static final ArchRule controllers_live_in_web = classes()
             .that().areAnnotatedWith(RestController.class)

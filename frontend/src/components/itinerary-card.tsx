@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Connection, Itinerary } from "@/lib/api/search";
 import { airport } from "@/lib/airports";
 import { dayOffset, formatDuration, formatMoney, localTime } from "@/lib/format";
@@ -23,7 +24,7 @@ function TransferNotice({ connection }: { connection: Connection }) {
   );
 }
 
-export function ItineraryCard({ itinerary }: { itinerary: Itinerary }) {
+export function ItineraryCard({ itinerary, bookHref }: { itinerary: Itinerary; bookHref?: string }) {
   const first = itinerary.legs[0];
   const last = itinerary.legs[itinerary.legs.length - 1];
   const origin = airport(first.origin);
@@ -71,6 +72,15 @@ export function ItineraryCard({ itinerary }: { itinerary: Itinerary }) {
           <span className="block text-xs text-muted">from</span>
           <span className="text-xl font-semibold">{formatMoney(itinerary.fareFrom, itinerary.currency)}</span>
           <span className="block text-xs text-muted">per person</span>
+          {bookHref && (
+            <Link
+              href={bookHref}
+              aria-label={`Select ${itinerary.legs.map((leg) => leg.flightNumber).join(" and ")}`}
+              className="mt-2 inline-block rounded-md bg-copper px-5 py-2 text-sm font-semibold text-white hover:bg-copper-strong"
+            >
+              Select
+            </Link>
+          )}
         </p>
       </div>
 
