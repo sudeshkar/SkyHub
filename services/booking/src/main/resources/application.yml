@@ -39,6 +39,9 @@ skyhub:
   security:
     # Base64 256-bit AES key for personal data at rest. No default: the service refuses to start without it.
     pii-key: ${SKYHUB_PII_KEY:}
+    # Base64 256-bit HMAC key that signs manage-booking tokens (ADR-0011). Separate from pii-key on purpose.
+    manage-token-key: ${SKYHUB_MANAGE_TOKEN_KEY:}
+    manage-token-ttl: PT15M
 
 management:
   # Actuator lives on its own port, never exposed publicly (docs/design/04-observability.md §7).

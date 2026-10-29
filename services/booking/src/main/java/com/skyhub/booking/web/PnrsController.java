@@ -28,8 +28,4 @@ public class PnrsController implements PnrsApi {
         return ResponseEntity.created(URI.create("/api/v1/pnrs/" + body.getLocator())).body(body);
     }
 
-    @Override
-    public ResponseEntity<PnrDto> getPnr(String locator, String lastName) {
-        return ResponseEntity.ok(BookingDtoMapper.toDto(bookingService.findPnr(locator, lastName)));
-    }
 }

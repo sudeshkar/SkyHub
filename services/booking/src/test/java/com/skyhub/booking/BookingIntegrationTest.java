@@ -63,20 +63,13 @@ class BookingIntegrationTest {
     }
 
     @Test
-    void should_book_a_two_segment_itinerary_and_retrieve_it_by_last_name() throws Exception {
-        String response = mvc.perform(book("2026-11-02", "11D", "24A", newKey()))
+    void should_book_a_two_segment_itinerary() throws Exception {
+        mvc.perform(book("2026-11-02", "11D", "24A", newKey()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.segments.length()").value(2))
                 .andExpect(jsonPath("$.passengers[0].seats[1]").value("24A"))
-                .andExpect(jsonPath("$.contactEmail").value("p****@example.com"))
-                .andReturn().getResponse().getContentAsString();
-        String locator = JsonPath.read(response, "$.locator");
-
-        mvc.perform(get("/api/v1/pnrs/{locator}", locator).param("lastName", "PERERA"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.locator").value(locator));
-        mvc.perform(get("/api/v1/pnrs/{locator}", locator).param("lastName", "Silva"))
-                .andExpect(status().isNotFound());
+                .andExpect(jsonPath("$.contactEmail").value("p****@example.com"));
+        // Reading a booking back needs a manage token: see ManageBookingIntegrationTest.
     }
 
     @Test

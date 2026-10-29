@@ -73,6 +73,19 @@ public class SeatInventory {
         pnrLocator = locator;
     }
 
+    /**
+     * Frees the seat. Only the booking that holds it may release it; anything else means the data is
+     * inconsistent, which must fail loudly rather than free someone else's seat.
+     */
+    public void release(String locator) {
+        if (status != SeatStatus.BOOKED || !locator.equals(pnrLocator)) {
+            throw new IllegalStateException(
+                    "Seat " + seatNumber + " on " + flightNumber + " " + departureDate + " is not held by booking " + locator);
+        }
+        status = SeatStatus.AVAILABLE;
+        pnrLocator = null;
+    }
+
     public String getFlightNumber() {
         return flightNumber;
     }

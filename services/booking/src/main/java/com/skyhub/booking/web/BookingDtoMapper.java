@@ -2,15 +2,19 @@ package com.skyhub.booking.web;
 
 import com.skyhub.booking.api.model.CabinDto;
 import com.skyhub.booking.api.model.CreatePnrRequestDto;
+import com.skyhub.booking.api.model.ManageSessionDto;
 import com.skyhub.booking.api.model.PassengerDto;
 import com.skyhub.booking.api.model.PnrDto;
 import com.skyhub.booking.api.model.PnrStatusDto;
+import com.skyhub.booking.api.model.SeatChangeDto;
 import com.skyhub.booking.api.model.SeatDto;
 import com.skyhub.booking.api.model.SeatMapDto;
 import com.skyhub.booking.api.model.SeatStatusDto;
 import com.skyhub.booking.api.model.SegmentDto;
 import com.skyhub.booking.application.CreatePnrCommand;
+import com.skyhub.booking.application.ManageSession;
 import com.skyhub.booking.application.PassengerCommand;
+import com.skyhub.booking.application.SeatChangeCommand;
 import com.skyhub.booking.application.view.PnrView;
 import com.skyhub.booking.application.view.SeatView;
 import com.skyhub.booking.domain.PnrSegment;
@@ -45,6 +49,15 @@ final class BookingDtoMapper {
                         .map(p -> new PassengerDto(p.firstName(), p.lastName(), p.seats()))
                         .toList(),
                 pnr.createdAt().atOffset(ZoneOffset.UTC));
+    }
+
+    static SeatChangeCommand toCommand(SeatChangeDto request) {
+        return new SeatChangeCommand(request.getPassengerIndex(), request.getSegmentIndex(), request.getSeatNumber());
+    }
+
+    static ManageSessionDto toDto(ManageSession session) {
+        return new ManageSessionDto(session.token().value(), "Bearer",
+                session.token().expiresAt().atOffset(ZoneOffset.UTC), toDto(session.pnr()));
     }
 
     static SeatMapDto toDto(String flightNumber, LocalDate departureDate, List<SeatView> seats) {

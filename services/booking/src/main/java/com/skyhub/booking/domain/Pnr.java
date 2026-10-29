@@ -15,6 +15,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,10 @@ public class Pnr {
     @Column(nullable = false, length = 64)
     private String requestFingerprint;
 
+    /** Optimistic lock: two concurrent changes to one booking (cancel and change seat) cannot both win. */
+    @Version
+    private long version;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "pnr_segment", joinColumns = @JoinColumn(name = "pnr_id"))
     @OrderColumn(name = "segment_order")
@@ -81,6 +86,54 @@ public class Pnr {
 
     public boolean wasCreatedBy(String fingerprint) {
         return requestFingerprint.equals(fingerprint);
+    }
+
+    /** @return true if the booking was cancelled by this call, false if it already was (idempotent) */
+    public boolean cancel() {
+        if (status == PnrStatus.CANCELLED) {
+            return false;
+        }
+        status = PnrStatus.CANCELLED;
+        return true;
+    }
+
+    /** The seat a passenger holds on a flight of this booking. */
+    public String seatOf(int passengerIndex, int segmentIndex) {
+        requirePosition(passengerIndex, segmentIndex);
+        return passengers.get(passengerIndex).getSeats().get(segmentIndex);
+    }
+
+    /**
+     * Moves a passenger to another seat on one flight. Seat inventory is updated by the caller in the
+     * same transaction; this keeps the booking itself consistent.
+     *
+     * @return the seat the passenger left
+     */
+    public String changeSeat(int passengerIndex, int segmentIndex, String newSeat) {
+        requireActive();
+        requirePosition(passengerIndex, segmentIndex);
+        for (int p = 0; p < passengers.size(); p++) {
+            if (p != passengerIndex && passengers.get(p).getSeats().get(segmentIndex).equals(newSeat)) {
+                throw new InvalidBookingException("Seat " + newSeat + " is already assigned to another passenger on this flight");
+            }
+        }
+        return passengers.get(passengerIndex).replaceSeat(segmentIndex, newSeat);
+    }
+
+    /** Lets callers check before touching seat inventory, so a refused change never books anything. */
+    public void requireActive() {
+        if (status == PnrStatus.CANCELLED) {
+            throw new BookingCancelledException("Booking " + locator + " is cancelled");
+        }
+    }
+
+    private void requirePosition(int passengerIndex, int segmentIndex) {
+        if (passengerIndex < 0 || passengerIndex >= passengers.size()) {
+            throw new InvalidBookingException("This booking has no passenger " + passengerIndex);
+        }
+        if (segmentIndex < 0 || segmentIndex >= segments.size()) {
+            throw new InvalidBookingException("This booking has no flight " + segmentIndex);
+        }
     }
 
     /** Retrieval check for "manage booking": any passenger's last name, ignoring case and surrounding spaces. */

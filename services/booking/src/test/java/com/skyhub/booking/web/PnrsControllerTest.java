@@ -14,7 +14,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.skyhub.booking.application.BookingResult;
 import com.skyhub.booking.application.BookingService;
 import com.skyhub.booking.application.view.PnrView;
-import com.skyhub.booking.config.SecurityConfig;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrStatus;
@@ -31,7 +30,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PnrsController.class)
-@Import(SecurityConfig.class)
+@Import(WebSliceSecurity.class)
 class PnrsControllerTest {
 
     private static final String BODY = """
@@ -117,20 +116,10 @@ class PnrsControllerTest {
     }
 
     @Test
-    void should_return_404_for_unknown_booking() throws Exception {
-        when(bookingService.findPnr("ZZZZZZ", "Perera"))
-                .thenThrow(new PnrNotFoundException("No booking matches this reference and last name"));
-
-        mvc.perform(get("/api/v1/pnrs/ZZZZZZ").param("lastName", "Perera"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.detail").value("No booking matches this reference and last name"));
-    }
-
-    @Test
     void should_never_leak_internal_errors() throws Exception {
-        when(bookingService.findPnr(any(), any())).thenThrow(new IllegalStateException("db password is hunter2"));
+        when(bookingService.createPnr(any(), any())).thenThrow(new IllegalStateException("db password is hunter2"));
 
-        mvc.perform(get("/api/v1/pnrs/ABC234").param("lastName", "Perera"))
+        mvc.perform(createRequest(BODY, "key-12345678"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.detail").value("Something went wrong. Please try again."));
     }
