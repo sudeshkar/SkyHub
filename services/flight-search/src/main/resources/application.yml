@@ -1,0 +1,56 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: flight-search
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/flightsearch}
+    username: ${DB_USERNAME:skyhub}
+    password: ${DB_PASSWORD:skyhub}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cache:
+    type: redis
+    cache-names: itineraries
+    redis:
+      time-to-live: 5m
+  mvc:
+    problemdetails:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# Hub network — see docs/adr/0001-multi-hub-configuration.md
+skyhub:
+  hubs:
+    - code: DXB
+      name: Dubai International
+      active: true
+      minimum-connection-time: 75m
+    - code: DWC
+      name: Al Maktoum International
+      active: true
+      minimum-connection-time: 60m
+  airport-transfers:
+    - from: DXB
+      to: DWC
+      duration: 120m
+  max-layover: 12h
