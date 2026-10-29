@@ -49,6 +49,18 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** Overview → *Manage actions* (`session_denied` climbing against `session_opened`); in Loki: `{service="booking"} |= "Manage session denied"`.
 **Mitigate:** the Next.js server already limits lookups to 10 per 15 minutes per client, so a flood means many clients: tighten that limit or block the source at the gateway. No booking is exposed by failed attempts (a wrong name and an unknown reference look identical). If `session_opened` also rises abnormally, treat it as a possible compromise and check recent `Manage session opened` logs.
 
+## SeatHoldsAbandoned
+
+**Means:** in the last hour more than 50 seat holds ended, and over 90% of the ones that ended (expired or became a booking) expired. Travellers pick seats and leave, or something stops them finishing. A held seat is unavailable to everyone else for 10 minutes, so this also hides inventory.
+**Confirm:** Overview → *Seat holds per minute by outcome* (`expired` far above `converted`); compare with *Bookings per minute by outcome*: if bookings also fall, checkout is broken (look at `BookingErrorRateHigh` and the website's server logs); if bookings are normal and holds spike, suspect a script holding seats. Per client, holds are limited to 6 per minute at the website.
+**Mitigate:** a broken checkout is fixed at its cause. For hold abuse, block the source at the gateway; holds free themselves after 10 minutes, and the cleanup job frees them within 30 seconds of that. To free seats immediately: `UPDATE seat_inventory SET status='AVAILABLE', hold_id=NULL, held_until=NULL, version=version+1 WHERE status='HELD';` (safe: a hold that is released this way simply cannot be converted).
+
+## CheckInRefusedHigh
+
+**Means:** more than 20 check-in requests in 15 minutes, over half refused because check-in is not open yet or has closed. Real travellers try a little early or late; this share points at wrong times.
+**Confirm:** Overview → *Check-ins per minute by outcome*; in Loki the refusal text names the time: the window is 24 hours to 60 minutes before departure (`skyhub.booking.check-in.*`). Compare the departure time in the message with the flight in flight-search (`GET /api/v1/flights/{flight}/departures/{date}`): a wrong timetable or a changed window setting shifts every flight.
+**Mitigate:** correct the timetable or the setting and restart booking (window values are read at startup). Nothing is written when check-in is refused, so no data needs repair.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.
