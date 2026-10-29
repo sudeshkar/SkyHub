@@ -37,9 +37,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/" className="font-display text-2xl tracking-tight">
               SkyHub
             </Link>
-            <nav aria-label="Main" className="text-sm text-sand">
+            <nav aria-label="Main" className="flex gap-6 text-sm text-sand">
               <Link href="/" className="hover:text-ivory">
                 Book
+              </Link>
+              <Link href="/manage" className="hover:text-ivory">
+                Manage booking
               </Link>
             </nav>
           </div>
