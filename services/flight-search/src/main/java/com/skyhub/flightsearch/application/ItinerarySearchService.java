@@ -65,7 +65,7 @@ public class ItinerarySearchService {
 
     /**
      * The dated flight with what is known about it, or nothing if it is cancelled: a cancelled flight is not offered. A delay is
-     * shown beside the schedule, and connections are still judged on scheduled times (ADR-0025).
+     * shown beside the schedule, and connections are judged on the expected times (ADR-0027).
      */
     private Optional<FlightLeg> operatingLeg(FlightSchedule schedule, LocalDate date) {
         FlightLeg leg = schedule.legOn(date);
@@ -88,7 +88,7 @@ public class ItinerarySearchService {
                     if (outbound == null) {
                         continue;   // that onward flight is cancelled
                     }
-                    Duration layover = Duration.between(inbound.arrival(), outbound.departure());
+                    Duration layover = Duration.between(inbound.expectedArrival(), outbound.expectedDeparture());
                     if (layover.compareTo(required) >= 0 && layover.compareTo(hubNetwork.maxLayover()) <= 0) {
                         Connection connection = new Connection(inbound.destination(), departureAirport, layover,
                                 hubNetwork.transferTime(inbound.destination(), departureAirport));

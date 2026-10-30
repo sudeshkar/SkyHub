@@ -36,6 +36,7 @@ How a slice goes, every time:
 | 19 | Approval screen on the operations page: proposals from the agent over HTTP, approved with the staff member's own login | ADR-0024 |
 | 20 | Cancelled flights are not sold; search follows disruptions through a compacted Kafka topic | ADR-0025 |
 | 21 | Withdraw a disruption: staff take back a mistaken or resolved delay or cancellation; refused once bookings were moved | ADR-0026 |
+| 22 | Connections follow delays: search judges layovers on expected times | ADR-0027 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -43,7 +44,6 @@ Ordered by how much they add to the story, not a commitment.
 
 | Slice | What it adds | Notes |
 |---|---|---|
-| **Re-check connections when a leg is delayed** | Search judges a connection on scheduled times, so a delay on the first leg can leave a connection that is no longer possible | Follow-up from ADR-0025. Revised times are already in the flight status board. |
 | **Fuller rebooking** | A bulk rebooking endpoint; grouping and filtering proposals for big flights; arrival times and a connection rule in the booking service; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline (needs a Groq key; `python -m evals --live`) | Approval and rebooking exist (ADR-0022, 0023, 0024). Run `python -m evals --live` with a Groq key first: the live model has not been run yet. |
 | **More notifications** | A "disruption withdrawn" email (ADR-0026); check-in-opening reminders; a refund-completed email; HTML email and a boarding-pass attachment; SMS; non-blocking retry topics and a dead-letter replay tool | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Reconcile charges without a booking** | A job that finds charges with no booking and refunds them | Removes the manual step in the `RefundFailed` runbook. |

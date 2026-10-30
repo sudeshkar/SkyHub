@@ -39,4 +39,19 @@ class FlightStatusTest {
         assertThat(delayed.departure()).isEqualTo(DEPARTS);   // the scheduled time is untouched: the delay is reported beside it
         assertThat(delayed.status().revisedDeparture()).isEqualTo(DEPARTS.plusHours(6));
     }
+
+    @Test
+    void should_move_both_times_of_a_delayed_leg_by_the_same_amount_and_leave_the_schedule_alone() {
+        FlightLeg delayed = leg().withStatus(FlightStatus.delayedTo(DEPARTS.plusMinutes(90)));
+
+        assertThat(delayed.expectedDeparture()).isEqualTo(DEPARTS.plusMinutes(90));
+        assertThat(delayed.expectedArrival()).isEqualTo(DEPARTS.plusMinutes(560));
+        assertThat(delayed.departure()).isEqualTo(DEPARTS);
+    }
+
+    @Test
+    void should_expect_the_scheduled_times_when_nothing_is_reported() {
+        assertThat(leg().expectedDeparture()).isEqualTo(DEPARTS);
+        assertThat(leg().expectedArrival()).isEqualTo(DEPARTS.plusMinutes(470));
+    }
 }
