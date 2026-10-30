@@ -5,8 +5,10 @@ import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.http.HttpMethod.PUT;
 
-import com.skyhub.booking.security.OpsKeyAuthorization;
+import com.skyhub.booking.application.PasswordHasher;
+import com.skyhub.booking.security.BCryptPasswordHasher;
 import com.skyhub.booking.security.OwnsBookingAuthorization;
+import com.skyhub.booking.security.StaffAuthorization;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -26,14 +28,14 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
 
-    /** Closed to everyone unless an operations key is configured. */
+    /** BCrypt for staff passwords (ADR-0017). Strength 12 by default; tests turn it down to stay fast. */
     @Bean
-    OpsKeyAuthorization opsKeyAuthorization(@Value("${skyhub.security.ops-key:}") String key) {
-        return new OpsKeyAuthorization(key);
+    PasswordHasher passwordHasher(@Value("${skyhub.security.staff-password-strength:12}") int strength) {
+        return new BCryptPasswordHasher(strength);
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, OpsKeyAuthorization opsKey) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         OwnsBookingAuthorization ownsBooking = new OwnsBookingAuthorization();
         return http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -53,7 +55,9 @@ public class SecurityConfig {
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/cancellation").access(ownsBooking)
                         .requestMatchers(PUT, "/api/v1/pnrs/{locator}/seat-assignments").access(ownsBooking)
-                        .requestMatchers(POST, "/api/v1/ops/disruptions").access(opsKey)
+                        .requestMatchers(POST, "/api/v1/ops/sessions").permitAll()
+                        .requestMatchers(POST, "/api/v1/ops/staff").access(StaffAuthorization.createsStaff())
+                        .requestMatchers(POST, "/api/v1/ops/disruptions").access(StaffAuthorization.recordsDisruptions())
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}/disruptions").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/check-ins").access(ownsBooking)
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}/check-ins/{segmentIndex}").access(ownsBooking)

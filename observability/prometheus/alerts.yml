@@ -103,6 +103,14 @@ groups:
           summary: "A refund after a cancellation failed: the booking is cancelled and the traveller is still owed money"
           runbook: "docs/runbooks/README.md#cancellationrefundfailed"
 
+      - alert: StaffLoginGuessing
+        expr: sum(increase(skyhub_staff_logins_total{outcome=~"failed|locked"}[10m])) > 10
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "More than 10 failed or locked staff logins in 10 minutes: someone may be guessing passwords"
+          runbook: "docs/runbooks/README.md#staffloginguessing"
+
       - alert: PaymentProviderUnavailable
         expr: |
           sum(increase(skyhub_payments_total{outcome="unavailable"}[10m])) > 10

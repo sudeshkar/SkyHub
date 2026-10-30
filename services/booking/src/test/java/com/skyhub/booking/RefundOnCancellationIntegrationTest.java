@@ -32,8 +32,6 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({PostgresTestcontainer.class, TestFlightCatalog.class})
 class RefundOnCancellationIntegrationTest {
 
-    private static final String OPS_KEY = "test-operations-key-test-operations-key";
-
     @Autowired
     private MockMvc mvc;
 
@@ -79,7 +77,7 @@ class RefundOnCancellationIntegrationTest {
     @Test
     void should_refund_in_full_at_any_time_when_the_airline_cancelled_the_flight() throws Exception {
         String locator = book("SK501", "2027-05-03", "11D");
-        mvc.perform(post("/api/v1/ops/disruptions").header("X-Ops-Key", OPS_KEY).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/ops/disruptions").header("Authorization", TestStaff.adminBearer(mvc)).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"flightNumber\":\"SK501\",\"departureDate\":\"2027-05-03\","
                                 + "\"type\":\"CANCELLED\",\"reason\":\"Aircraft grounded\"}"))
                 .andExpect(status().isOk());

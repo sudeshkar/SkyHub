@@ -67,11 +67,11 @@ final class BookingDtoMapper {
                 .toList());
     }
 
-    static RecordDisruptionCommand toCommand(RecordDisruptionRequestDto request) {
+    static RecordDisruptionCommand toCommand(RecordDisruptionRequestDto request, String recordedBy) {
         return new RecordDisruptionCommand(request.getFlightNumber(), request.getDepartureDate(),
                 DisruptionType.valueOf(request.getType().name()),
                 request.getRevisedDeparture() == null ? null : request.getRevisedDeparture().toInstant(),
-                request.getReason());
+                request.getReason(), recordedBy);
     }
 
     static BookingDisruptionsDto toDto(List<BookingDisruption> disruptions) {

@@ -12,11 +12,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.skyhub.booking.application.BookingDisruption;
 import com.skyhub.booking.application.DisruptionService;
+import com.skyhub.booking.application.ManageTokenIssuer;
+import com.skyhub.booking.application.StaffTokenIssuer;
+import com.skyhub.booking.domain.StaffRole;
 import com.skyhub.booking.domain.DisruptionType;
 import com.skyhub.booking.domain.InvalidBookingException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -32,8 +36,6 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @Import(WebSliceSecurity.class)
 class DisruptionsControllerTest {
 
-    /** Matches skyhub.security.ops-key in the test properties. */
-    private static final String OPS_KEY = "test-operations-key-test-operations-key";
     private static final String DELAY = """
             {"flightNumber": "SK501", "departureDate": "2026-11-02", "type": "DELAYED",
              "revisedDeparture": "2026-11-02T14:30:00Z", "reason": "Late inbound aircraft"}""";
@@ -41,30 +43,46 @@ class DisruptionsControllerTest {
     @Autowired
     private MockMvc mvc;
 
+    @Autowired
+    private StaffTokenIssuer staffTokens;
+
+    @Autowired
+    private ManageTokenIssuer manageTokens;
+
     @MockitoBean
     private DisruptionService disruptionService;
 
+    private String ops;
+
+    @BeforeEach
+    void logIn() {
+        ops = "Bearer " + staffTokens.issue("priya.ops", StaffRole.OPS).value();
+    }
+
     private static MockHttpServletRequestBuilder record(String body, String key) {
         MockHttpServletRequestBuilder request = post("/api/v1/ops/disruptions").contentType(MediaType.APPLICATION_JSON).content(body);
-        return key == null ? request : request.header("X-Ops-Key", key);
+        return key == null ? request : request.header("Authorization", key);
     }
 
     @Test
     void should_record_a_disruption_for_operations_and_report_the_affected_bookings() throws Exception {
         when(disruptionService.record(argThat(c -> c.type() == DisruptionType.DELAYED
                 && c.revisedDeparture().equals(Instant.parse("2026-11-02T14:30:00Z"))
-                && c.flightNumber().equals("SK501")))).thenReturn(42);
+                && c.flightNumber().equals("SK501")
+                && c.recordedBy().equals("priya.ops")))).thenReturn(42);
 
-        mvc.perform(record(DELAY, OPS_KEY))
+        mvc.perform(record(DELAY, ops))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.affectedBookings").value(42));
     }
 
     @Test
-    void should_refuse_anyone_without_the_operations_key() throws Exception {
+    void should_refuse_anyone_who_is_not_logged_in_as_staff() throws Exception {
         mvc.perform(record(DELAY, null)).andExpect(status().isUnauthorized());
-        mvc.perform(record(DELAY, "guess")).andExpect(status().isUnauthorized());
+        mvc.perform(record(DELAY, "Bearer guess")).andExpect(status().isUnauthorized());
+        // a traveller's booking token is a valid token, but not a staff one
+        mvc.perform(record(DELAY, "Bearer " + manageTokens.issue("ABC234").value())).andExpect(status().isForbidden());
         verifyNoInteractions(disruptionService);
     }
 
@@ -74,14 +92,14 @@ class DisruptionsControllerTest {
                 .thenThrow(new InvalidBookingException("A delay needs a revised departure time"));
 
         mvc.perform(record("""
-                        {"flightNumber": "SK501", "departureDate": "2026-11-02", "type": "DELAYED"}""", OPS_KEY))
+                        {"flightNumber": "SK501", "departureDate": "2026-11-02", "type": "DELAYED"}""", ops))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("A delay needs a revised departure time"));
         mvc.perform(record("""
-                        {"flightNumber": "../x", "departureDate": "2026-11-02", "type": "CANCELLED"}""", OPS_KEY))
+                        {"flightNumber": "../x", "departureDate": "2026-11-02", "type": "CANCELLED"}""", ops))
                 .andExpect(status().isBadRequest());
         mvc.perform(record("""
-                        {"flightNumber": "SK501", "departureDate": "2026-11-02", "type": "EXPLODED"}""", OPS_KEY))
+                        {"flightNumber": "SK501", "departureDate": "2026-11-02", "type": "EXPLODED"}""", ops))
                 .andExpect(status().isBadRequest());
     }
 

@@ -229,6 +229,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Staff login
+         * @description Exchanges a username and password for a staff token (30 minutes) that carries the staff member's role.
+         *     An unknown user, a wrong password and a locked account all return the same 401. Five wrong passwords lock
+         *     the account for 15 minutes.
+         */
+        post: operations["openStaffSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a staff account
+         * @description Administrators only. The password is stored only as a hash.
+         */
+        post: operations["createStaffAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pnrs/{locator}/disruptions": {
         parameters: {
             query?: never;
@@ -436,6 +478,30 @@ export interface components {
             expiresAt: string;
             pnr: components["schemas"]["Pnr"];
         };
+        StaffLoginRequest: {
+            username: string;
+            password: string;
+        };
+        /** @enum {string} */
+        StaffRole: "OPS" | "ADMIN";
+        StaffSession: {
+            accessToken: string;
+            /** @example Bearer */
+            tokenType: string;
+            /** Format: date-time */
+            expiresAt: string;
+            username: string;
+            role: components["schemas"]["StaffRole"];
+        };
+        CreateStaffRequest: {
+            username: string;
+            password: string;
+            role: components["schemas"]["StaffRole"];
+        };
+        StaffAccount: {
+            username: string;
+            role: components["schemas"]["StaffRole"];
+        };
         SeatChange: {
             passengerIndex: number;
             segmentIndex: number;
@@ -476,14 +542,14 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Missing, invalid or expired manage token */
+        /** @description Missing, invalid or expired token */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
             };
             content?: never;
         };
-        /** @description The token belongs to a different booking */
+        /** @description The token belongs to a different booking, or the role is not allowed to do this */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -886,6 +952,77 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    openStaffSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Logged in */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Wrong username or password, or the account is locked */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createStaffAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStaffRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffAccount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description That username is taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getDisruptions: {

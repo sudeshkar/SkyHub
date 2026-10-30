@@ -30,7 +30,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @Import({PostgresTestcontainer.class, TestFlightCatalog.class})
 class DisruptionsIntegrationTest {
 
-    private static final String OPS_KEY = "test-operations-key-test-operations-key";
+    private String ops; // an Authorization header value for the bootstrap administrator
 
     @Autowired
     private MockMvc mvc;
@@ -45,7 +45,7 @@ class DisruptionsIntegrationTest {
         mvc.perform(post("/api/v1/pnrs/{l}/cancellation", cancelled).header("Authorization", tokenFor(cancelled)))
                 .andExpect(status().isOk());
 
-        mvc.perform(record("SK501", "2027-03-01", delayTo(Duration.ofHours(6)), OPS_KEY))
+        mvc.perform(record("SK501", "2027-03-01", delayTo(Duration.ofHours(6)), ops))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.affectedBookings").value(1));
     }
@@ -53,15 +53,15 @@ class DisruptionsIntegrationTest {
     @Test
     void should_keep_the_endpoint_closed_without_the_key() throws Exception {
         mvc.perform(record("SK501", "2027-03-02", delayTo(Duration.ofHours(6)), null)).andExpect(status().isUnauthorized());
-        mvc.perform(record("SK501", "2027-03-02", delayTo(Duration.ofHours(6)), "not-the-key")).andExpect(status().isUnauthorized());
+        mvc.perform(record("SK501", "2027-03-02", delayTo(Duration.ofHours(6)), "Bearer not-a-token")).andExpect(status().isUnauthorized());
         assertThat(rows("2027-03-02")).isZero();
     }
 
     @Test
     void should_hold_one_record_per_flight_and_date_however_often_it_is_recorded() throws Exception {
-        mvc.perform(record("SK501", "2027-03-03", delayTo(Duration.ofHours(6)), OPS_KEY)).andExpect(status().isOk());
-        mvc.perform(record("SK501", "2027-03-03", delayTo(Duration.ofHours(7)), OPS_KEY)).andExpect(status().isOk());
-        mvc.perform(record("SK501", "2027-03-03", "{\"type\":\"CANCELLED\",\"reason\":\"Aircraft grounded\"}", OPS_KEY))
+        mvc.perform(record("SK501", "2027-03-03", delayTo(Duration.ofHours(6)), ops)).andExpect(status().isOk());
+        mvc.perform(record("SK501", "2027-03-03", delayTo(Duration.ofHours(7)), ops)).andExpect(status().isOk());
+        mvc.perform(record("SK501", "2027-03-03", "{\"type\":\"CANCELLED\",\"reason\":\"Aircraft grounded\"}", ops))
                 .andExpect(status().isOk());
 
         assertThat(rows("2027-03-03")).isEqualTo(1);
@@ -73,8 +73,8 @@ class DisruptionsIntegrationTest {
 
     @Test
     void should_refuse_inconsistent_requests() throws Exception {
-        mvc.perform(record("SK501", "2027-03-04", "{\"type\":\"DELAYED\"}", OPS_KEY)).andExpect(status().isBadRequest());
-        mvc.perform(record("SK501", "2027-03-04", delayTo(Duration.ofHours(6)).replace("DELAYED", "CANCELLED"), OPS_KEY))
+        mvc.perform(record("SK501", "2027-03-04", "{\"type\":\"DELAYED\"}", ops)).andExpect(status().isBadRequest());
+        mvc.perform(record("SK501", "2027-03-04", delayTo(Duration.ofHours(6)).replace("DELAYED", "CANCELLED"), ops))
                 .andExpect(status().isBadRequest());
         assertThat(rows("2027-03-04")).isZero();
     }
@@ -87,8 +87,8 @@ class DisruptionsIntegrationTest {
         mvc.perform(get("/api/v1/pnrs/{l}/disruptions", mine).header("Authorization", token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items").isEmpty());
 
-        mvc.perform(record("SK501", "2027-03-05", delayTo(Duration.ofHours(6)), OPS_KEY)).andExpect(status().isOk());
-        mvc.perform(record("SK901", "2027-03-05", "{\"type\":\"CANCELLED\",\"reason\":\"Weather\"}", OPS_KEY)).andExpect(status().isOk());
+        mvc.perform(record("SK501", "2027-03-05", delayTo(Duration.ofHours(6)), ops)).andExpect(status().isOk());
+        mvc.perform(record("SK901", "2027-03-05", "{\"type\":\"CANCELLED\",\"reason\":\"Weather\"}", ops)).andExpect(status().isOk());
 
         mvc.perform(get("/api/v1/pnrs/{l}/disruptions", mine).header("Authorization", token))
                 .andExpect(status().isOk())
@@ -102,7 +102,7 @@ class DisruptionsIntegrationTest {
     @Test
     void should_not_let_a_cancelled_flight_be_checked_in() throws Exception {
         String locator = book("SK501", "2027-03-06", "11D");
-        mvc.perform(record("SK501", "2027-03-06", "{\"type\":\"CANCELLED\",\"reason\":\"Aircraft grounded\"}", OPS_KEY))
+        mvc.perform(record("SK501", "2027-03-06", "{\"type\":\"CANCELLED\",\"reason\":\"Aircraft grounded\"}", ops))
                 .andExpect(status().isOk());
 
         mvc.perform(checkIn(locator))
@@ -114,7 +114,7 @@ class DisruptionsIntegrationTest {
     @Test
     void should_close_check_in_until_the_delayed_flights_window_opens() throws Exception {
         String locator = book("SK501", "2027-03-07", "11D"); // scheduled in 5 hours: check-in would be open
-        mvc.perform(record("SK501", "2027-03-07", delayTo(Duration.ofHours(40)), OPS_KEY)).andExpect(status().isOk());
+        mvc.perform(record("SK501", "2027-03-07", delayTo(Duration.ofHours(40)), ops)).andExpect(status().isOk());
 
         mvc.perform(checkIn(locator))
                 .andExpect(status().isConflict())
@@ -126,9 +126,14 @@ class DisruptionsIntegrationTest {
         String locator = book("SK888", "2027-03-08", "11D"); // scheduled in 30 minutes: check-in closed
         mvc.perform(checkIn(locator)).andExpect(status().isConflict());
 
-        mvc.perform(record("SK888", "2027-03-08", delayTo(Duration.ofHours(5)), OPS_KEY)).andExpect(status().isOk());
+        mvc.perform(record("SK888", "2027-03-08", delayTo(Duration.ofHours(5)), ops)).andExpect(status().isOk());
 
         mvc.perform(checkIn(locator)).andExpect(status().isCreated());
+    }
+
+    @org.junit.jupiter.api.BeforeEach
+    void logIn() throws Exception {
+        ops = TestStaff.adminBearer(mvc);
     }
 
     // ---- helpers -------------------------------------------------------------------------------------------------
@@ -143,7 +148,7 @@ class DisruptionsIntegrationTest {
         String body = "{\"flightNumber\":\"%s\",\"departureDate\":\"%s\",%s".formatted(flight, date, partial.substring(1));
         MockHttpServletRequestBuilder request = post("/api/v1/ops/disruptions")
                 .contentType(MediaType.APPLICATION_JSON).content(body);
-        return key == null ? request : request.header("X-Ops-Key", key);
+        return key == null ? request : request.header("Authorization", key);
     }
 
     private long rows(String date) {

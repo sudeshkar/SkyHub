@@ -2,6 +2,9 @@ package com.skyhub.booking.web;
 
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
 import com.skyhub.booking.application.PaymentUnavailableException;
+import com.skyhub.booking.application.StaffLoginFailedException;
+import com.skyhub.booking.application.StaffUsernameTakenException;
+import com.skyhub.booking.domain.InvalidStaffAccountException;
 import com.skyhub.booking.domain.AlreadyCheckedInException;
 import com.skyhub.booking.domain.BookingCancelledException;
 import com.skyhub.booking.domain.CheckInClosedException;
@@ -129,6 +132,22 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 .header(HttpHeaders.RETRY_AFTER, "5")
                 .body(problem(HttpStatus.SERVICE_UNAVAILABLE, "Schedule unavailable",
                         "We couldn't check the flight schedule. Please try again shortly."));
+    }
+
+    /** One answer for every login failure, so nothing says which usernames exist (ADR-0017). */
+    @ExceptionHandler(StaffLoginFailedException.class)
+    ProblemDetail handleStaffLoginFailed(StaffLoginFailedException ex) {
+        return problem(HttpStatus.UNAUTHORIZED, "Login failed", ex.getMessage());
+    }
+
+    @ExceptionHandler(StaffUsernameTakenException.class)
+    ProblemDetail handleStaffUsernameTaken(StaffUsernameTakenException ex) {
+        return problem(HttpStatus.CONFLICT, "Username taken", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidStaffAccountException.class)
+    ProblemDetail handleInvalidStaff(InvalidStaffAccountException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid staff account", ex.getMessage());
     }
 
     @ExceptionHandler(PnrNotFoundException.class)
