@@ -14,7 +14,9 @@ import org.springframework.stereotype.Component;
 public class PaymentMetrics {
 
     public enum Outcome {
-        CAPTURED, DECLINED, UNAVAILABLE, PRICE_CHANGED, REFUNDED, REFUND_FAILED;
+        CAPTURED, DECLINED, UNAVAILABLE, PRICE_CHANGED, REFUNDED, REFUND_FAILED,
+        /** Cancellation refunds (ADR-0016): given back, owed but the provider failed, or cancelled too late. */
+        CANCEL_REFUNDED, CANCEL_REFUND_FAILED, CANCEL_NOT_REFUNDABLE;
 
         String tag() {
             return name().toLowerCase();

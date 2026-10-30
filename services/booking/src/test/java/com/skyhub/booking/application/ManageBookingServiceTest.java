@@ -5,11 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.skyhub.booking.application.view.PnrView;
+import com.skyhub.booking.application.view.RefundView;
 import com.skyhub.booking.domain.BookingCancelledException;
 import com.skyhub.booking.domain.Cabin;
 import com.skyhub.booking.domain.ContactEmail;
@@ -19,6 +23,7 @@ import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.PnrStatus;
+import com.skyhub.booking.domain.RefundPolicy;
 import com.skyhub.booking.domain.SeatInventory;
 import com.skyhub.booking.domain.SeatSpec;
 import com.skyhub.booking.domain.SeatStatus;
@@ -31,6 +36,7 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.math.BigDecimal;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +52,7 @@ class ManageBookingServiceTest {
     private final com.skyhub.booking.persistence.CheckInRepository checkIns =
             mock(com.skyhub.booking.persistence.CheckInRepository.class);
     private final ManageTokenIssuer tokens = mock(ManageTokenIssuer.class);
+    private final CancellationRefunds refunds = mock(CancellationRefunds.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final SeatMapCache seatMapCache = new SeatMapCache(registry);
     private final Map<String, SeatInventory> inventory = new HashMap<>();
@@ -75,8 +82,11 @@ class ManageBookingServiceTest {
                 .thenAnswer(call -> Optional.ofNullable(
                         inventory.get(call.<String>getArgument(0) + call.<String>getArgument(2))));
         when(tokens.issue("ABC234")).thenReturn(new ManageToken("signed.jwt.value", TOKEN_EXPIRY));
+        when(refunds.decide(any(Pnr.class))).thenReturn(RefundPolicy.Decision.FULL_REFUND);
+        when(refunds.settle(anyString())).thenReturn(Optional.empty());
+        when(refunds.status(anyString())).thenReturn(Optional.empty());
         service = new ManageBookingService(pnrs, seats, checkIns, seatMapCache, tokens, new ManageMetrics(registry),
-                TransactionOperations.withoutTransaction());
+                refunds, TransactionOperations.withoutTransaction());
     }
 
     @Test
@@ -140,6 +150,59 @@ class ManageBookingServiceTest {
             assertThat(seat.getPnrLocator()).isNull();
         });
         assertThat(count("cancelled")).isEqualTo(1);
+    }
+
+    @Test
+    void should_decide_the_refund_before_changing_anything_then_pay_it_after_the_cancel() {
+        RefundView paid = new RefundView(RefundView.Status.REFUNDED, new BigDecimal("200.00"), "USD");
+        when(refunds.settle("ABC234")).thenReturn(Optional.of(paid));
+
+        PnrView cancelled = service.cancel("ABC234");
+
+        var order = inOrder(refunds);
+        order.verify(refunds).decide(pnr);
+        order.verify(refunds).record("ABC234", RefundPolicy.Decision.FULL_REFUND);
+        order.verify(refunds).settle("ABC234");
+        assertThat(cancelled.refund()).isEqualTo(paid);
+    }
+
+    @Test
+    void should_change_nothing_when_the_refund_cannot_be_decided() {
+        when(refunds.decide(any(Pnr.class))).thenThrow(new FlightCatalogUnavailableException("down", null));
+
+        assertThatExceptionOfType(FlightCatalogUnavailableException.class).isThrownBy(() -> service.cancel("ABC234"));
+
+        assertThat(pnr.getStatus()).isEqualTo(PnrStatus.CONFIRMED);
+        assertThat(inventory.get("SK50111D").getPnrLocator()).isEqualTo("ABC234");
+        verify(refunds, never()).record(anyString(), any());
+        verify(refunds, never()).settle(anyString());
+    }
+
+    @Test
+    void should_retry_a_pending_refund_when_cancelling_again_without_deciding_again() {
+        service.cancel("ABC234");
+
+        service.cancel("ABC234");
+
+        verify(refunds, org.mockito.Mockito.times(1)).decide(any(Pnr.class));
+        verify(refunds, org.mockito.Mockito.times(1)).record(anyString(), any());
+        verify(refunds, org.mockito.Mockito.times(2)).settle("ABC234");
+    }
+
+    @Test
+    void should_show_the_refund_status_of_a_cancelled_booking_without_paying_anything() {
+        service.cancel("ABC234");
+        RefundView pending = new RefundView(RefundView.Status.PENDING, new BigDecimal("200.00"), "USD");
+        when(refunds.status("ABC234")).thenReturn(Optional.of(pending));
+
+        assertThat(service.find("ABC234").refund()).isEqualTo(pending);
+        verify(refunds, org.mockito.Mockito.times(1)).settle("ABC234"); // only the cancel itself paid
+    }
+
+    @Test
+    void should_show_no_refund_on_a_booking_that_is_not_cancelled() {
+        assertThat(service.find("ABC234").refund()).isNull();
+        verify(refunds, never()).status(anyString());
     }
 
     @Test

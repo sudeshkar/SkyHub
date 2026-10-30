@@ -15,6 +15,7 @@ import com.skyhub.booking.api.model.ManageSessionDto;
 import com.skyhub.booking.api.model.PassengerDto;
 import com.skyhub.booking.api.model.PnrDto;
 import com.skyhub.booking.api.model.PnrStatusDto;
+import com.skyhub.booking.api.model.RefundDto;
 import com.skyhub.booking.api.model.SeatChangeDto;
 import com.skyhub.booking.api.model.SeatDto;
 import com.skyhub.booking.api.model.SeatMapDto;
@@ -32,6 +33,7 @@ import com.skyhub.booking.application.ManageSession;
 import com.skyhub.booking.application.PassengerCommand;
 import com.skyhub.booking.application.SeatChangeCommand;
 import com.skyhub.booking.application.view.PnrView;
+import com.skyhub.booking.application.view.RefundView;
 import com.skyhub.booking.application.view.SeatView;
 import com.skyhub.booking.domain.PnrSegment;
 import java.time.LocalDate;
@@ -105,7 +107,12 @@ final class BookingDtoMapper {
                 pnr.passengers().stream()
                         .map(p -> new PassengerDto(p.firstName(), p.lastName(), p.seats()))
                         .toList(),
-                pnr.createdAt().atOffset(ZoneOffset.UTC));
+                pnr.createdAt().atOffset(ZoneOffset.UTC))
+                .refund(pnr.refund() == null ? null : toDto(pnr.refund()));
+    }
+
+    static RefundDto toDto(RefundView refund) {
+        return new RefundDto(RefundDto.StatusEnum.valueOf(refund.status().name()), refund.amount(), refund.currency());
     }
 
     static SeatChangeCommand toCommand(SeatChangeDto request) {

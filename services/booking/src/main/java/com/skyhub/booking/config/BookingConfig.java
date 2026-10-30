@@ -3,6 +3,7 @@ package com.skyhub.booking.config;
 import com.skyhub.booking.domain.HoldIdGenerator;
 import com.skyhub.booking.domain.LocatorGenerator;
 import com.skyhub.booking.domain.RandomLocatorGenerator;
+import com.skyhub.booking.domain.RefundPolicy;
 import com.skyhub.booking.domain.SeatLayout;
 import com.skyhub.booking.domain.UuidHoldIdGenerator;
 import java.time.Clock;
@@ -25,6 +26,11 @@ public class BookingConfig {
     @Bean
     HoldIdGenerator holdIdGenerator() {
         return new UuidHoldIdGenerator();
+    }
+
+    @Bean
+    RefundPolicy refundPolicy() {
+        return new RefundPolicy();
     }
 
     @Bean

@@ -17,7 +17,18 @@ public record PnrView(
         String maskedContactEmail,
         List<SegmentView> segments,
         List<PassengerView> passengers,
-        Instant createdAt) {
+        Instant createdAt,
+        RefundView refund) {
+
+    /** A booking with no refund to report (not cancelled, or never paid). */
+    public PnrView(String locator, PnrStatus status, String maskedContactEmail, List<SegmentView> segments,
+                   List<PassengerView> passengers, Instant createdAt) {
+        this(locator, status, maskedContactEmail, segments, passengers, createdAt, null);
+    }
+
+    public PnrView withRefund(RefundView refund) {
+        return new PnrView(locator, status, maskedContactEmail, segments, passengers, createdAt, refund);
+    }
 
     public record SegmentView(String flightNumber, LocalDate departureDate) {
     }
@@ -34,7 +45,8 @@ public record PnrView(
                 pnr.getPassengers().stream()
                         .map(p -> new PassengerView(p.getFirstName(), p.getLastName(), p.getSeats()))
                         .toList(),
-                pnr.getCreatedAt());
+                pnr.getCreatedAt(),
+                null);
     }
 
     private static SegmentView segment(PnrSegment segment) {
