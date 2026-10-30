@@ -85,6 +85,18 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** Overview → *Payments per minute by outcome* (`unavailable` far above `captured`); the provider's status page; `Payment provider unavailable` warnings in Loki.
 **Mitigate:** nothing in SkyHub to fix if the provider is down; wait for it and tell support. If only SkyHub cannot reach it, check outbound network access and the provider credentials. A retry with the same Idempotency-Key is safe: the provider never charges one key twice.
 
+## OutboxBacklog
+
+**Means:** at least one booking event has sat unpublished in the booking database for 10 minutes (ADR-0019). Bookings still succeed, but the events that trigger emails are not reaching Kafka, so travellers are not told.
+**Confirm:** Overview metric `skyhub_outbox_pending` (should sit at 0 and spike for seconds) and `skyhub_outbox_publish_failures_total`. Loki `{service="booking"} |= "Event not published"` shows the broker error. The rows: `SELECT id, aggregate_id, event_type, created_at FROM outbox_event WHERE published_at IS NULL ORDER BY seq;` in the booking database.
+**Mitigate:** check the broker is up (`docker compose ps kafka`, or the cluster's health) and reachable from booking (`KAFKA_BOOTSTRAP_SERVERS`). Nothing is lost: the relay retries every 2 seconds and publishes in order once the broker answers, so the backlog drains by itself. A single event stuck while others pass cannot happen (the relay stops at the first failure), so if `pending` stays flat the broker is the cause. Events older than a week are purged only after they are published.
+
+## NotificationDeadLettered
+
+**Means:** the notification service could not handle a message after its retries and copied it to the dead-letter topic `skyhub.booking.events.DLT` (ADR-0019). Usually the mail provider was down for longer than the retries, or a message is malformed. The traveller did not get that email.
+**Confirm:** Loki `{service="notification"} |= "Confirmation email not sent"` (carries `pnr.locator`), and `skyhub_notifications_total{outcome="failed"}`. Read the parked messages: `kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic skyhub.booking.events.DLT --from-beginning` (the headers say why).
+**Mitigate:** fix the cause (mail provider, bad message). To resend, publish the parked message's value back to `skyhub.booking.events`: it is safe, because the consumer skips any event it has already recorded as sent. There is no replay tool yet (ADR-0019 follow-up).
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.

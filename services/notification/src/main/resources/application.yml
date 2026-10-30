@@ -1,0 +1,57 @@
+server:
+  # No public API. The only web endpoints are the actuator ones, which live on the management port below.
+  port: 8083
+
+spring:
+  application:
+    name: notification
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/notification}
+    username: ${DB_USERNAME:skyhub}
+    password: ${DB_PASSWORD:skyhub}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: notification
+      # A new consumer group reads the topic from the beginning, so a freshly started service misses nothing.
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+skyhub:
+  notifications:
+    topic: skyhub.booking.events
+    # A message that fails is tried again this many times in total, this far apart, then parked on <topic>.DLT.
+    retry-attempts: 4
+    retry-interval: PT2S
+
+management:
+  # Actuator lives on its own port, never exposed publicly (docs/design/04-observability.md §7).
+  server:
+    port: 9083
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  structured:
+    format:
+      console: ecs
+      file: ecs
+  file:
+    # Set LOG_FILE to also write JSON logs to a file (collected by Grafana Alloy into Loki).
+    name: ${LOG_FILE:}

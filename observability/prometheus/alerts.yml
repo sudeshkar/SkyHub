@@ -123,6 +123,22 @@ groups:
           summary: "Over half of payment attempts cannot reach the payment provider (10+ in 10 minutes)"
           runbook: "docs/runbooks/README.md#paymentproviderunavailable"
 
+      - alert: OutboxBacklog
+        expr: min_over_time(skyhub_outbox_pending[10m]) > 0
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Booking events have been waiting to reach Kafka for 10 minutes: travellers are not being notified"
+          runbook: "docs/runbooks/README.md#outboxbacklog"
+
+      - alert: NotificationDeadLettered
+        expr: increase(skyhub_notifications_dead_lettered_total[10m]) > 0
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "A notification gave up after its retries and was parked on the dead-letter topic"
+          runbook: "docs/runbooks/README.md#notificationdeadlettered"
+
       - alert: ServiceDown
         expr: up == 0
         for: 1m

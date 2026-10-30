@@ -1,0 +1,16 @@
+{
+  "eventId": "0b8f6f5e-3c47-4a58-9d0e-6a4f7e2f1c11",
+  "type": "booking.confirmed",
+  "version": 1,
+  "occurredAt": "2026-10-30T10:00:00Z",
+  "locator": "ABC234",
+  "contactEmail": "priya@example.com",
+  "passengers": [
+    { "firstName": "Priya", "lastName": "Perera" }
+  ],
+  "segments": [
+    { "flightNumber": "SK501", "departureDate": "2026-11-02" }
+  ],
+  "totalAmount": 100.00,
+  "currency": "USD"
+}

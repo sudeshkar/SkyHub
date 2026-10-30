@@ -1,6 +1,6 @@
 # ADR-0007: REST for queries, events for side effects
 
-**Status:** Accepted as the direction. Only the REST half is built; events arrive with notifications.
+**Status:** Accepted. Both halves are now built: events arrived with notifications (ADR-0019).
 **Date:** 2026-10-30
 
 ## Context
@@ -20,4 +20,4 @@ Option 2. Searches, bookings, holds, check-in and payments are REST calls. Side 
 
 - Positive: a failing email service never fails a booking.
 - Negative: eventual consistency between booking and its consumers; an outbox, a broker and idempotent consumers to build and operate.
-- Today: no broker exists in the repository. Until the notifications slice, travellers are not notified, which is listed in the roadmap.
+- Today: Kafka runs in `docker compose`, and the booking-confirmed email is the first event (ADR-0019). Other side effects (cancellation, disruptions, check-in) are still to come.

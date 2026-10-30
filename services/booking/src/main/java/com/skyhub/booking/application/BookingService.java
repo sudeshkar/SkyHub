@@ -51,12 +51,14 @@ public class BookingService {
     private final PaymentGateway gateway;
     private final PaymentRepository payments;
     private final PaymentMetrics paymentMetrics;
+    private final BookingEvents events;
 
     public BookingService(SeatInventoryRepository seats, PnrRepository pnrs, SeatInventoryInitializer inventory,
                           SeatMapCache seatMaps, CreatePnrValidator validator, LocatorGenerator locators, Clock clock,
                           TransactionOperations transactions, BookingMetrics metrics, HoldMetrics holdMetrics,
                           PricingService pricing, PaymentGateway gateway, PaymentRepository payments,
-                          PaymentMetrics paymentMetrics) {
+                          PaymentMetrics paymentMetrics, BookingEvents events) {
+        this.events = events;
         this.pricing = pricing;
         this.gateway = gateway;
         this.payments = payments;
@@ -200,6 +202,8 @@ public class BookingService {
         Pnr pnr = Pnr.confirmed(locator, contactEmail, segments, passengers, clock.instant(), keyHash, fingerprint);
         Pnr saved = pnrs.saveAndFlush(pnr);
         payments.saveAndFlush(Payment.captured(locator, charge.id(), charge.amount(), clock.instant()));
+        // Same transaction as the booking: the event exists exactly when the booking does (ADR-0019).
+        events.bookingConfirmed(saved, charge.amount());
         return new BookingResult(PnrView.of(saved), true);
     }
 }
