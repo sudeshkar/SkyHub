@@ -20,3 +20,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0014](0014-flight-disruptions.md) | Flight disruptions: delays and cancellations | Accepted |
 | [0015](0015-payment-before-booking-with-compensation.md) | Pay when booking: charge first, book second, refund if booking fails | Accepted |
 | [0016](0016-refund-on-cancellation.md) | Refund on cancellation by simple fare rules | Accepted |
+| [0017](0017-staff-login-and-roles.md) | Staff login and roles instead of a shared operations key | Accepted |

@@ -2,6 +2,7 @@ package com.skyhub.booking.security;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.skyhub.booking.application.ManageTokenIssuer;
+import com.skyhub.booking.application.StaffTokenIssuer;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Base64;
@@ -70,6 +71,12 @@ public class ManageTokenConfig {
     @Bean
     JwtDecoder jwtDecoder(SecretKey manageTokenKey, Clock clock) {
         return decoder(manageTokenKey, clock);
+    }
+
+    @Bean
+    StaffTokenIssuer staffTokenIssuer(JwtEncoder encoder, Clock clock,
+                                      @Value("${skyhub.security.staff-token-ttl:PT30M}") Duration timeToLive) {
+        return new JwtStaffTokenIssuer(encoder, clock, timeToLive);
     }
 
     @Bean

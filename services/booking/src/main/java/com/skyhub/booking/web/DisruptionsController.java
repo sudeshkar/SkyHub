@@ -7,10 +7,11 @@ import com.skyhub.booking.api.model.RecordDisruptionRequestDto;
 import com.skyhub.booking.application.DisruptionService;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Authorisation happens before these methods run (SecurityConfig): recording needs the operations key,
+ * Authorisation happens before these methods run (SecurityConfig): recording needs a staff token with a role that may record,
  * reading needs a manage token for the booking in the URL.
  */
 @RestController
@@ -24,7 +25,8 @@ public class DisruptionsController implements DisruptionsApi {
 
     @Override
     public ResponseEntity<DisruptionRecordedDto> recordDisruption(RecordDisruptionRequestDto request) {
-        int affected = disruptions.record(BookingDtoMapper.toCommand(request));
+        String staff = SecurityContextHolder.getContext().getAuthentication().getName();
+        int affected = disruptions.record(BookingDtoMapper.toCommand(request, staff));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new DisruptionRecordedDto(affected));
     }
 

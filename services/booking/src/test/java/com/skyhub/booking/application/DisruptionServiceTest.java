@@ -49,7 +49,7 @@ class DisruptionServiceTest {
     }
 
     private static RecordDisruptionCommand delay(Instant revised, String reason) {
-        return new RecordDisruptionCommand("SK501", DATE, DisruptionType.DELAYED, revised, reason);
+        return new RecordDisruptionCommand("SK501", DATE, DisruptionType.DELAYED, revised, reason, "priya.ops");
     }
 
     @Test
@@ -63,12 +63,13 @@ class DisruptionServiceTest {
         assertThat(saved.getValue().getRevisedDeparture()).isEqualTo(REVISED);
         assertThat(saved.getValue().getReason()).isEqualTo("Late inbound aircraft");
         assertThat(saved.getValue().getRecordedAt()).isEqualTo(NOW);
+        assertThat(saved.getValue().getRecordedBy()).isEqualTo("priya.ops");
         assertThat(registry.counter("skyhub.disruptions", "type", "delayed").count()).isEqualTo(1);
     }
 
     @Test
     void should_record_a_cancellation() {
-        service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, null, null));
+        service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, null, null, "priya.ops"));
 
         var saved = org.mockito.ArgumentCaptor.forClass(Disruption.class);
         verify(disruptions).save(saved.capture());
@@ -82,7 +83,7 @@ class DisruptionServiceTest {
         Disruption earlier = Disruption.delayed("SK501", DATE, REVISED, "Late aircraft", NOW.minusSeconds(600));
         when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(earlier));
 
-        service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, null, "Aircraft grounded"));
+        service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, null, "Aircraft grounded", "priya.ops"));
 
         assertThat(earlier.getType()).isEqualTo(DisruptionType.CANCELLED);
         assertThat(earlier.getRevisedDeparture()).isNull();
@@ -112,7 +113,7 @@ class DisruptionServiceTest {
         assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.record(delay(null, "x")))
                 .withMessageContaining("revised departure");
         assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(
-                        () -> service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, REVISED, "x")))
+                        () -> service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, REVISED, "x", "priya.ops")))
                 .withMessageContaining("cancelled");
         assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.record(delay(REVISED, "x".repeat(201))))
                 .withMessageContaining("200");

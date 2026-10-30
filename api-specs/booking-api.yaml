@@ -14,6 +14,7 @@ tags:
   - name: Holds
   - name: CheckIn
   - name: Disruptions
+  - name: Staff
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -361,7 +362,7 @@ paths:
         Idempotent: recording again for the same flight and date replaces the earlier record, so a retry or a
         correction is the same request. Returns how many active bookings are on the flight.
       security:
-        - opsKey: []
+        - staffToken: []
       requestBody:
         required: true
         content:
@@ -379,6 +380,73 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/ops/sessions:
+    post:
+      tags: [Staff]
+      operationId: openStaffSession
+      summary: Staff login
+      description: |
+        Exchanges a username and password for a staff token (30 minutes) that carries the staff member's role.
+        An unknown user, a wrong password and a locked account all return the same 401. Five wrong passwords lock
+        the account for 15 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffLoginRequest'
+      responses:
+        '201':
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Wrong username or password, or the account is locked
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/ops/staff:
+    post:
+      tags: [Staff]
+      operationId: createStaffAccount
+      summary: Create a staff account
+      description: Administrators only. The password is stored only as a hash.
+      security:
+        - staffToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStaffRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: That username is taken
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
   /api/v1/pnrs/{locator}/disruptions:
     get:
@@ -445,11 +513,11 @@ paths:
 
 components:
   securitySchemes:
-    opsKey:
-      type: apiKey
-      in: header
-      name: X-Ops-Key
-      description: Operations credential (SKYHUB_OPS_KEY). Held by operations tooling only; never sent by the website.
+    staffToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived staff token from POST /api/v1/ops/sessions. Carries a role (OPS or ADMIN). Never sent by the website.
     manageToken:
       type: http
       scheme: bearer
@@ -473,9 +541,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Unauthorized:
-      description: Missing, invalid or expired manage token
+      description: Missing, invalid or expired token
     Forbidden:
-      description: The token belongs to a different booking
+      description: The token belongs to a different booking, or the role is not allowed to do this
     FlightNotFound:
       description: The flight does not operate on that date
       content:
@@ -834,6 +902,63 @@ components:
           format: date-time
         pnr:
           $ref: '#/components/schemas/Pnr'
+
+    StaffLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 40
+        password:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    StaffRole:
+      type: string
+      enum: [OPS, ADMIN]
+
+    StaffSession:
+      type: object
+      required: [accessToken, tokenType, expiresAt, username, role]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresAt:
+          type: string
+          format: date-time
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/StaffRole'
+
+    CreateStaffRequest:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+          pattern: '^[a-z][a-z0-9._-]{2,39}$'
+        password:
+          type: string
+          minLength: 12
+          maxLength: 200
+        role:
+          $ref: '#/components/schemas/StaffRole'
+
+    StaffAccount:
+      type: object
+      required: [username, role]
+      properties:
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/StaffRole'
 
     SeatChange:
       type: object

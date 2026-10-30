@@ -73,6 +73,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** Loki `{service="booking"} |= "Refund after cancellation failed"` (carries `pnr.locator` and `payment.charge`). Overview → *Payments per minute by outcome* (`cancel_refund_failed`). Payments still owed: `SELECT locator, charge_id, amount, currency FROM payment WHERE status = 'REFUND_DUE';` in the booking database.
 **Mitigate:** check the provider is reachable (see PaymentProviderUnavailable). Cancelling the booking again retries the refund (it is safe to repeat), so ask the traveller to press *Cancel* again from the manage page, or refund the `charge_id` by hand in the provider's dashboard and then set the row to `REFUNDED`. There is no automatic retry yet (ADR-0016 follow-up).
 
+## StaffLoginGuessing
+
+**Means:** more than 10 staff logins failed or were refused for a locked account in 10 minutes (ADR-0017). Either someone is guessing passwords, or a real colleague has forgotten theirs. Five wrong passwords lock an account for 15 minutes, so a guesser is slowed to about 20 tries an hour per account.
+**Confirm:** Loki `{service="booking"} |= "Staff login"` (each line carries `staff.username`). Many different usernames from a burst is guessing; one username repeating is usually a person. Overview metrics: `skyhub_staff_logins_total` by `outcome` (`failed`, `locked`).
+**Mitigate:** if it is a colleague, wait 15 minutes or ask an administrator to create them a new account (there is no password reset yet). If it is guessing, check the edge rate limit is on (ADR-0009) and block the source address there. A locked account unlocks itself; nothing was accessed unless a `Staff logged in` line follows a run of failures for the same name, in which case treat that account as compromised and remove it from the database (`DELETE FROM staff_account WHERE username = '...'`); its token still works for up to 30 minutes.
+
 ## PaymentProviderUnavailable
 
 **Means:** more than half of payment attempts in the last 10 minutes could not reach the payment provider. Nobody is charged and nobody is booked while this lasts: travellers see "payment provider unavailable" and can retry.

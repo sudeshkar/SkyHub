@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Delays and cancellations (ADR-0014). Recording is idempotent: the same flight and date always has at most one
- * record, and recording again replaces it. Who may record is the security layer's concern, not this class's.
+ * record, and recording again replaces it. Who may record is the security layer's concern; who did is stored with the record.
  */
 @Service
 public class DisruptionService {
@@ -53,6 +53,7 @@ public class DisruptionService {
         long affected = pnrs.countActiveOnFlight(command.flightNumber(), command.departureDate());
         log.atInfo()
                 .addKeyValue("flight", command.flightNumber())
+                .addKeyValue("disruption.recorded_by", command.recordedBy())
                 .addKeyValue("disruption.type", command.type())
                 .addKeyValue("disruption.affected_bookings", affected)
                 .log("Disruption recorded");
@@ -72,6 +73,7 @@ public class DisruptionService {
         } else {
             disruption.becomeCancelled(command.reason(), now);
         }
+        disruption.recordedBy(command.recordedBy());
         disruptions.save(disruption);
     }
 

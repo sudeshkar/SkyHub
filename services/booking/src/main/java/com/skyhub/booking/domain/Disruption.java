@@ -44,6 +44,10 @@ public class Disruption {
     @Column(nullable = false)
     private Instant recordedAt;
 
+    /** The staff username who recorded it (ADR-0017). Null on rows from before staff accounts existed. */
+    @Column(length = 40)
+    private String recordedBy;
+
     /** Two operators recording the same flight at once must not silently overwrite each other. */
     @Version
     private long version;
@@ -87,6 +91,10 @@ public class Disruption {
         this.recordedAt = recordedAt;
     }
 
+    public void recordedBy(String username) {
+        this.recordedBy = username;
+    }
+
     public boolean isCancelled() {
         return type == DisruptionType.CANCELLED;
     }
@@ -121,5 +129,9 @@ public class Disruption {
 
     public Instant getRecordedAt() {
         return recordedAt;
+    }
+
+    public String getRecordedBy() {
+        return recordedBy;
     }
 }

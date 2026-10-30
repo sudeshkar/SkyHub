@@ -44,9 +44,15 @@ skyhub:
     manage-token-ttl: PT15M
     # Base64 256-bit HMAC key that signs boarding pass barcodes (ADR-0013). Separate from the other keys on purpose.
     boarding-pass-key: ${SKYHUB_BOARDING_PASS_KEY:}
-    # Operations credential for recording flight disruptions (ADR-0014), at least 32 characters. Optional: without it the
-    # ops endpoint refuses everyone. Never give it to the website.
-    ops-key: ${SKYHUB_OPS_KEY:}
+    # Staff tokens (ADR-0017) are signed with the manage-token key and told apart by scope.
+    staff-token-ttl: PT30M
+    # BCrypt cost for staff passwords. Raise it as hardware gets faster; tests lower it.
+    staff-password-strength: 12
+  bootstrap:
+    # The first administrator, created once when no staff accounts exist (ADR-0017). Ignored afterwards.
+    # The password needs at least 12 characters. Leave both empty to start with no staff.
+    admin-username: ${SKYHUB_BOOTSTRAP_ADMIN_USERNAME:}
+    admin-password: ${SKYHUB_BOOTSTRAP_ADMIN_PASSWORD:}
 
 management:
   # Actuator lives on its own port, never exposed publicly (docs/design/04-observability.md §7).
