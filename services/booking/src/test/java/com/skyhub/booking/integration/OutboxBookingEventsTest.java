@@ -36,6 +36,8 @@ class OutboxBookingEventsTest {
     private static final Path EXAMPLE = Path.of("../../api-specs/events/booking-confirmed.v1.example.json");
     private static final Path CANCELLED_EXAMPLE = Path.of("../../api-specs/events/booking-cancelled.v1.example.json");
     private static final Path DISRUPTED_EXAMPLE = Path.of("../../api-specs/events/booking-disrupted.v1.example.json");
+    private static final Path WITHDRAWN_EXAMPLE = Path.of("../../api-specs/events/booking-disruption-withdrawn.v1.example.json");
+    private static final UUID WITHDRAWN_ID = UUID.fromString("d8f2a4b6-17c3-4e90-b5a1-3c6e9d0f2b44");
     private static final Path REBOOKED_EXAMPLE = Path.of("../../api-specs/events/booking-rebooked.v1.example.json");
     private static final UUID REBOOKED_ID = UUID.fromString("e5a3d7c1-2f48-4b6a-9c10-7d1e8f3b4a55");
     private static final UUID CANCELLED_ID = UUID.fromString("7d2c1a90-5b1e-4c55-8a3a-2f9a6f1c0a22");
@@ -124,6 +126,17 @@ class OutboxBookingEventsTest {
         assertThat(event.getEventType()).isEqualTo("booking.disrupted");
         assertThat(event.getAggregateId()).isEqualTo("ABC234");
         assertThat(json.readTree(cipher.decrypt(event.getPayload()))).isEqualTo(json.readTree(Files.readString(DISRUPTED_EXAMPLE)));
+    }
+
+    @Test
+    void should_write_the_withdrawal_event_as_the_notification_service_expects() throws Exception {
+        events(WITHDRAWN_ID).bookingDisruptionWithdrawn(pnr(), Disruption.cancelled("SK501", LocalDate.of(2026, 11, 2), "Mistake", NOW));
+
+        OutboxEvent event = saved();
+
+        assertThat(event.getEventType()).isEqualTo("booking.disruption-withdrawn");
+        assertThat(event.getAggregateId()).isEqualTo("ABC234");
+        assertThat(json.readTree(cipher.decrypt(event.getPayload()))).isEqualTo(json.readTree(Files.readString(WITHDRAWN_EXAMPLE)));
     }
 
     @Test

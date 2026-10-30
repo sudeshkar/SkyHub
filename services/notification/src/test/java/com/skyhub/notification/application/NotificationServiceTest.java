@@ -93,6 +93,19 @@ class NotificationServiceTest {
                 new BookingCancelledEvent.Refund("FULL_REFUND", new BigDecimal("100.00"), "USD"));
     }
 
+    @Test
+    void should_send_a_withdrawal_email_once_even_if_the_event_is_delivered_twice() {
+        var event = new com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent(
+                UUID.fromString("d8f2a4b6-17c3-4e90-b5a1-3c6e9d0f2b44"), "booking.disruption-withdrawn", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2), "CANCELLED");
+
+        service.bookingDisruptionWithdrawn(event);
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().subject()).contains("SK501").contains("operating");
+    }
+
     private BookingDisruptedEvent disrupted() {
         return new BookingDisruptedEvent(UUID.fromString("c4e1b6d2-91a7-4f3e-b0d5-5a8e2c7f9b33"), "booking.disrupted", 1,
                 Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2),

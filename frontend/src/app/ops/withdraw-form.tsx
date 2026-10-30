@@ -40,8 +40,8 @@ export function WithdrawForm() {
       <form action={action} className="max-w-md space-y-4">
         <h2 className="font-display text-xl">Withdraw a disruption</h2>
         <p className="text-sm text-muted">
-          Use this when a delay or cancellation was recorded by mistake or has been resolved. Travellers who were already
-          emailed are not emailed again. It cannot be done once bookings have been moved off the flight.
+          Use this when a delay or cancellation was recorded by mistake or has been resolved. Every traveller still holding the
+          flight is emailed that it is operating again. It cannot be done once bookings have been moved off the flight.
         </p>
         <label className="block text-sm font-medium">
           Flight number

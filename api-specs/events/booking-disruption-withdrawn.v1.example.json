@@ -1,0 +1,11 @@
+{
+  "eventId": "d8f2a4b6-17c3-4e90-b5a1-3c6e9d0f2b44",
+  "type": "booking.disruption-withdrawn",
+  "version": 1,
+  "occurredAt": "2026-10-30T10:00:00Z",
+  "locator": "ABC234",
+  "contactEmail": "priya@example.com",
+  "flightNumber": "SK501",
+  "departureDate": "2026-11-02",
+  "disruption": "CANCELLED"
+}

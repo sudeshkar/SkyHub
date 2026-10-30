@@ -18,7 +18,7 @@ describe("WithdrawForm", () => {
     render(<WithdrawForm />);
 
     expect(screen.getByLabelText(/I am sure/)).toBeRequired();
-    expect(screen.getByText(/not emailed again/i)).toBeInTheDocument();
+    expect(screen.getByText(/emailed that it is operating again/i)).toBeInTheDocument();
   });
 
   it("tells staff how many bookings are on the flight once the disruption is withdrawn", async () => {

@@ -241,8 +241,8 @@ export interface paths {
         post?: never;
         /**
          * Take back a disruption that was recorded by mistake or has been resolved
-         * @description Staff only. The flight is for sale again and search shows it as scheduled. Travellers who were already
-         *     emailed about the disruption are not emailed again (ADR-0026). Refused with 409 once any booking has been
+         * @description Staff only. The flight is for sale again and search shows it as scheduled. Every traveller still holding the
+         *     flight is emailed that it is operating again (ADR-0028). Refused with 409 once any booking has been
          *     moved off the flight, because the refund those travellers were promised rests on the disruption record.
          *     Returns how many active bookings are on the flight. A second request finds nothing and answers 404.
          */
