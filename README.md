@@ -53,6 +53,7 @@ flowchart LR
 - **flight-search** keeps the timetable in memory (copy-on-write) and answers searches without touching the database.
 - **booking** owns seats, holds, bookings and check-in. One database per service.
 - **notification** reads booking events from Kafka and sends the emails, once each. Booking never waits for it, so a mail or broker outage cannot fail a booking.
+- **disruption-agent** (Python) reads a disruption and proposes where affected bookings could go; guardrails verify every proposal and a person decides. It reaches SkyHub through an MCP server and sees no personal data. See [`services/disruption-agent`](services/disruption-agent/README.md).
 - **website** is the only thing the public reaches. It talks to the services from the server, so the browser never sees them or their tokens.
 
 More in [`docs/design/01-hld.md`](docs/design/01-hld.md) (high-level) and [`docs/design/02-lld.md`](docs/design/02-lld.md) (classes and patterns).
@@ -63,6 +64,7 @@ More in [`docs/design/01-hld.md`](docs/design/01-hld.md) (high-level) and [`docs
 - **Holds that cannot be abused or outlive their time.** All-or-nothing, 10 minutes, expiry checked when a hold becomes a booking *and* swept every 30 s by one idempotent SQL statement. → [ADR-0012](docs/adr/0012-seat-holds-that-expire.md)
 - **Money that cannot be charged twice.** Charge first, book second, refund if booking fails; the charge key comes from the request's Idempotency-Key, so a retry after a crash finds the charge instead of making another. The price is the server's, never the browser's. → [ADR-0015](docs/adr/0015-payment-before-booking-with-compensation.md)
 - **Events that cannot be lost or doubled.** A booking and its "confirmed" event are saved in one database transaction (outbox); a relay publishes to Kafka afterwards, and the consumer records each event id before sending, so a redelivery sends nothing twice. Stopping Kafka mid-booking delays the email; it does not fail the booking. → [ADR-0019](docs/adr/0019-transactional-outbox-and-kafka.md)
+- **An AI agent that cannot do harm.** The model proposes re-accommodation; code checks every proposal against facts the tools returned (real flight, same route, fits the connection, enough seats across all proposals); a person approves. A fuzz test throws 200 hostile worlds at a deliberately bad model and an independent oracle finds zero unsafe answers. → [ADR-0022](docs/adr/0022-disruption-agent-proposes-code-verifies.md)
 - **Unique boarding numbers under concurrency** via a single atomic upsert; eight simultaneous check-ins get eight different numbers. Barcodes are HMAC-signed. → [ADR-0013](docs/adr/0013-online-check-in-and-boarding-passes.md)
 - **Security.** Deny-by-default Spring Security; short-lived booking-scoped JWTs; personal data encrypted at rest (AES-256-GCM) and idempotency keys stored hashed; DTOs only at API boundaries; rate limiting at the edge. → [ADR-0009](docs/adr/0009-rate-limiting-at-the-edge.md), [0010](docs/adr/0010-encrypt-personal-data-at-rest.md), [0011](docs/adr/0011-manage-booking-with-a-short-lived-token.md)
 - **Performance, measured on a laptop.** In-memory timetable: search went from 1,558 to 9,085 requests/s (median latency 92 ms to 2 ms). Cached seat maps: 1,762 to about 23,000 requests/s. → [ADR-0006](docs/adr/0006-in-memory-timetable-instead-of-result-cache.md)
@@ -141,7 +143,7 @@ CI runs the same on every pull request.
 
 ```
 api-specs/      OpenAPI contracts, written before the code (the services generate their interfaces from them)
-services/       flight-search, booking and notification (Spring Boot)
+services/       flight-search, booking and notification (Spring Boot), and disruption-agent (Python)
 frontend/       the website (Next.js)
 observability/  Prometheus rules, Grafana dashboard, Loki / Tempo / Alloy config
 docs/           design documents, decision records (ADRs), runbooks, and the [roadmap](docs/ROADMAP.md) of what is done and pending
@@ -149,6 +151,6 @@ docs/           design documents, decision records (ADRs), runbooks, and the [ro
 
 ## Status and honest limits
 
-Built so far: search, seat selection, booking with payment (mock provider), refunds on cancellation, manage booking, seat holds, online check-in, delays and cancellations, staff login with roles and an operations screen, emails for a confirmed booking, a cancellation (with its refund) and a delayed or cancelled flight, through an outbox and Kafka, observability.
+Built so far: search, seat selection, booking with payment (mock provider), refunds on cancellation, manage booking, seat holds, online check-in, delays and cancellations, staff login with roles and an operations screen, a disruption agent that proposes re-accommodation, emails for a confirmed booking, a cancellation (with its refund) and a delayed or cancelled flight, through an outbox and Kafka, observability.
 
-Not built, on purpose or not yet: a real payment provider, user accounts, a real mail provider (emails go to Mailpit locally; the SMTP adapter works with any relay) and check-in reminders, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.
+Not built, on purpose or not yet: a real payment provider, user accounts, acting on the agent's proposals (it only proposes; its Groq model is untested live), a real mail provider (emails go to Mailpit locally; the SMTP adapter works with any relay) and check-in reminders, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.

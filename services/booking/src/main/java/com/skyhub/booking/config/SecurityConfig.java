@@ -57,6 +57,8 @@ public class SecurityConfig {
                         .requestMatchers(PUT, "/api/v1/pnrs/{locator}/seat-assignments").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/ops/sessions").permitAll()
                         .requestMatchers(POST, "/api/v1/ops/staff").access(StaffAuthorization.createsStaff())
+                        .requestMatchers(GET, "/api/v1/ops/flights/{flightNumber}/departures/{departureDate}/bookings")
+                                .access(StaffAuthorization.viewsAffectedBookings())
                         .requestMatchers(POST, "/api/v1/ops/disruptions").access(StaffAuthorization.recordsDisruptions())
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}/disruptions").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/check-ins").access(ownsBooking)

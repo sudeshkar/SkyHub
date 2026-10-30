@@ -2,6 +2,8 @@ package com.skyhub.booking.web;
 
 import com.skyhub.booking.api.model.CabinDto;
 import com.skyhub.booking.api.model.CreatePnrRequestDto;
+import com.skyhub.booking.api.model.AffectedBookingDto;
+import com.skyhub.booking.api.model.AffectedBookingsDto;
 import com.skyhub.booking.api.model.BookingDisruptionsDto;
 import com.skyhub.booking.api.model.DisruptionDto;
 import com.skyhub.booking.api.model.DisruptionTypeDto;
@@ -21,6 +23,7 @@ import com.skyhub.booking.api.model.SeatDto;
 import com.skyhub.booking.api.model.SeatMapDto;
 import com.skyhub.booking.api.model.SeatStatusDto;
 import com.skyhub.booking.api.model.SegmentDto;
+import com.skyhub.booking.application.AffectedBooking;
 import com.skyhub.booking.application.BookingDisruption;
 import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.RecordDisruptionCommand;
@@ -72,6 +75,13 @@ final class BookingDtoMapper {
                 DisruptionType.valueOf(request.getType().name()),
                 request.getRevisedDeparture() == null ? null : request.getRevisedDeparture().toInstant(),
                 request.getReason(), recordedBy);
+    }
+
+    static AffectedBookingsDto toAffectedDto(String flightNumber, LocalDate departureDate, List<AffectedBooking> bookings) {
+        return new AffectedBookingsDto(flightNumber, departureDate, bookings.stream()
+                .map(b -> new AffectedBookingDto(b.locator(), b.passengerCount(), b.segmentIndex(), b.segments().stream()
+                        .map(s -> new SegmentDto(s.flightNumber(), s.departureDate())).toList()))
+                .toList());
     }
 
     static BookingDisruptionsDto toDto(List<BookingDisruption> disruptions) {

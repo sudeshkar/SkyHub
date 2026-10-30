@@ -229,6 +229,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/flights/{flightNumber}/departures/{departureDate}/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The active bookings on one flight, for working out who a disruption affects
+         * @description Staff only. Lists each confirmed booking that holds a seat on the flight, with its reference, how many
+         *     seats it holds, which of its flights this is, and its whole route. It carries no names and no contact
+         *     details, so the answer can be given to tools that must not see personal data (ADR-0022).
+         */
+        get: operations["getAffectedBookings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/sessions": {
         parameters: {
             query?: never;
@@ -477,6 +499,19 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             pnr: components["schemas"]["Pnr"];
+        };
+        AffectedBookings: {
+            flightNumber: components["schemas"]["FlightNumber"];
+            /** Format: date */
+            departureDate: string;
+            items: components["schemas"]["AffectedBooking"][];
+        };
+        AffectedBooking: {
+            locator: string;
+            passengerCount: number;
+            /** @description Position of the disrupted flight in this booking */
+            segmentIndex: number;
+            segments: components["schemas"]["Segment"][];
         };
         StaffLoginRequest: {
             username: string;
@@ -948,6 +983,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DisruptionRecorded"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAffectedBookings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flightNumber: components["schemas"]["FlightNumber"];
+                /** @description Scheduled UTC departure date of the flight */
+                departureDate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Possibly empty */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AffectedBookings"];
                 };
             };
             400: components["responses"]["BadRequest"];

@@ -1,10 +1,12 @@
 package com.skyhub.booking.web;
 
 import com.skyhub.booking.api.DisruptionsApi;
+import com.skyhub.booking.api.model.AffectedBookingsDto;
 import com.skyhub.booking.api.model.BookingDisruptionsDto;
 import com.skyhub.booking.api.model.DisruptionRecordedDto;
 import com.skyhub.booking.api.model.RecordDisruptionRequestDto;
 import com.skyhub.booking.application.DisruptionService;
+import java.time.LocalDate;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,6 +30,12 @@ public class DisruptionsController implements DisruptionsApi {
         String staff = SecurityContextHolder.getContext().getAuthentication().getName();
         int affected = disruptions.record(BookingDtoMapper.toCommand(request, staff));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new DisruptionRecordedDto(affected));
+    }
+
+    @Override
+    public ResponseEntity<AffectedBookingsDto> getAffectedBookings(String flightNumber, LocalDate departureDate) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(BookingDtoMapper.toAffectedDto(flightNumber, departureDate, disruptions.affectedBookings(flightNumber, departureDate)));
     }
 
     @Override

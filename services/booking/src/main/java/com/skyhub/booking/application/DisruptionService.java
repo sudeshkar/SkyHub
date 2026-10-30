@@ -10,6 +10,7 @@ import com.skyhub.booking.persistence.DisruptionRepository;
 import com.skyhub.booking.persistence.PnrRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
@@ -98,6 +99,27 @@ public class DisruptionService {
             }
         }
         return active.size();
+    }
+
+    /**
+     * The active bookings on a flight, reduced to what re-accommodation needs (ADR-0022): no names, no contact details.
+     * Read-only, so asking never changes anything.
+     */
+    public List<AffectedBooking> affectedBookings(String flightNumber, LocalDate departureDate) {
+        return transactions.execute(status -> pnrs.findActiveOnFlight(flightNumber, departureDate).stream()
+                .map(pnr -> new AffectedBooking(pnr.getLocator(), pnr.getPassengers().size(),
+                        indexOf(pnr, flightNumber, departureDate), List.copyOf(pnr.getSegments())))
+                .toList());
+    }
+
+    private static int indexOf(Pnr pnr, String flightNumber, LocalDate departureDate) {
+        List<PnrSegment> segments = pnr.getSegments();
+        for (int i = 0; i < segments.size(); i++) {
+            if (segments.get(i).flightNumber().equals(flightNumber) && segments.get(i).departureDate().equals(departureDate)) {
+                return i;
+            }
+        }
+        throw new IllegalStateException("The booking was found for a flight it does not have");
     }
 
     /** The disrupted flights of a booking, in booking order. Empty when all is well. */

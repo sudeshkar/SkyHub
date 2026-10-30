@@ -31,6 +31,7 @@ How a slice goes, every time:
 | 14 | Booking-confirmed email: transactional outbox, Kafka, notification service | ADR-0019 |
 | 15 | Cancellation (with refund) and flight delay / cancellation emails | ADR-0020 |
 | 16 | Real SMTP adapter, Mailpit as the local mail server | ADR-0021 |
+| 17 | Disruption agent (Python, MCP, Groq): proposes re-accommodation, guardrails verify it, evals judge it | ADR-0022 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -38,7 +39,7 @@ Ordered by how much they add to the story, not a commitment.
 
 | Slice | What it adds | Notes |
 |---|---|---|
-| **Disruption agent (Python, Groq)** | An agent that reads a disruption, finds the affected bookings and proposes re-accommodation; MCP server exposing booking tools; an eval suite | The "Python/AI" part of the plan. Uses Groq's free API key (no Claude key). Builds on slice 9. |
+| **Act on the agent's proposals** | A screen where staff approve or change a proposal, and a step that rebooks with an audit trail; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline | The agent proposes only (ADR-0022). Run `python -m evals --live` with a Groq key first: the live model has not been run yet. |
 | **More notifications** | Check-in-opening reminders; a refund-completed email; HTML email and a boarding-pass attachment; SMS; non-blocking retry topics and a dead-letter replay tool | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Disruptions in search** | Flight search shows delayed/cancelled flights | flight-search would read disruptions. |
 | **Reconcile charges without a booking** | A job that finds charges with no booking and refunds them | Removes the manual step in the `RefundFailed` runbook. |
