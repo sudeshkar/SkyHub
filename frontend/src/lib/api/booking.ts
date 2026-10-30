@@ -238,6 +238,59 @@ export async function getBoardingPasses(locator: string, token: string, segmentI
 }
 
 export type Disruption = components["schemas"]["Disruption"];
+export type RecordDisruptionRequest = components["schemas"]["RecordDisruptionRequest"];
+
+export type StaffOutcome =
+  | { kind: "opened"; accessToken: string; expiresAt: string; username: string; role: "OPS" | "ADMIN" }
+  | { kind: "denied" } // wrong username or password, or a locked account: the service does not say which
+  | { kind: "unavailable" };
+
+export type RecordOutcome =
+  | { kind: "recorded"; affectedBookings: number }
+  | { kind: "unauthorized" } // token missing, expired, or the role may not do this
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+/** Staff login (ADR-0017). Server-side only: the browser never sees the password go anywhere but here. */
+export async function openStaffSession(username: string, password: string): Promise<StaffOutcome> {
+  const response = await call("/api/v1/ops/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 201) {
+    const session = (await response.json()) as components["schemas"]["StaffSession"];
+    return {
+      kind: "opened",
+      accessToken: session.accessToken,
+      expiresAt: session.expiresAt,
+      username: session.username,
+      role: session.role,
+    };
+  }
+  if (response.status === 401 || response.status === 400) return { kind: "denied" };
+  return { kind: "unavailable" };
+}
+
+/** Records a delay or cancellation; the staff token says who did it. */
+export async function recordDisruption(token: string, request: RecordDisruptionRequest): Promise<RecordOutcome> {
+  const response = await call("/api/v1/ops/disruptions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(request),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) {
+    const recorded = (await response.json()) as components["schemas"]["DisruptionRecorded"];
+    return { kind: "recorded", affectedBookings: recorded.affectedBookings };
+  }
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  if (response.status === 400) return { kind: "rejected", detail: await problemDetail(response, "That was not accepted.") };
+  return { kind: "unavailable" };
+}
 
 /** A failure here must not break the page, so it quietly means "nothing to show". */
 export async function getDisruptions(locator: string, token: string): Promise<Disruption[]> {

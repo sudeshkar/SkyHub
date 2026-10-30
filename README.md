@@ -119,7 +119,7 @@ cd frontend && npm test        # unit and component tests
 cd frontend && npm run typecheck && npx eslint src
 ```
 
-**End-to-end (a real browser):** with both services, PostgreSQL and the website running as in *Run it locally*, run `cd frontend && npx playwright install chromium` once, then `npm run e2e`. It books a flight, pays with the test card, looks the booking up, cancels it and checks the refund. It is not part of CI because it needs the whole stack.
+**End-to-end (a real browser):** with both services, PostgreSQL and the website running as in *Run it locally*, run `cd frontend && npx playwright install chromium` once, then `npm run e2e`. It books a flight, pays with the test card, looks the booking up, cancels it and checks the refund. A second test signs in to the operations screen (`/ops`) and records a cancellation; it needs a staff account, so start the booking service with `SKYHUB_BOOTSTRAP_ADMIN_USERNAME` / `SKYHUB_BOOTSTRAP_ADMIN_PASSWORD` and pass the same pair as `SKYHUB_E2E_STAFF_USER` / `SKYHUB_E2E_STAFF_PASSWORD` (without them that test is skipped). It is not part of CI because it needs the whole stack.
 
 CI runs the same on every pull request.
 
