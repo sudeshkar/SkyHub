@@ -1,0 +1,13 @@
+{
+  "eventId": "c4e1b6d2-91a7-4f3e-b0d5-5a8e2c7f9b33",
+  "type": "booking.disrupted",
+  "version": 1,
+  "occurredAt": "2026-10-30T10:00:00Z",
+  "locator": "ABC234",
+  "contactEmail": "priya@example.com",
+  "flightNumber": "SK501",
+  "departureDate": "2026-11-02",
+  "disruption": "DELAYED",
+  "revisedDeparture": "2026-11-02T14:30:00Z",
+  "reason": "Late inbound aircraft"
+}

@@ -53,6 +53,7 @@ class ManageBookingServiceTest {
             mock(com.skyhub.booking.persistence.CheckInRepository.class);
     private final ManageTokenIssuer tokens = mock(ManageTokenIssuer.class);
     private final CancellationRefunds refunds = mock(CancellationRefunds.class);
+    private final BookingEvents events = mock(BookingEvents.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final SeatMapCache seatMapCache = new SeatMapCache(registry);
     private final Map<String, SeatInventory> inventory = new HashMap<>();
@@ -86,7 +87,7 @@ class ManageBookingServiceTest {
         when(refunds.settle(anyString())).thenReturn(Optional.empty());
         when(refunds.status(anyString())).thenReturn(Optional.empty());
         service = new ManageBookingService(pnrs, seats, checkIns, seatMapCache, tokens, new ManageMetrics(registry),
-                refunds, TransactionOperations.withoutTransaction());
+                refunds, TransactionOperations.withoutTransaction(), events);
     }
 
     @Test
@@ -164,6 +165,34 @@ class ManageBookingServiceTest {
         order.verify(refunds).record("ABC234", RefundPolicy.Decision.FULL_REFUND);
         order.verify(refunds).settle("ABC234");
         assertThat(cancelled.refund()).isEqualTo(paid);
+    }
+
+    @Test
+    void should_record_a_cancellation_event_with_the_decision_and_the_amount_paid() {
+        when(refunds.record("ABC234", RefundPolicy.Decision.FULL_REFUND))
+                .thenReturn(Optional.of(com.skyhub.booking.domain.Money.of("200.00", "USD")));
+
+        service.cancel("ABC234");
+
+        verify(events).bookingCancelled(pnr, RefundPolicy.Decision.FULL_REFUND,
+                Optional.of(com.skyhub.booking.domain.Money.of("200.00", "USD")));
+    }
+
+    @Test
+    void should_record_the_event_once_even_if_the_traveller_presses_cancel_again() {
+        service.cancel("ABC234");
+        service.cancel("ABC234");
+
+        verify(events, org.mockito.Mockito.times(1)).bookingCancelled(any(), any(), any());
+    }
+
+    @Test
+    void should_record_no_event_when_the_refund_cannot_be_decided() {
+        when(refunds.decide(any(Pnr.class))).thenThrow(new FlightCatalogUnavailableException("down", null));
+
+        assertThatExceptionOfType(FlightCatalogUnavailableException.class).isThrownBy(() -> service.cancel("ABC234"));
+
+        verifyNoInteractions(events);
     }
 
     @Test

@@ -37,6 +37,7 @@ class DisruptionServiceTest {
 
     private final DisruptionRepository disruptions = mock(DisruptionRepository.class);
     private final PnrRepository pnrs = mock(PnrRepository.class);
+    private final BookingEvents events = mock(BookingEvents.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private DisruptionService service;
 
@@ -44,8 +45,15 @@ class DisruptionServiceTest {
     void setUp() {
         when(disruptions.save(any(Disruption.class))).thenAnswer(call -> call.getArgument(0));
         when(disruptions.findByFlightNumberAndDepartureDate(any(), any())).thenReturn(Optional.empty());
-        when(pnrs.countActiveOnFlight("SK501", DATE)).thenReturn(42L);
-        service = new DisruptionService(disruptions, pnrs, Clock.fixed(NOW, ZoneOffset.UTC), new DisruptionMetrics(registry));
+        when(pnrs.findActiveOnFlight("SK501", DATE)).thenReturn(bookings(42));
+        service = new DisruptionService(disruptions, pnrs, Clock.fixed(NOW, ZoneOffset.UTC), new DisruptionMetrics(registry),
+                events, org.springframework.transaction.support.TransactionOperations.withoutTransaction());
+    }
+
+    private static List<Pnr> bookings(int count) {
+        return java.util.stream.IntStream.range(0, count).mapToObj(i -> Pnr.confirmed("B" + String.format("%05d", i),
+                new ContactEmail("p" + i + "@example.com"), List.of(new PnrSegment("SK501", DATE)),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("11D"))), NOW, "hash" + i, "fingerprint" + i)).toList();
     }
 
     private static RecordDisruptionCommand delay(Instant revised, String reason) {
@@ -65,6 +73,53 @@ class DisruptionServiceTest {
         assertThat(saved.getValue().getRecordedAt()).isEqualTo(NOW);
         assertThat(saved.getValue().getRecordedBy()).isEqualTo("priya.ops");
         assertThat(registry.counter("skyhub.disruptions", "type", "delayed").count()).isEqualTo(1);
+    }
+
+    @Test
+    void should_tell_every_affected_booking_in_the_same_transaction_as_the_record() {
+        List<Pnr> affected = bookings(3);
+        when(pnrs.findActiveOnFlight("SK501", DATE)).thenReturn(affected);
+
+        service.record(delay(REVISED, "Late inbound aircraft"));
+
+        var saved = org.mockito.ArgumentCaptor.forClass(Disruption.class);
+        var order = org.mockito.Mockito.inOrder(disruptions, events);
+        order.verify(disruptions).save(saved.capture());
+        affected.forEach(pnr -> order.verify(events).bookingDisrupted(pnr, saved.getValue()));
+    }
+
+    @Test
+    void should_tell_nobody_when_the_same_disruption_is_recorded_again() {
+        Disruption earlier = Disruption.delayed("SK501", DATE, REVISED, "Late inbound aircraft", NOW.minusSeconds(600));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(earlier));
+
+        int affected = service.record(delay(REVISED, "  Late inbound aircraft "));
+
+        assertThat(affected).isEqualTo(42); // the size of it is still reported
+        verify(events, never()).bookingDisrupted(any(), any());
+    }
+
+    @Test
+    void should_tell_everyone_again_when_a_delay_is_corrected_or_becomes_a_cancellation() {
+        Disruption earlier = Disruption.delayed("SK501", DATE, REVISED, "Late inbound aircraft", NOW.minusSeconds(600));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(earlier));
+        when(pnrs.findActiveOnFlight("SK501", DATE)).thenReturn(bookings(2));
+
+        service.record(delay(REVISED.plusSeconds(3600), "Late inbound aircraft"));
+
+        verify(events, org.mockito.Mockito.times(2)).bookingDisrupted(any(), eq(earlier));
+    }
+
+    @Test
+    void should_tell_nobody_when_the_record_could_not_be_saved() {
+        when(disruptions.save(any(Disruption.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_disruption_flight"))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_disruption_flight"));
+
+        assertThatExceptionOfType(org.springframework.dao.DataIntegrityViolationException.class)
+                .isThrownBy(() -> service.record(delay(REVISED, "x")));
+
+        verify(events, never()).bookingDisrupted(any(), any());
     }
 
     @Test

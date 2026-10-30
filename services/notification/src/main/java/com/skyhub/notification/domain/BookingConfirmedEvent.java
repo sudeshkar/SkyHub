@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 public record BookingConfirmedEvent(UUID eventId, String type, int version, Instant occurredAt, String locator,
                                     String contactEmail, List<Passenger> passengers, List<Segment> segments,
-                                    BigDecimal totalAmount, String currency) {
+                                    BigDecimal totalAmount, String currency) implements NotificationEvent {
 
     public static final String TYPE = "booking.confirmed";
 

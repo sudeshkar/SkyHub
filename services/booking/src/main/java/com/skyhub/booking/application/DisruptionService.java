@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Delays and cancellations (ADR-0014). Recording is idempotent: the same flight and date always has at most one
@@ -30,8 +31,13 @@ public class DisruptionService {
     private final PnrRepository pnrs;
     private final Clock clock;
     private final DisruptionMetrics metrics;
+    private final BookingEvents events;
+    private final TransactionOperations transactions;
 
-    public DisruptionService(DisruptionRepository disruptions, PnrRepository pnrs, Clock clock, DisruptionMetrics metrics) {
+    public DisruptionService(DisruptionRepository disruptions, PnrRepository pnrs, Clock clock, DisruptionMetrics metrics,
+                             BookingEvents events, TransactionOperations transactions) {
+        this.events = events;
+        this.transactions = transactions;
         this.disruptions = disruptions;
         this.pnrs = pnrs;
         this.clock = clock;
@@ -43,27 +49,36 @@ public class DisruptionService {
         if (command.type() == DisruptionType.CANCELLED && command.revisedDeparture() != null) {
             throw new InvalidBookingException("A cancelled flight cannot have a revised departure time");
         }
+        int affected;
         try {
-            save(command);
+            affected = transactions.execute(status -> saveAndTellTravellers(command));
         } catch (DataIntegrityViolationException createdMeanwhile) {
             // Another operator recorded this flight between our lookup and our insert: update theirs instead.
-            save(command);
+            affected = transactions.execute(status -> saveAndTellTravellers(command));
         }
         metrics.record(command.type());
-        long affected = pnrs.countActiveOnFlight(command.flightNumber(), command.departureDate());
         log.atInfo()
                 .addKeyValue("flight", command.flightNumber())
                 .addKeyValue("disruption.recorded_by", command.recordedBy())
                 .addKeyValue("disruption.type", command.type())
                 .addKeyValue("disruption.affected_bookings", affected)
                 .log("Disruption recorded");
-        return Math.toIntExact(affected);
+        return affected;
     }
 
-    private void save(RecordDisruptionCommand command) {
+    /**
+     * One transaction: the record, and an event for every active booking on the flight (ADR-0019). Either both exist or
+     * neither does. Recording something that changes nothing a traveller could see sends nothing, so an operations tool
+     * that retries does not email everyone again.
+     *
+     * @return how many active bookings are on the flight
+     */
+    private int saveAndTellTravellers(RecordDisruptionCommand command) {
         Instant now = clock.instant();
         Disruption disruption = disruptions.findByFlightNumberAndDepartureDate(command.flightNumber(), command.departureDate())
                 .orElse(null);
+        boolean changed = disruption == null
+                || !disruption.sameAs(command.type(), command.revisedDeparture(), command.reason());
         if (disruption == null) {
             disruption = command.type() == DisruptionType.DELAYED
                     ? Disruption.delayed(command.flightNumber(), command.departureDate(), command.revisedDeparture(), command.reason(), now)
@@ -75,6 +90,14 @@ public class DisruptionService {
         }
         disruption.recordedBy(command.recordedBy());
         disruptions.save(disruption);
+
+        List<Pnr> active = pnrs.findActiveOnFlight(command.flightNumber(), command.departureDate());
+        if (changed) {
+            for (Pnr pnr : active) {
+                events.bookingDisrupted(pnr, disruption);
+            }
+        }
+        return active.size();
     }
 
     /** The disrupted flights of a booking, in booking order. Empty when all is well. */

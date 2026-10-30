@@ -145,6 +145,6 @@ docs/           design documents, decision records (ADRs), runbooks, and the [ro
 
 ## Status and honest limits
 
-Built so far: search, seat selection, booking with payment (mock provider), refunds on cancellation, manage booking, seat holds, online check-in, delays and cancellations, staff login with roles and an operations screen, a booking-confirmed email through an outbox and Kafka, observability.
+Built so far: search, seat selection, booking with payment (mock provider), refunds on cancellation, manage booking, seat holds, online check-in, delays and cancellations, staff login with roles and an operations screen, emails for a confirmed booking, a cancellation (with its refund) and a delayed or cancelled flight, through an outbox and Kafka, observability.
 
-Not built, on purpose or not yet: a real payment provider, user accounts, a real mail server (emails are written to the notification service's log) and emails for anything except a confirmed booking, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.
+Not built, on purpose or not yet: a real payment provider, user accounts, a real mail server (emails are written to the notification service's log) and check-in reminders, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.

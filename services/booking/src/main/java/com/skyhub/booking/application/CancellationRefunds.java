@@ -2,6 +2,7 @@ package com.skyhub.booking.application;
 
 import com.skyhub.booking.application.view.RefundView;
 import com.skyhub.booking.domain.Disruption;
+import com.skyhub.booking.domain.Money;
 import com.skyhub.booking.domain.Payment;
 import com.skyhub.booking.domain.Pnr;
 import com.skyhub.booking.domain.PnrSegment;
@@ -75,10 +76,11 @@ public class CancellationRefunds {
     }
 
     /** Runs inside the cancel transaction. A booking with no payment (made before payments existed) is left alone. */
-    public void record(String locator, RefundPolicy.Decision decision) {
+    /** @return what the booking cost, or empty for a booking that was never paid (nothing to record) */
+    public Optional<Money> record(String locator, RefundPolicy.Decision decision) {
         Payment payment = payments.findByLocator(locator).orElse(null);
         if (payment == null) {
-            return;
+            return Optional.empty();
         }
         if (decision == RefundPolicy.Decision.FULL_REFUND) {
             payment.refundDue();
@@ -87,6 +89,7 @@ public class CancellationRefunds {
             metrics.record(PaymentMetrics.Outcome.CANCEL_NOT_REFUNDABLE);
         }
         payments.save(payment);
+        return Optional.of(payment.getAmount());
     }
 
     /**

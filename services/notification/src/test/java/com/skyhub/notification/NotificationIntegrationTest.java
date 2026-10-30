@@ -88,6 +88,25 @@ class NotificationIntegrationTest {
     }
 
     @Test
+    void should_send_the_cancellation_and_disruption_emails_too() throws Exception {
+        UUID cancelled = UUID.randomUUID();
+        UUID disrupted = UUID.randomUUID();
+        String cancelledMessage = Files.readString(Path.of("../../api-specs/events/booking-cancelled.v1.example.json"))
+                .replace("7d2c1a90-5b1e-4c55-8a3a-2f9a6f1c0a22", cancelled.toString()).replace("ABC234", "FFF666");
+        String disruptedMessage = Files.readString(Path.of("../../api-specs/events/booking-disrupted.v1.example.json"))
+                .replace("c4e1b6d2-91a7-4f3e-b0d5-5a8e2c7f9b33", disrupted.toString()).replace("ABC234", "FFF666");
+
+        kafka.send(TOPIC, "FFF666", cancelledMessage);
+        kafka.send(TOPIC, "FFF666", disruptedMessage);
+
+        await().atMost(Duration.ofSeconds(30)).until(() -> rows(cancelled) == 1 && rows(disrupted) == 1);
+        assertThat(jdbc.queryForObject("SELECT type FROM sent_notification WHERE event_id = ?", String.class, cancelled))
+                .isEqualTo("booking.cancelled");
+        assertThat(jdbc.queryForObject("SELECT subject FROM sent_notification WHERE event_id = ?", String.class, disrupted))
+                .isEqualTo("Your SkyHub flight SK501 on 2026-11-02 is delayed");
+    }
+
+    @Test
     void should_send_one_email_however_many_times_the_event_is_delivered() throws Exception {
         UUID id = UUID.randomUUID();
         String message = event(id, "BBB222");

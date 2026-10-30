@@ -125,7 +125,8 @@ class CancellationRefundsTest {
 
     @Test
     void should_mark_the_payment_refund_due_when_the_rules_say_refund() {
-        refunds.record("ABC234", RefundPolicy.Decision.FULL_REFUND);
+        assertThat(refunds.record("ABC234", RefundPolicy.Decision.FULL_REFUND)).hasValueSatisfying(
+                paid -> assertThat(paid.amount()).isEqualByComparingTo("200.00"));
 
         assertThat(payment.getStatus()).isEqualTo(Payment.Status.REFUND_DUE);
         verify(payments).save(payment);
@@ -143,7 +144,7 @@ class CancellationRefundsTest {
     void should_do_nothing_for_a_booking_that_was_never_paid() {
         when(payments.findByLocator("OLD123")).thenReturn(Optional.empty());
 
-        refunds.record("OLD123", RefundPolicy.Decision.FULL_REFUND);
+        assertThat(refunds.record("OLD123", RefundPolicy.Decision.FULL_REFUND)).isEmpty();
 
         verify(payments, never()).save(any());
     }

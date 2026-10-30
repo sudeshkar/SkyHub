@@ -93,7 +93,82 @@ class OutboxIntegrationTest {
         assertThat(events()).isEqualTo(afterFirst);
     }
 
+    @Test
+    void should_record_a_cancellation_event_saying_the_money_comes_back_when_cancelled_early() throws Exception {
+        String locator = bookedLocator("SK777", "2027-08-10", "12A");
+
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", locator).header("Authorization", manageToken(locator)))
+                .andExpect(status().isOk());
+
+        List<String> types = jdbc.queryForList("SELECT event_type FROM outbox_event WHERE aggregate_id = ? ORDER BY seq", String.class, locator);
+        assertThat(types).containsExactly("booking.confirmed", "booking.cancelled");
+    }
+
+    @Test
+    void should_record_the_cancellation_event_once_however_often_cancel_is_pressed() throws Exception {
+        String locator = bookedLocator("SK777", "2027-08-12", "12A");
+        String token = manageToken(locator);
+
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", locator).header("Authorization", token)).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", locator).header("Authorization", token)).andExpect(status().isOk());
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_event WHERE aggregate_id = ? AND event_type = 'booking.cancelled'",
+                Long.class, locator)).isEqualTo(1);
+    }
+
+    @Test
+    void should_tell_each_active_booking_on_a_disrupted_flight_but_not_a_cancelled_one_and_not_twice() throws Exception {
+        String stays = bookedLocator("SK501", "2027-08-11", "12A");
+        String alsoStays = bookedLocator("SK501", "2027-08-11", "12B");
+        String leaves = bookedLocator("SK501", "2027-08-11", "12C");
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", leaves).header("Authorization", manageToken(leaves))).andExpect(status().isOk());
+        String admin = TestStaff.adminBearer(mvc);
+        String delay = "{\"flightNumber\":\"SK501\",\"departureDate\":\"2027-08-11\",\"type\":\"DELAYED\","
+                + "\"revisedDeparture\":\"2027-08-11T14:30:00Z\",\"reason\":\"Late inbound aircraft\"}";
+
+        mvc.perform(post("/api/v1/ops/disruptions").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON).content(delay))
+                .andExpect(status().isOk());
+        // the operations tool retrying the same request must not email everybody again
+        mvc.perform(post("/api/v1/ops/disruptions").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON).content(delay))
+                .andExpect(status().isOk());
+
+        assertThat(disruptionEventsFor(stays)).isEqualTo(1);
+        assertThat(disruptionEventsFor(alsoStays)).isEqualTo(1);
+        assertThat(disruptionEventsFor(leaves)).isZero();
+    }
+
+    @Test
+    void should_tell_everyone_again_when_the_delay_changes() throws Exception {
+        String locator = bookedLocator("SK501", "2027-08-13", "12A");
+        String admin = TestStaff.adminBearer(mvc);
+        for (String time : List.of("14:30", "16:00")) {
+            mvc.perform(post("/api/v1/ops/disruptions").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"flightNumber\":\"SK501\",\"departureDate\":\"2027-08-13\",\"type\":\"DELAYED\","
+                                    + "\"revisedDeparture\":\"2027-08-13T%s:00Z\"}".formatted(time)))
+                    .andExpect(status().isOk());
+        }
+
+        assertThat(disruptionEventsFor(locator)).isEqualTo(2);
+    }
+
     // ---- helpers -------------------------------------------------------------------------------------------------
+
+    private long disruptionEventsFor(String locator) {
+        return jdbc.queryForObject("SELECT count(*) FROM outbox_event WHERE aggregate_id = ? AND event_type = 'booking.disrupted'",
+                Long.class, locator);
+    }
+
+    private String bookedLocator(String flight, String date, String seat) throws Exception {
+        String body = book(flight, date, seat, "tok_visa").andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.locator");
+    }
+
+    private String manageToken(String locator) throws Exception {
+        String body = mvc.perform(post("/api/v1/pnrs/{l}/sessions", locator).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastName\":\"Perera\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return "Bearer " + JsonPath.<String>read(body, "$.accessToken");
+    }
 
     private long events() {
         return jdbc.queryForObject("SELECT count(*) FROM outbox_event", Long.class);
