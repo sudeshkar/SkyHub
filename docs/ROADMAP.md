@@ -47,10 +47,10 @@ Ordered by how much they add to the story, not a commitment.
 ## Smaller loose ends
 
 - **Not yet clicked through in a browser:** the seat-hold countdown, check-in, disruption notices and the payment step. Unit, component and integration tests cover them; an end-to-end browser test (Playwright) would cover the whole path.
-- **Monitoring gaps:** no dashboard panel or alert for `skyhub_disruptions_total`; no Next.js tracing and no JDBC spans yet.
+- **Monitoring gaps:** no Next.js tracing and no JDBC spans yet. (The disruptions panel exists; no alert on purpose, since recording a disruption is a deliberate operations action.)
 - **Hold abuse:** holds are limited per client at the website (6 a minute); a per-client limit at the gateway is the next step (ADR-0012).
 - **Manage-token revocation:** a token stays valid until it expires (15 minutes); there is no way to revoke one (ADR-0011).
 - **README screenshots** of search, seat map, manage page and Grafana.
 - **Homepage hero video:** needs a paid plan on the video-generation service; the start frame is already prepared.
-- **Dev setup:** turn off the Java extension's auto-build in VS Code; it can overwrite `target/classes` and make a slice test fail for no code reason.
+- **Dev setup:** the Java extension's auto-build is off in this machine's local `.vscode/settings.json` (`java.autobuild.enabled: false`); `.vscode/` is not committed, so set it again on a new machine. Auto-build can overwrite `target/classes` and make a slice test fail for no code reason.
 - **Knowledge graph:** `graphify` is installed; adding its hook and a note in `CLAUDE.md` was offered, not done.
