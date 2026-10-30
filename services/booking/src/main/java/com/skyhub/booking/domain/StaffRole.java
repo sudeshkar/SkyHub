@@ -13,6 +13,11 @@ public enum StaffRole {
         this.createsStaff = createsStaff;
     }
 
+    /** Who is booked on a flight (without names or contact details): both roles, so a disruption can be worked out. */
+    public boolean mayViewAffectedBookings() {
+        return true;
+    }
+
     public boolean mayRecordDisruptions() {
         return true; // both roles; written out so the rule is findable and the next role has to decide
     }

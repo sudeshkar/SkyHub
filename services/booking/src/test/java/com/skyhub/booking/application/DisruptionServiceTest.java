@@ -76,6 +76,27 @@ class DisruptionServiceTest {
     }
 
     @Test
+    void should_list_the_bookings_on_a_flight_with_only_what_re_accommodation_needs() {
+        Pnr twoLegs = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"),
+                List.of(new PnrSegment("SK001", DATE), new PnrSegment("SK501", DATE)),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("11D", "24A")),
+                        new PnrPassenger("Anil", "Perera", List.of("11E", "24B"))), NOW, "hash", "fingerprint");
+        when(pnrs.findActiveOnFlight("SK501", DATE)).thenReturn(List.of(twoLegs));
+
+        List<AffectedBooking> affected = service.affectedBookings("SK501", DATE);
+
+        assertThat(affected).containsExactly(new AffectedBooking("ABC234", 2, 1,
+                List.of(new PnrSegment("SK001", DATE), new PnrSegment("SK501", DATE))));
+    }
+
+    @Test
+    void should_list_nothing_for_a_flight_nobody_is_booked_on() {
+        when(pnrs.findActiveOnFlight("SK900", DATE)).thenReturn(List.of());
+
+        assertThat(service.affectedBookings("SK900", DATE)).isEmpty();
+    }
+
+    @Test
     void should_tell_every_affected_booking_in_the_same_transaction_as_the_record() {
         List<Pnr> affected = bookings(3);
         when(pnrs.findActiveOnFlight("SK501", DATE)).thenReturn(affected);

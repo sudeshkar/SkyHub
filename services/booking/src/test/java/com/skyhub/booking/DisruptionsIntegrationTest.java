@@ -131,6 +131,32 @@ class DisruptionsIntegrationTest {
         mvc.perform(checkIn(locator)).andExpect(status().isCreated());
     }
 
+    @Test
+    void should_list_the_active_bookings_on_a_flight_without_names_or_emails() throws Exception {
+        String stays = book("SK501", "2027-03-09", "11D");
+        String leaves = book("SK501", "2027-03-09", "11E");
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", leaves).header("Authorization", tokenFor(leaves)))
+                .andExpect(status().isOk());
+
+        String body = mvc.perform(get("/api/v1/ops/flights/SK501/departures/2027-03-09/bookings").header("Authorization", ops))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].locator").value(stays))
+                .andExpect(jsonPath("$.items[0].passengerCount").value(1))
+                .andExpect(jsonPath("$.items[0].segmentIndex").value(0))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("Perera").doesNotContain("Priya").doesNotContain("priya@example.com").doesNotContain(leaves);
+    }
+
+    @Test
+    void should_list_an_empty_flight_as_no_bookings_and_refuse_callers_who_are_not_staff() throws Exception {
+        mvc.perform(get("/api/v1/ops/flights/SK501/departures/2027-03-10/bookings").header("Authorization", ops))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0));
+        mvc.perform(get("/api/v1/ops/flights/SK501/departures/2027-03-10/bookings")).andExpect(status().isUnauthorized());
+    }
+
     @org.junit.jupiter.api.BeforeEach
     void logIn() throws Exception {
         ops = TestStaff.adminBearer(mvc);

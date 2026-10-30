@@ -18,6 +18,22 @@ jobs:
       # Testcontainers uses the runner's Docker daemon for PostgreSQL and Redis.
       - run: sh mvnw -B verify
 
+  # The disruption agent (ADR-0022): unit tests, the guardrail fuzz test and the offline evals. Needs no API key.
+  agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/disruption-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: services/disruption-agent/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

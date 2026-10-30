@@ -1,0 +1,25 @@
+[project]
+name = "disruption-agent"
+version = "0.1.0"
+description = "Reads a flight disruption, finds who is affected, and proposes re-accommodation for a person to approve (ADR-0022)."
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=2.3,<3",
+    "groq>=1.7,<2",
+    "httpx>=0.28,<1",
+    "pydantic>=2.11,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "evals"]
+pythonpath = ["src", "."]

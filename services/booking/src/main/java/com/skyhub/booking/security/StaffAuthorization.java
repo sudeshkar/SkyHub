@@ -30,6 +30,10 @@ public final class StaffAuthorization implements AuthorizationManager<RequestAut
         return new StaffAuthorization(StaffRole::mayRecordDisruptions);
     }
 
+    public static StaffAuthorization viewsAffectedBookings() {
+        return new StaffAuthorization(StaffRole::mayViewAffectedBookings);
+    }
+
     public static StaffAuthorization createsStaff() {
         return new StaffAuthorization(StaffRole::mayCreateStaff);
     }
