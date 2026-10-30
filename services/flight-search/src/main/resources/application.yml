@@ -25,6 +25,12 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # Every instance rebuilds the whole picture from the start of the compacted topic (ADR-0025).
+      auto-offset-reset: earliest
+      enable-auto-commit: false
 
 management:
   # Actuator lives on its own port, never exposed publicly (docs/design/04-observability.md §7).
@@ -67,6 +73,11 @@ logging:
 
 # Hub network — see docs/adr/0001-multi-hub-configuration.md
 skyhub:
+  flight-status:
+    # Follow flight delays and cancellations from Kafka (ADR-0025). Switch off only where there is no broker (tests).
+    listener:
+      enabled: true
+    topic: skyhub.flight.disruptions
   # In-memory timetable (ADR-0006): reloaded on this interval; searches never query the database.
   timetable:
     refresh-interval: PT5M

@@ -30,7 +30,25 @@ const direct: Itinerary = {
   currency: "USD",
 };
 
+const delayed: Itinerary = {
+  ...direct,
+  legs: [{ ...direct.legs[0], status: "DELAYED", revisedDeparture: "2026-11-02T14:30:00Z" }],
+};
+
 describe("ItineraryCard", () => {
+  it("tells the traveller a flight is delayed and when it now leaves, beside the scheduled time", () => {
+    render(<ItineraryCard itinerary={delayed} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("SK001 is delayed: it now leaves at 18:30");
+    expect(screen.getByText("12:30")).toBeInTheDocument(); // the scheduled time (Dubai) is still shown
+  });
+
+  it("shows no delay notice for a flight on schedule", () => {
+    render(<ItineraryCard itinerary={direct} />);
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("shows local departure and arrival times", () => {
     render(<ItineraryCard itinerary={viaTransfer} />);
 

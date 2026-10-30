@@ -33,11 +33,13 @@ public class DisruptionService {
     private final Clock clock;
     private final DisruptionMetrics metrics;
     private final BookingEvents events;
+    private final FlightEvents flightEvents;
     private final TransactionOperations transactions;
 
     public DisruptionService(DisruptionRepository disruptions, PnrRepository pnrs, Clock clock, DisruptionMetrics metrics,
-                             BookingEvents events, TransactionOperations transactions) {
+                             BookingEvents events, FlightEvents flightEvents, TransactionOperations transactions) {
         this.events = events;
+        this.flightEvents = flightEvents;
         this.transactions = transactions;
         this.disruptions = disruptions;
         this.pnrs = pnrs;
@@ -94,6 +96,7 @@ public class DisruptionService {
 
         List<Pnr> active = pnrs.findActiveOnFlight(command.flightNumber(), command.departureDate());
         if (changed) {
+            flightEvents.flightDisrupted(disruption);   // search follows the flight's state (ADR-0025)
             for (Pnr pnr : active) {
                 events.bookingDisrupted(pnr, disruption);
             }

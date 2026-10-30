@@ -2,6 +2,7 @@ package com.skyhub.flightsearch.web;
 
 import com.skyhub.flightsearch.api.model.ConnectionDto;
 import com.skyhub.flightsearch.api.model.FlightLegDto;
+import com.skyhub.flightsearch.api.model.FlightStatusDto;
 import com.skyhub.flightsearch.api.model.HubDto;
 import com.skyhub.flightsearch.api.model.ItineraryDto;
 import com.skyhub.flightsearch.domain.Connection;
@@ -34,8 +35,11 @@ final class ItineraryMapper {
     }
 
     static FlightLegDto toDto(FlightLeg leg) {
-        return new FlightLegDto(leg.flightNumber(), leg.origin(), leg.destination(), leg.departure(), leg.arrival(),
+        FlightLegDto dto = new FlightLegDto(leg.flightNumber(), leg.origin(), leg.destination(), leg.departure(), leg.arrival(),
                 leg.aircraftType(), leg.fare(), leg.currency());
+        dto.setStatus(FlightStatusDto.valueOf(leg.status().kind().name()));
+        dto.setRevisedDeparture(leg.status().revisedDeparture());
+        return dto;
     }
 
     private static ConnectionDto toDto(Connection connection) {

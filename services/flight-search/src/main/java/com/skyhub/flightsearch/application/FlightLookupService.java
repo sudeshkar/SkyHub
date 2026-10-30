@@ -10,15 +10,17 @@ import org.springframework.stereotype.Service;
 public class FlightLookupService {
 
     private final TimetableSource timetables;
+    private final FlightStatusSource statuses;
 
-    public FlightLookupService(TimetableSource timetables) {
+    public FlightLookupService(TimetableSource timetables, FlightStatusSource statuses) {
         this.timetables = timetables;
+        this.statuses = statuses;
     }
 
     public FlightLeg departure(String flightNumber, LocalDate date) {
         return timetables.current().flight(flightNumber)
                 .filter(schedule -> schedule.operatesOn(date))
-                .map(schedule -> schedule.legOn(date))
+                .map(schedule -> schedule.legOn(date).withStatus(statuses.statusOf(flightNumber, date)))   // cancelled flights are still found: bookings on them need to see them
                 .orElseThrow(() -> new FlightNotFoundException(flightNumber + " does not operate on " + date));
     }
 }

@@ -29,6 +29,9 @@ public class OutboxEvent {
     @Column(nullable = false, length = 60)
     private String eventType;
 
+    @Column(nullable = false, length = 100)
+    private String topic;
+
     @Column(nullable = false)
     private String payload;
 
@@ -40,9 +43,18 @@ public class OutboxEvent {
     protected OutboxEvent() {
     }
 
+    /** The topic booking events have always gone to. */
+    public static final String BOOKING_TOPIC = "skyhub.booking.events";
+
     public static OutboxEvent pending(UUID id, String aggregateId, String eventType, String encryptedPayload,
                                       Instant createdAt) {
+        return pending(id, aggregateId, eventType, encryptedPayload, createdAt, BOOKING_TOPIC);
+    }
+
+    public static OutboxEvent pending(UUID id, String aggregateId, String eventType, String encryptedPayload,
+                                      Instant createdAt, String topic) {
         OutboxEvent event = new OutboxEvent();
+        event.topic = topic;
         event.id = id;
         event.aggregateId = aggregateId;
         event.eventType = eventType;
@@ -61,6 +73,10 @@ public class OutboxEvent {
 
     public UUID getId() {
         return id;
+    }
+
+    public String getTopic() {
+        return topic;
     }
 
     public String getAggregateId() {

@@ -26,6 +26,8 @@ function TransferNotice({ connection }: { connection: Connection }) {
 
 export function ItineraryCard({ itinerary, bookHref }: { itinerary: Itinerary; bookHref?: string }) {
   const first = itinerary.legs[0];
+  // A delayed flight shows its new time beside the schedule (ADR-0025); a cancelled one is never in search results.
+  const delayedLegs = itinerary.legs.filter((leg) => leg.status === "DELAYED" && leg.revisedDeparture);
   const last = itinerary.legs[itinerary.legs.length - 1];
   const origin = airport(first.origin);
   const destination = airport(last.destination);
@@ -90,6 +92,14 @@ export function ItineraryCard({ itinerary, bookHref }: { itinerary: Itinerary; b
         </div>
       )}
 
+      {delayedLegs.length > 0 && (
+        <p role="status" className="mt-3 border-l-4 border-amber-line bg-amber-bg px-3 py-2 text-sm">
+          {delayedLegs
+            .map((leg) => `${leg.flightNumber} is delayed: it now leaves at ${localTime(leg.revisedDeparture!, airport(leg.origin).timeZone)}`)
+            .join(". ")}
+          .
+        </p>
+      )}
       <details className="mt-3 text-sm">
         <summary className="cursor-pointer text-copper hover:text-copper-strong">Flight details</summary>
         <ol className="mt-3 space-y-3">

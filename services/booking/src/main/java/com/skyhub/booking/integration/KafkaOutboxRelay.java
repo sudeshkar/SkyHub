@@ -40,7 +40,6 @@ public class KafkaOutboxRelay {
     private final PiiCipher cipher;
     private final Clock clock;
     private final TransactionOperations transactions;
-    private final String topic;
     private final int batchSize;
     private final Duration sendTimeout;
     private final Duration retention;
@@ -49,7 +48,6 @@ public class KafkaOutboxRelay {
 
     public KafkaOutboxRelay(OutboxEventRepository outbox, KafkaTemplate<String, String> kafka, PiiCipher cipher,
                             Clock clock, TransactionOperations transactions, MeterRegistry registry,
-                            @Value("${skyhub.outbox.topic:skyhub.booking.events}") String topic,
                             @Value("${skyhub.outbox.relay.batch-size:50}") int batchSize,
                             @Value("${skyhub.outbox.relay.send-timeout:PT5S}") Duration sendTimeout,
                             @Value("${skyhub.outbox.retention:P7D}") Duration retention) {
@@ -58,7 +56,6 @@ public class KafkaOutboxRelay {
         this.cipher = cipher;
         this.clock = clock;
         this.transactions = transactions;
-        this.topic = topic;
         this.batchSize = batchSize;
         this.sendTimeout = sendTimeout;
         this.retention = retention;
@@ -84,7 +81,7 @@ public class KafkaOutboxRelay {
         List<OutboxEvent> done = new ArrayList<>();
         for (OutboxEvent event : batch) {
             try {
-                kafka.send(topic, event.getAggregateId(), cipher.decrypt(event.getPayload()))
+                kafka.send(event.getTopic(), event.getAggregateId(), cipher.decrypt(event.getPayload()))
                         .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();

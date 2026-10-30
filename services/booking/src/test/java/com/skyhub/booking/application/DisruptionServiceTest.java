@@ -38,6 +38,7 @@ class DisruptionServiceTest {
     private final DisruptionRepository disruptions = mock(DisruptionRepository.class);
     private final PnrRepository pnrs = mock(PnrRepository.class);
     private final BookingEvents events = mock(BookingEvents.class);
+    private final FlightEvents flightEvents = mock(FlightEvents.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private DisruptionService service;
 
@@ -47,7 +48,7 @@ class DisruptionServiceTest {
         when(disruptions.findByFlightNumberAndDepartureDate(any(), any())).thenReturn(Optional.empty());
         when(pnrs.findActiveOnFlight("SK501", DATE)).thenReturn(bookings(42));
         service = new DisruptionService(disruptions, pnrs, Clock.fixed(NOW, ZoneOffset.UTC), new DisruptionMetrics(registry),
-                events, org.springframework.transaction.support.TransactionOperations.withoutTransaction());
+                events, flightEvents, org.springframework.transaction.support.TransactionOperations.withoutTransaction());
     }
 
     private static List<Pnr> bookings(int count) {
@@ -107,6 +108,36 @@ class DisruptionServiceTest {
         var order = org.mockito.Mockito.inOrder(disruptions, events);
         order.verify(disruptions).save(saved.capture());
         affected.forEach(pnr -> order.verify(events).bookingDisrupted(pnr, saved.getValue()));
+    }
+
+    @Test
+    void should_publish_the_flight_s_new_state_once_in_the_same_transaction_so_search_can_follow() {
+        service.record(delay(REVISED, "Late inbound aircraft"));
+
+        var saved = org.mockito.ArgumentCaptor.forClass(Disruption.class);
+        var order = org.mockito.Mockito.inOrder(disruptions, flightEvents);
+        order.verify(disruptions).save(saved.capture());
+        order.verify(flightEvents).flightDisrupted(saved.getValue());
+    }
+
+    @Test
+    void should_not_publish_again_when_the_same_disruption_is_recorded_twice() {
+        Disruption earlier = Disruption.delayed("SK501", DATE, REVISED, "Late inbound aircraft", NOW.minusSeconds(600));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(earlier));
+
+        service.record(delay(REVISED, "Late inbound aircraft"));
+
+        verify(flightEvents, never()).flightDisrupted(any());
+    }
+
+    @Test
+    void should_publish_a_change_so_search_hears_that_a_delay_became_a_cancellation() {
+        Disruption earlier = Disruption.delayed("SK501", DATE, REVISED, "Late inbound aircraft", NOW.minusSeconds(600));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(earlier));
+
+        service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, null, "Aircraft grounded", "priya.ops"));
+
+        verify(flightEvents).flightDisrupted(earlier);
     }
 
     @Test

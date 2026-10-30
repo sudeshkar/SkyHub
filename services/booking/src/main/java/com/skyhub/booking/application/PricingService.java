@@ -16,19 +16,23 @@ import org.springframework.stereotype.Service;
 public class PricingService {
 
     private final FlightCatalog flights;
+    private final FlightSalesGuard guard;
 
-    public PricingService(FlightCatalog flights) {
+    public PricingService(FlightCatalog flights, FlightSalesGuard guard) {
         this.flights = flights;
+        this.guard = guard;
     }
 
     /**
      * @throws FlightNotFoundException when a flight does not operate on its date
+     * @throws com.skyhub.booking.domain.FlightCancelledException when the airline has cancelled one of the flights
      * @throws InvalidBookingException when there is nothing to price or the flights are priced in different currencies
      */
     public Money quote(List<PnrSegment> segments, int passengers) {
         if (segments.isEmpty() || passengers < 1) {
             throw new InvalidBookingException("A trip needs at least one flight and one passenger");
         }
+        guard.requireSellable(segments);   // no price for a flight that cannot be bought (ADR-0025)
         Money total = null;
         for (PnrSegment segment : segments) {
             Money fare = flights.find(segment.flightNumber(), segment.departureDate())

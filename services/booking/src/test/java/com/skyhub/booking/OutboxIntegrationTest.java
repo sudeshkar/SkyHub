@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * consumer while what sits in the table is not.
  */
 @SpringBootTest(properties = "skyhub.outbox.relay.enabled=true")
-@EmbeddedKafka(topics = "skyhub.booking.events", bootstrapServersProperty = "spring.kafka.bootstrap-servers")
+@EmbeddedKafka(topics = {"skyhub.booking.events", "skyhub.flight.disruptions"}, bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 @AutoConfigureMockMvc
 @Import({PostgresTestcontainer.class, TestFlightCatalog.class})
 class OutboxIntegrationTest {
@@ -151,6 +151,21 @@ class OutboxIntegrationTest {
         assertThat(disruptionEventsFor(locator)).isEqualTo(2);
     }
 
+    @Test
+    void should_publish_a_disruption_to_the_flight_topic_once_even_if_the_request_is_repeated() throws Exception {
+        String admin = TestStaff.adminBearer(mvc);
+        String cancel = "{\"flightNumber\":\"SK501\",\"departureDate\":\"2027-08-20\",\"type\":\"CANCELLED\",\"reason\":\"Aircraft grounded\"}";
+
+        mvc.perform(post("/api/v1/ops/disruptions").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON).content(cancel))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/ops/disruptions").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON).content(cancel))
+                .andExpect(status().isOk());
+
+        ConsumerRecord<String, String> record = awaitMessageOn("skyhub.flight.disruptions", "SK501@2027-08-20");
+        assertThat(JsonPath.<String>read(record.value(), "$.disruption")).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_event WHERE aggregate_id = 'SK501@2027-08-20'", Long.class)).isEqualTo(1);
+    }
+
     // ---- helpers -------------------------------------------------------------------------------------------------
 
     private long disruptionEventsFor(String locator) {
@@ -190,6 +205,10 @@ class OutboxIntegrationTest {
 
     /** Reads the topic from the start until the message for this booking arrives. */
     private ConsumerRecord<String, String> awaitMessageFor(String locator) {
+        return awaitMessageOn(TOPIC, locator);
+    }
+
+    private ConsumerRecord<String, String> awaitMessageOn(String topic, String key) {
         Map<String, Object> config = Map.of(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
                 ConsumerConfig.GROUP_ID_CONFIG, "outbox-test-" + UUID.randomUUID(),
@@ -198,10 +217,10 @@ class OutboxIntegrationTest {
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         List<ConsumerRecord<String, String>> found = new ArrayList<>();
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(config)) {
-            consumer.subscribe(List.of(TOPIC));
+            consumer.subscribe(List.of(topic));
             await().atMost(Duration.ofSeconds(30)).until(() -> {
                 consumer.poll(Duration.ofMillis(500)).forEach(r -> {
-                    if (locator.equals(r.key())) found.add(r);
+                    if (key.equals(r.key())) found.add(r);
                 });
                 return !found.isEmpty();
             });

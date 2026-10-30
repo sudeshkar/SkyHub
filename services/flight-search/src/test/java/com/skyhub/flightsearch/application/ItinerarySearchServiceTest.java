@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.skyhub.flightsearch.domain.AirportTransfer;
 import com.skyhub.flightsearch.domain.FlightSchedule;
+import com.skyhub.flightsearch.domain.FlightStatus;
 import com.skyhub.flightsearch.domain.Hub;
 import com.skyhub.flightsearch.domain.HubNetwork;
 import com.skyhub.flightsearch.domain.Itinerary;
@@ -13,6 +14,7 @@ import com.skyhub.flightsearch.domain.Timetable;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +25,7 @@ class ItinerarySearchServiceTest {
     private static final LocalDate MONDAY = LocalDate.of(2026, 11, 2);
 
     private final List<FlightSchedule> timetable = new ArrayList<>();
+    private FlightStatusSource statuses = FlightStatusSource.none();
 
     @Test
     void should_return_direct_flight() {
@@ -34,6 +37,63 @@ class ItinerarySearchServiceTest {
             assertThat(it.stops()).isZero();
             assertThat(it.legs().getFirst().flightNumber()).isEqualTo("SK001");
         });
+    }
+
+    @Test
+    void should_not_offer_a_flight_that_is_cancelled_on_that_date() {
+        givenSchedule("SK001", "DXB", "LHR", "08:30", 470);
+        statuses = (flight, day) -> flight.equals("SK001") ? FlightStatus.cancelled() : FlightStatus.SCHEDULED;
+
+        assertThat(search("DXB", "LHR")).isEmpty();
+    }
+
+    @Test
+    void should_offer_the_other_flights_on_the_route_when_one_is_cancelled() {
+        givenSchedule("SK001", "DXB", "LHR", "08:30", 470);
+        givenSchedule("SK003", "DXB", "LHR", "14:00", 470);
+        statuses = (flight, day) -> flight.equals("SK001") ? FlightStatus.cancelled() : FlightStatus.SCHEDULED;
+
+        assertThat(search("DXB", "LHR")).singleElement().satisfies(it -> assertThat(it.legs().getFirst().flightNumber()).isEqualTo("SK003"));
+    }
+
+    @Test
+    void should_show_a_delayed_flight_with_its_new_time_beside_the_scheduled_one() {
+        givenSchedule("SK001", "DXB", "LHR", "08:30", 470);
+        OffsetDateTime later = OffsetDateTime.parse("2026-11-02T14:30:00Z");
+        statuses = (flight, day) -> FlightStatus.delayedTo(later);
+
+        var leg = search("DXB", "LHR").getFirst().legs().getFirst();
+
+        assertThat(leg.status().kind()).isEqualTo(FlightStatus.Kind.DELAYED);
+        assertThat(leg.status().revisedDeparture()).isEqualTo(later);
+        assertThat(leg.departure()).isEqualTo(OffsetDateTime.parse("2026-11-02T08:30:00Z"));
+    }
+
+    @Test
+    void should_drop_a_connection_when_either_of_its_flights_is_cancelled() {
+        givenSchedule("SK501", "CMB", "DXB", "02:00", 290);
+        givenSchedule("SK001", "DXB", "LHR", "08:30", 470);
+
+        statuses = (flight, day) -> flight.equals("SK501") ? FlightStatus.cancelled() : FlightStatus.SCHEDULED;
+        assertThat(search("CMB", "LHR")).isEmpty();
+
+        statuses = (flight, day) -> flight.equals("SK001") ? FlightStatus.cancelled() : FlightStatus.SCHEDULED;
+        assertThat(search("CMB", "LHR")).isEmpty();
+    }
+
+    @Test
+    void should_look_the_status_of_each_flight_up_once_per_search_and_never_for_flights_on_other_routes() {
+        givenSchedule("SK001", "DXB", "LHR", "08:30", 470);
+        givenSchedule("SK020", "DXB", "SYD", "09:00", 840);
+        java.util.List<String> asked = new java.util.ArrayList<>();
+        statuses = (flight, day) -> {
+            asked.add(flight);
+            return FlightStatus.SCHEDULED;
+        };
+
+        search("DXB", "LHR");
+
+        assertThat(asked).containsExactly("SK001");
     }
 
     @Test
@@ -145,7 +205,7 @@ class ItinerarySearchServiceTest {
 
     private List<Itinerary> search(String origin, String destination, HubNetwork network) {
         Timetable snapshot = Timetable.of(timetable);
-        return new ItinerarySearchService(() -> snapshot, network).search(origin, destination, MONDAY);
+        return new ItinerarySearchService(() -> snapshot, network, statuses).search(origin, destination, MONDAY);
     }
 
     private void givenSchedule(String number, String from, String to, String departs, int minutes) {

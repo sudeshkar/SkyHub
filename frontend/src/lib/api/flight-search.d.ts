@@ -91,7 +91,19 @@ export interface components {
             fare: number;
             /** @example USD */
             currency: string;
+            status?: components["schemas"]["FlightStatus"];
+            /**
+             * Format: date-time
+             * @description When a delayed flight now leaves. departureTime stays the scheduled time. Absent unless DELAYED.
+             */
+            revisedDeparture?: string | null;
         };
+        /**
+         * @description Searches never return a CANCELLED flight. Looking one flight up by number and date still does, with this status,
+         *     because bookings on it must be able to see it (ADR-0025). Absent means SCHEDULED.
+         * @enum {string}
+         */
+        FlightStatus: "SCHEDULED" | "DELAYED" | "CANCELLED";
         Connection: {
             /** @example DXB */
             arrivalAirport: string;

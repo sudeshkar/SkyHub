@@ -71,7 +71,8 @@ class BookingServiceTest {
     private final BookingEvents events = mock(BookingEvents.class);
     /** Every flight costs 100.00 USD a passenger, so SK501 + SK901 for one passenger is 200.00. */
     private final PricingService pricing = new PricingService(
-            (flight, date) -> Optional.of(new FlightInfo(NOW.plusSeconds(18000), Money.of("100.00", "USD"))));
+            (flight, date) -> Optional.of(new FlightInfo(NOW.plusSeconds(18000), Money.of("100.00", "USD"))),
+            mock(FlightSalesGuard.class));
 
     private final BookingService service = new BookingService(seats, pnrs, initializer, new SeatMapCache(new SimpleMeterRegistry()), new CreatePnrValidator(List.of(new SegmentCountRule(), new PassengerCountRule(),
                     new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
