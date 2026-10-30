@@ -7,6 +7,8 @@ import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.Pnr;
 import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrSegment;
+import com.skyhub.booking.domain.PnrStatus;
+import com.skyhub.booking.domain.RefundPolicy;
 import com.skyhub.booking.domain.SeatInventory;
 import com.skyhub.booking.domain.SeatUnavailableException;
 import com.skyhub.booking.persistence.CheckInRepository;
@@ -35,17 +37,19 @@ public class ManageBookingService {
     private final SeatMapCache seatMaps;
     private final ManageTokenIssuer tokens;
     private final ManageMetrics metrics;
+    private final CancellationRefunds refunds;
     private final TransactionOperations transactions;
 
     public ManageBookingService(PnrRepository pnrs, SeatInventoryRepository seats, CheckInRepository checkIns,
                                 SeatMapCache seatMaps, ManageTokenIssuer tokens, ManageMetrics metrics,
-                                TransactionOperations transactions) {
+                                CancellationRefunds refunds, TransactionOperations transactions) {
         this.pnrs = pnrs;
         this.seats = seats;
         this.checkIns = checkIns;
         this.seatMaps = seatMaps;
         this.tokens = tokens;
         this.metrics = metrics;
+        this.refunds = refunds;
         this.transactions = transactions;
     }
 
@@ -59,23 +63,36 @@ public class ManageBookingService {
         }
         metrics.record(Action.SESSION_OPENED);
         log.atInfo().addKeyValue("pnr.locator", locator).log("Manage session opened");
-        return new ManageSession(tokens.issue(locator), PnrView.of(pnr));
+        return new ManageSession(tokens.issue(locator), view(pnr));
     }
 
     public PnrView find(String locator) {
-        return PnrView.of(pnrs.findByLocator(locator).orElseThrow(ManageBookingService::notFound));
+        return view(pnrs.findByLocator(locator).orElseThrow(ManageBookingService::notFound));
+    }
+
+    /** A cancelled booking also says what became of the money (ADR-0016); reading never moves money. */
+    private PnrView view(Pnr pnr) {
+        PnrView view = PnrView.of(pnr);
+        if (pnr.getStatus() != PnrStatus.CANCELLED) {
+            return view;
+        }
+        return view.withRefund(refunds.status(pnr.getLocator()).orElse(null));
     }
 
     public PnrView cancel(String locator) {
         List<PnrSegment> flights = null;
         try {
-            Cancellation result = transactions.execute(status -> cancelInTransaction(locator));
+            // Decide the refund first: it reads the timetable, and if that is down nothing has changed yet (ADR-0016).
+            Pnr current = pnrs.findByLocator(locator).orElseThrow(ManageBookingService::notFound);
+            RefundPolicy.Decision decision = current.getStatus() == PnrStatus.CONFIRMED ? refunds.decide(current) : null;
+            Cancellation result = transactions.execute(status -> cancelInTransaction(locator, decision));
             flights = result.flights();
             if (result.changed()) {
                 metrics.record(Action.CANCELLED);
                 log.atInfo().addKeyValue("pnr.locator", locator).log("Booking cancelled");
             }
-            return result.view();
+            // Outside the transaction: a provider call. Also retries a refund an earlier cancel left pending.
+            return result.view().withRefund(refunds.settle(locator).orElse(null));
         } finally {
             if (flights != null) {
                 flights.forEach(f -> seatMaps.invalidate(f.flightNumber(), f.departureDate()));
@@ -106,7 +123,7 @@ public class ManageBookingService {
         }
     }
 
-    private Cancellation cancelInTransaction(String locator) {
+    private Cancellation cancelInTransaction(String locator, RefundPolicy.Decision decision) {
         Pnr pnr = pnrs.findByLocator(locator).orElseThrow(ManageBookingService::notFound);
         List<PnrSegment> flights = pnr.getSegments();
         if (!pnr.cancel()) {
@@ -117,6 +134,7 @@ public class ManageBookingService {
                 seatOf(flights.get(s), pnr.seatOf(p, s)).release(locator);
             }
         }
+        refunds.record(locator, decision);
         return new Cancellation(PnrView.of(pnrs.saveAndFlush(pnr)), flights, true);
     }
 

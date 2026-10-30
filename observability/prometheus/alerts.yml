@@ -96,6 +96,13 @@ groups:
           summary: "A refund failed after a failed booking: a traveller has been charged and has no booking"
           runbook: "docs/runbooks/README.md#refundfailed"
 
+      - alert: CancellationRefundFailed
+        expr: sum(increase(skyhub_payments_total{outcome="cancel_refund_failed"}[10m])) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: "A refund after a cancellation failed: the booking is cancelled and the traveller is still owed money"
+          runbook: "docs/runbooks/README.md#cancellationrefundfailed"
+
       - alert: PaymentProviderUnavailable
         expr: |
           sum(increase(skyhub_payments_total{outcome="unavailable"}[10m])) > 10

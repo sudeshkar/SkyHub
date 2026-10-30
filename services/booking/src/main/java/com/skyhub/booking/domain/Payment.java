@@ -20,7 +20,14 @@ import java.time.Instant;
 public class Payment {
 
     public enum Status {
-        CAPTURED, REFUNDED
+        /** Taken; the booking may still be cancelled. */
+        CAPTURED,
+        /** Cancelled and eligible: the money is owed and the provider has not confirmed giving it back. */
+        REFUND_DUE,
+        /** Given back (ADR-0016). */
+        REFUNDED,
+        /** Cancelled too late: the airline keeps it. */
+        NO_REFUND
     }
 
     @Id
@@ -58,6 +65,30 @@ public class Payment {
         payment.status = Status.CAPTURED;
         payment.createdAt = createdAt;
         return payment;
+    }
+
+    /** The booking was cancelled and the fare rules say the money goes back (ADR-0016). */
+    public void refundDue() {
+        requireStatus(Status.CAPTURED);
+        status = Status.REFUND_DUE;
+    }
+
+    /** The booking was cancelled too late for a refund. */
+    public void notRefundable() {
+        requireStatus(Status.CAPTURED);
+        status = Status.NO_REFUND;
+    }
+
+    /** The provider confirmed the refund. */
+    public void refunded() {
+        requireStatus(Status.REFUND_DUE);
+        status = Status.REFUNDED;
+    }
+
+    private void requireStatus(Status expected) {
+        if (status != expected) {
+            throw new IllegalStateException("Payment for " + locator + " is " + status + ", expected " + expected);
+        }
     }
 
     public String getLocator() {

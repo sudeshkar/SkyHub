@@ -154,7 +154,11 @@ export interface paths {
         put?: never;
         /**
          * Cancel a booking and release its seats
-         * @description Idempotent. Cancelling an already-cancelled booking returns it unchanged.
+         * @description Idempotent. Cancelling an already-cancelled booking returns it unchanged, except that a refund still
+         *     `PENDING` is tried again. Money goes back in full if the airline cancelled a flight on the booking or
+         *     the first departure is 24 hours or more away; otherwise nothing is refunded (ADR-0016). The booking is
+         *     cancelled even when the payment provider cannot be reached: the refund is then `PENDING`.
+         *     Returns 503 and changes nothing when the timetable cannot be checked.
          */
         post: operations["cancelPnr"];
         delete?: never;
@@ -380,6 +384,23 @@ export interface components {
             passengers: components["schemas"]["Passenger"][];
             /** Format: date-time */
             createdAt: string;
+            /** @description Null unless the booking is cancelled and was paid. */
+            refund?: components["schemas"]["Refund"] | null;
+        };
+        /** @description What happens to the money when a paid booking is cancelled. */
+        Refund: {
+            /**
+             * @description REFUNDED, PENDING (owed, the provider has not confirmed yet) or NOT_REFUNDABLE (cancelled too late)
+             * @enum {string}
+             */
+            status: "REFUNDED" | "PENDING" | "NOT_REFUNDABLE";
+            /**
+             * @description What was paid. When NOT_REFUNDABLE it is the amount that is not given back.
+             * @example 200
+             */
+            amount: number;
+            /** @example USD */
+            currency: string;
         };
         CheckInRequest: {
             segmentIndex: number;

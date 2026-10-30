@@ -242,7 +242,12 @@ paths:
       tags: [ManageBooking]
       operationId: cancelPnr
       summary: Cancel a booking and release its seats
-      description: Idempotent. Cancelling an already-cancelled booking returns it unchanged.
+      description: |
+        Idempotent. Cancelling an already-cancelled booking returns it unchanged, except that a refund still
+        `PENDING` is tried again. Money goes back in full if the airline cancelled a flight on the booking or
+        the first departure is 24 hours or more away; otherwise nothing is refunded (ADR-0016). The booking is
+        cancelled even when the payment provider cannot be reached: the refund is then `PENDING`.
+        Returns 503 and changes nothing when the timetable cannot be checked.
       security:
         - manageToken: []
       parameters:
@@ -739,6 +744,28 @@ components:
         createdAt:
           type: string
           format: date-time
+        refund:
+          description: Null unless the booking is cancelled and was paid.
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Refund'
+
+    Refund:
+      type: object
+      description: What happens to the money when a paid booking is cancelled.
+      required: [status, amount, currency]
+      properties:
+        status:
+          type: string
+          enum: [REFUNDED, PENDING, NOT_REFUNDABLE]
+          description: REFUNDED, PENDING (owed, the provider has not confirmed yet) or NOT_REFUNDABLE (cancelled too late)
+        amount:
+          type: number
+          example: 200.00
+          description: What was paid. When NOT_REFUNDABLE it is the amount that is not given back.
+        currency:
+          type: string
+          example: USD
 
     CheckInRequest:
       type: object

@@ -13,7 +13,7 @@ import {
   type ManageActionResult,
 } from "@/app/manage/actions";
 import type { BoardingPass, Disruption, Pnr, SeatMap as SeatMapData } from "@/lib/api/booking";
-import { utcDateTime } from "@/lib/format";
+import { formatPrice, utcDateTime } from "@/lib/format";
 import { SeatMap } from "@/components/booking/seat-map";
 import { BoardingPassCard } from "./boarding-pass-card";
 
@@ -171,6 +171,14 @@ export function ManageView({
         </form>
       </header>
 
+      {cancelled && pnr.refund && (
+        <RefundNotice
+          refund={pnr.refund}
+          pending={pending}
+          onRetry={() => startTransition(async () => void report(await cancelBooking(), "Asked the payment provider again."))}
+        />
+      )}
+
       {notice && (
         <p
           role={notice.tone === "error" ? "alert" : "status"}
@@ -293,6 +301,10 @@ export function ManageView({
               <p className="mt-2 text-sm text-muted">
                 Every seat on every flight is released and the booking cannot be restored. You would need to book again.
               </p>
+              <p className="mt-2 text-sm text-muted">
+                You get a full refund if you cancel 24 hours or more before the first flight, or if the airline cancelled a
+                flight on this booking. Otherwise nothing is refunded.
+              </p>
               <div className="mt-4 flex gap-3">
                 <button
                   type="button"
@@ -322,6 +334,47 @@ export function ManageView({
         </section>
       )}
     </div>
+  );
+}
+
+/** What became of the money after a cancellation (ADR-0016). A refund the provider has not confirmed can be retried. */
+function RefundNotice({
+  refund,
+  pending,
+  onRetry,
+}: {
+  refund: NonNullable<Pnr["refund"]>;
+  pending: boolean;
+  onRetry: () => void;
+}) {
+  const money = formatPrice(refund.amount, refund.currency);
+  return (
+    <section aria-label="Refund" className="rounded-lg border border-sand bg-white p-5">
+      <h2 className="font-semibold">Refund</h2>
+      {refund.status === "REFUNDED" && (
+        <p className="mt-2 text-sm">{money} has been refunded to your original payment method.</p>
+      )}
+      {refund.status === "NOT_REFUNDABLE" && (
+        <p className="mt-2 text-sm">
+          This booking was cancelled less than 24 hours before departure, so the {money} you paid is not refundable.
+        </p>
+      )}
+      {refund.status === "PENDING" && (
+        <>
+          <p className="mt-2 text-sm">
+            Your {money} refund is on its way, but the payment provider has not confirmed it yet. You can ask again.
+          </p>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onRetry}
+            className="mt-3 rounded-md border border-sand px-4 py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            Try the refund again
+          </button>
+        </>
+      )}
+    </section>
   );
 }
 

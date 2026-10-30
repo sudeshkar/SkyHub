@@ -583,7 +583,7 @@
       "id": 15,
       "type": "timeseries",
       "title": "Payments per minute by outcome",
-      "description": "captured (charged), declined, unavailable (provider did not answer; nothing charged), price_changed, refunded (booking failed after charging) and refund_failed (a traveller is charged with no booking: page).",
+      "description": "captured (charged), declined, unavailable (provider did not answer; nothing charged), price_changed, refunded (booking failed after charging) and refund_failed (a traveller is charged with no booking: page). cancel_refunded, cancel_refund_failed (a cancelled booking is still owed money: ticket) and cancel_not_refundable are the refunds on cancellation.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
