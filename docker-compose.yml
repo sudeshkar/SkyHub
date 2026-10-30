@@ -52,6 +52,13 @@ services:
     volumes:
       - kafka-data:/var/lib/kafka/data
 
+  # Catches every email the notification service sends and shows it in a web page (ADR-0021). Nothing leaves the machine.
+  mailpit:
+    image: axllent/mailpit:v1.21.8
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # the inbox, in a browser
+
   # ---- Observability (docs/design/04-observability.md): docker compose --profile observability up -d ----
   prometheus:
     image: prom/prometheus:v3.5.0

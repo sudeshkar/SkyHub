@@ -4,14 +4,16 @@ import com.skyhub.notification.application.EmailMessage;
 import com.skyhub.notification.application.EmailSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Development adapter: "sends" an email by writing it to the log. It lets the whole path run and be tested without
- * a mail server. The address is masked; the body is only logged at DEBUG, because it holds names. A real SMTP
- * adapter replaces this class and nothing else (ADR-0019).
+ * Development adapter: "sends" an email by writing it to the log, for running with no mail server at all (set
+ * {@code skyhub.notifications.email.mode=log}; the default is SMTP, ADR-0021). The address is masked; the body is only
+ * logged at DEBUG, because it holds names.
  */
 @Component
+@ConditionalOnProperty(name = "skyhub.notifications.email.mode", havingValue = "log")
 public class LoggingEmailSender implements EmailSender {
 
     private static final Logger log = LoggerFactory.getLogger(LoggingEmailSender.class);
