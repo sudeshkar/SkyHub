@@ -155,6 +155,14 @@ groups:
           summary: "The check-in reminder sweep has failed repeatedly: travellers are not being told check-in is open"
           runbook: "docs/runbooks/README.md#checkinremindersfailing"
 
+      - alert: RefundGaveUp
+        expr: increase(skyhub_refund_retries_total{outcome="gave_up"}[10m]) > 0
+        for: 0m
+        labels: { severity: page }
+        annotations:
+          summary: "A refund failed on every retry for over a day: a traveller is owed money and only a person can fix it"
+          runbook: "docs/runbooks/README.md#refundgaveup"
+
       - alert: ServiceDown
         expr: up == 0
         for: 1m

@@ -65,13 +65,13 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 
 **Means:** a booking failed *after* the traveller was charged (usually: the seat was taken in the meantime), and giving the money back failed too. A traveller has been charged and has no booking. This is the one payment failure that cannot fix itself.
 **Confirm:** the booking log line `Refund failed after a failed booking; the traveller has been charged` carries `payment.charge`, the provider's charge reference. In Loki: `{service="booking"} |= "Refund failed"`. Overview → *Payments per minute by outcome* (`refund_failed`).
-**Mitigate:** refund that charge by hand in the payment provider's dashboard using the `payment.charge` reference, then check the provider is reachable (see PaymentProviderUnavailable). There is no booking to cancel: no `payment` row exists for it. Automated reconciliation of charges without a booking is the planned follow-up (ADR-0015).
+**Mitigate:** usually nothing: the charge is written to `unrefunded_charge` and the refund is retried automatically (ADR-0030), first after 5 minutes and then with a growing wait. Check `SELECT charge_id, amount, currency, attempts, next_attempt_at, refunded_at FROM unrefunded_charge ORDER BY created_at DESC;`. If it stays unrefunded, the RefundGaveUp alert fires. Only if the log also says `Could not record the unrefunded charge` is there no row: refund that `payment.charge` by hand in the provider's dashboard. There is no booking to cancel: no `payment` row exists for it. A crash between charging and booking leaves a charge nobody recorded; that gap is described in ADR-0030.
 
 ## CancellationRefundFailed
 
 **Means:** a traveller cancelled a paid booking that qualifies for a refund (ADR-0016), the booking was cancelled, but the payment provider did not confirm the refund. The traveller is owed money and sees the refund as *pending*. Unlike RefundFailed, nothing is wrongly booked: the seats are free and the booking is cancelled.
 **Confirm:** Loki `{service="booking"} |= "Refund after cancellation failed"` (carries `pnr.locator` and `payment.charge`). Overview → *Payments per minute by outcome* (`cancel_refund_failed`). Payments still owed: `SELECT locator, charge_id, amount, currency FROM payment WHERE status = 'REFUND_DUE';` in the booking database.
-**Mitigate:** check the provider is reachable (see PaymentProviderUnavailable). Cancelling the booking again retries the refund (it is safe to repeat), so ask the traveller to press *Cancel* again from the manage page, or refund the `charge_id` by hand in the provider's dashboard and then set the row to `REFUNDED`. There is no automatic retry yet (ADR-0016 follow-up).
+**Mitigate:** check the provider is reachable (see PaymentProviderUnavailable). Cancelling the booking again retries the refund (it is safe to repeat), so ask the traveller to press *Cancel* again from the manage page, or refund the `charge_id` by hand in the provider's dashboard and then set the row to `REFUNDED`. The refund job retries it by itself (ADR-0030); if it keeps failing, RefundGaveUp fires.
 
 ## StaffLoginGuessing
 
@@ -108,6 +108,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Means:** the sweep that queues "check-in is open" emails (ADR-0029) failed more than twice in 30 minutes. Travellers are not told their check-in opened. They can still check in; only the reminder is late. Nothing is lost: a booking is reminded on the first sweep that works, as long as check-in is still open.
 **Confirm:** Loki `{service="booking"} |= "Check-in reminder sweep failed"` (the cause is in the stack trace; usually the database). `skyhub_checkin_reminders_total{outcome="failed"}`. A related counter, `outcome="flight_unavailable"`, rising means flight search could not be asked a flight's time, so that flight is skipped until it answers.
 **Mitigate:** fix the cause (database or flight search). The sweep runs every 5 minutes and catches up by itself. To see who is still waiting: bookings with no row in `check_in_reminder` for a flight whose check-in is open. A reminder that was never sent after check-in closed is not sent late.
+
+## RefundGaveUp
+
+**Means:** the refund job tried a refund 12 times over about a day and the provider refused or did not answer every time (ADR-0030). A traveller is owed money. Nothing will retry it again.
+**Confirm:** Loki `{service="booking"} |= "Gave up refunding a charge"` (carries `refund.source`, `payment.charge`, and the provider's error). `skyhub_refund_retries_total{outcome="gave_up"}` by `source`. For `failed-booking`: `SELECT * FROM unrefunded_charge WHERE refunded_at IS NULL AND attempts >= 12;`. For `cancellation`: `SELECT locator, charge_id, amount, currency FROM payment WHERE status = 'REFUND_DUE' AND refund_attempts >= 12;`.
+**Mitigate:** find out why the provider refuses that charge (already refunded outside our system? expired? wrong id?). If it is fixable, reset the row so the job tries again: `UPDATE unrefunded_charge SET attempts = 0, next_attempt_at = now() WHERE charge_id = '...';` (or `UPDATE payment SET refund_attempts = 0, refund_next_attempt_at = NULL WHERE locator = '...';`). Otherwise refund it by hand in the provider's dashboard, then set `refunded_at = now()` (or `status = 'REFUNDED'`) so it is not found again.
 
 ## ServiceDown
 
