@@ -10,6 +10,7 @@ import com.skyhub.notification.application.NotificationService;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.BookingRebookedEvent;
 import com.skyhub.notification.domain.InvalidEventException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,6 +40,15 @@ class BookingEventsListenerTest {
         ArgumentCaptor<BookingCancelledEvent> event = ArgumentCaptor.forClass(BookingCancelledEvent.class);
         verify(service).bookingCancelled(event.capture());
         org.assertj.core.api.Assertions.assertThat(event.getValue().locator()).isEqualTo("ABC234");
+    }
+
+    @Test
+    void should_hand_a_rebooking_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/booking-rebooked.v1.example.json")));
+
+        ArgumentCaptor<BookingRebookedEvent> event = ArgumentCaptor.forClass(BookingRebookedEvent.class);
+        verify(service).bookingRebooked(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().to().departureDate().toString()).isEqualTo("2026-11-03");
     }
 
     @Test

@@ -36,6 +36,15 @@ def test_accepts_a_proposal_that_fits_every_rule():
     assert result.rejections == []
 
 
+def test_an_accepted_rebooking_carries_the_leg_to_move_taken_from_the_booking_not_from_the_model():
+    b = booking("ABC234")
+    known = facts(b, alternatives=[alternative("SK503", utc(2, 10, 30))])
+
+    result = verify([rebook("ABC234", "SK503")], [b], known)
+
+    assert outcome(result, "ABC234").segment_index == b.disrupted_segment_index
+
+
 def test_never_accepts_a_flight_no_tool_returned():
     b = booking("ABC234")
     known = facts(b, alternatives=[alternative("SK503", utc(2, 10, 30))])

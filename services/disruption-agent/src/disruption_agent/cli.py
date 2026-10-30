@@ -11,6 +11,7 @@ from datetime import date
 from mcp import Client, StdioServerParameters
 
 from .agent import DisruptionAgent
+from .apply import Applier, ConsoleApprover, summary
 from .config import Settings
 from .llm import GroqChatModel
 from .clients import ServiceError
@@ -34,6 +35,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("flight_number", help="the disrupted flight, e.g. SK501")
     parser.add_argument("departure_date", type=date.fromisoformat, help="its scheduled UTC departure date, YYYY-MM-DD")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
+    parser.add_argument("--apply", action="store_true",
+                        help="after the report, ask about each proposed move and carry out the ones you approve (needs a terminal)")
     args = parser.parse_args(argv)
 
     api_key = os.environ.get("GROQ_API_KEY")
@@ -46,4 +49,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Could not complete: {problem}", file=sys.stderr)
         return 1
     print(report.model_dump_json(indent=2) if args.json else report.to_text())
+    if args.apply:
+        return _apply(report)
     return 0
+
+
+def _apply(report) -> int:
+    """Moves what a person approves, one booking at a time. Never unattended: there is deliberately no --yes."""
+    if not sys.stdin.isatty():
+        print("--apply asks you about each move, so it needs a terminal. Nothing was changed.", file=sys.stderr)
+        return 2
+    outcomes = Applier(Settings.from_env().booking_client(), ConsoleApprover()).apply(report)
+    print(summary(outcomes))
+    return 1 if any(o.status == "failed" for o in outcomes) else 0

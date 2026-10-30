@@ -26,3 +26,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0020](0020-cancellation-and-disruption-emails.md) | Cancellation and disruption emails | Accepted |
 | [0021](0021-smtp-email-and-mailpit.md) | Send email over SMTP, with Mailpit as the local mail server | Accepted |
 | [0022](0022-disruption-agent-proposes-code-verifies.md) | The disruption agent proposes, code verifies, a person decides | Accepted |
+| [0023](0023-staff-rebooking-after-a-disruption.md) | Staff move bookings off a disrupted flight, and the service checks the rules again | Accepted |

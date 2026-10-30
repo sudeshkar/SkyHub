@@ -18,6 +18,11 @@ public enum StaffRole {
         return true;
     }
 
+    /** Move a booking off a disrupted flight. Both roles; every move is audited with the person's name. */
+    public boolean mayRebook() {
+        return true;
+    }
+
     public boolean mayRecordDisruptions() {
         return true; // both roles; written out so the rule is findable and the next role has to decide
     }

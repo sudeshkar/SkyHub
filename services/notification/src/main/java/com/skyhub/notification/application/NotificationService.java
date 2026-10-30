@@ -4,6 +4,7 @@ import com.skyhub.notification.application.NotificationMetrics.Outcome;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.BookingRebookedEvent;
 import com.skyhub.notification.domain.NotificationEvent;
 import com.skyhub.notification.domain.SentNotification;
 import com.skyhub.notification.persistence.SentNotificationRepository;
@@ -48,6 +49,10 @@ public class NotificationService {
 
     public void bookingDisrupted(BookingDisruptedEvent event) {
         deliver(event, EmailComposer.bookingDisrupted(event));
+    }
+
+    public void bookingRebooked(BookingRebookedEvent event) {
+        deliver(event, EmailComposer.bookingRebooked(event));
     }
 
     private void deliver(NotificationEvent event, EmailMessage message) {

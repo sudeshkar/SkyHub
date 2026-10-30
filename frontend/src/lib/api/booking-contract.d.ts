@@ -251,6 +251,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/pnrs/{locator}/rebooking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move one flight of a booking onto another, after a disruption
+         * @description Staff only (ADR-0023). Moves the given flight of the booking onto another flight, choosing seats for the whole party
+         *     (kept together, in the cabin they were in). Refused unless the flight being left has a recorded delay or
+         *     cancellation, the booking is active and not checked in on it, and the new flight operates, is not cancelled, flies
+         *     the same route and does not leave before the original was due. Everything or nothing happens. Asking again for a
+         *     move that is already done changes nothing and answers `changed: false`. The traveller is emailed.
+         */
+        post: operations["rebookFlight"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/sessions": {
         parameters: {
             query?: never;
@@ -499,6 +523,23 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             pnr: components["schemas"]["Pnr"];
+        };
+        RebookRequest: {
+            /** @description Position of the flight to move in the booking */
+            segmentIndex: number;
+            flightNumber: components["schemas"]["FlightNumber"];
+            /** Format: date */
+            departureDate: string;
+        };
+        Rebooked: {
+            locator: string;
+            segmentIndex: number;
+            from: components["schemas"]["Segment"];
+            to: components["schemas"]["Segment"];
+            /** @description The new seat of each passenger, in passenger order. No names. */
+            seats: components["schemas"]["SeatNumber"][];
+            /** @description false when the booking was already on that flight */
+            changed: boolean;
         };
         AffectedBookings: {
             flightNumber: components["schemas"]["FlightNumber"];
@@ -1015,6 +1056,46 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    rebookFlight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locator: components["parameters"]["Locator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RebookRequest"];
+            };
+        };
+        responses: {
+            /** @description Moved, or already there */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rebooked"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["PnrNotFound"];
+            /** @description Refused: a rule forbids this move, or the seats are not there */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            503: components["responses"]["ScheduleUnavailable"];
         };
     };
     openStaffSession: {

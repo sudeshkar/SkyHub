@@ -70,6 +70,8 @@ class Proposal(BaseModel):
     flight_number: str | None = None
     departure_date: date | None = None
     rationale: str = ""
+    # Which leg of the booking to move. Filled in by the guardrails from the booking, never taken from the model.
+    segment_index: int | None = None
 
     @field_validator("rationale", mode="before")
     @classmethod

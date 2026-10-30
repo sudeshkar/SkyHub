@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.BookingRebookedEvent;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -109,6 +110,31 @@ class EmailComposerTest {
 
         assertThat(message.subject()).isEqualTo("Your SkyHub flight SK501 on 2026-11-02 is cancelled");
         assertThat(message.body()).contains("full refund").contains("Manage booking").contains("Aircraft grounded");
+    }
+
+    @Test
+    void should_tell_the_traveller_about_the_new_flight_and_every_passengers_seat() {
+        EmailMessage message = EmailComposer.bookingRebooked(new BookingRebookedEvent(UUID.randomUUID(), "booking.rebooked", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com",
+                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)),
+                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3)),
+                List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A"),
+                        new BookingRebookedEvent.SeatedPassenger("Anil", "Perera", "14B"))));
+
+        assertThat(message.subject()).isEqualTo("Your SkyHub booking ABC234 has moved to SK501 on 2026-11-03");
+        assertThat(message.body()).contains("SK501 on 2026-11-02").contains("SK501 on 2026-11-03")
+                .contains("Priya Perera: 14A").contains("Anil Perera: 14B").contains("Manage booking");
+    }
+
+    @Test
+    void should_make_no_promise_about_money_in_the_rebooking_email() {
+        EmailMessage message = EmailComposer.bookingRebooked(new BookingRebookedEvent(UUID.randomUUID(), "booking.rebooked", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com",
+                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)),
+                new BookingConfirmedEvent.Segment("SK502", LocalDate.of(2026, 11, 2)),
+                List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A"))));
+
+        assertThat(message.body()).doesNotContain("refund");   // what is refundable depends on why the flight was disrupted
     }
 
     @Test

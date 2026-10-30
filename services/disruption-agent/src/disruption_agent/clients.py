@@ -35,18 +35,37 @@ class BookingClient:
         self._token = response.json()["accessToken"]
         return self._token
 
-    def affected_bookings(self, flight_number: str, day: date) -> list[dict]:
-        path = f"/api/v1/ops/flights/{flight_number}/departures/{day.isoformat()}/bookings"
+    def _send(self, method: str, path: str, **kwargs) -> httpx.Response:
+        """One authorised call. If the service refuses the token (it expired) logs in again, once, and retries."""
+        response = None
         for attempt in (1, 2):
             token = self._token or self._login()
-            response = self._http.get(path, headers={"Authorization": f"Bearer {token}"})
+            response = self._http.request(method, path, headers={"Authorization": f"Bearer {token}"}, **kwargs)
             if response.status_code == 401 and attempt == 1:
-                self._token = None  # expired: log in again, once
+                self._token = None
                 continue
-            if response.status_code != 200:
-                raise ServiceError(f"The booking service answered {response.status_code} for the bookings on {flight_number}")
-            return response.json()["items"]
-        raise ServiceError("The booking service kept refusing the staff token")
+            break
+        return response
+
+    def affected_bookings(self, flight_number: str, day: date) -> list[dict]:
+        response = self._send("GET", f"/api/v1/ops/flights/{flight_number}/departures/{day.isoformat()}/bookings")
+        if response.status_code != 200:
+            raise ServiceError(f"The booking service answered {response.status_code} for the bookings on {flight_number}")
+        return response.json()["items"]
+
+    def rebook(self, locator: str, segment_index: int, flight_number: str, day: date) -> dict:
+        """Asks the booking service to move one flight of a booking. The service re-checks every rule and may refuse; its
+        reason is passed on. Only ever called after a person approved (see apply.py)."""
+        response = self._send("POST", f"/api/v1/ops/pnrs/{locator}/rebooking", json={
+            "segmentIndex": segment_index, "flightNumber": flight_number, "departureDate": day.isoformat()})
+        if response.status_code != 200:
+            try:
+                detail = response.json().get("detail")
+            except ValueError:
+                detail = None
+            raise ServiceError(f"The booking service refused the move of {locator}: {detail}" if detail
+                               else f"The booking service answered {response.status_code} for the move of {locator}")
+        return response.json()
 
 
 class SearchClient:

@@ -1,0 +1,13 @@
+{
+  "eventId": "e5a3d7c1-2f48-4b6a-9c10-7d1e8f3b4a55",
+  "type": "booking.rebooked",
+  "version": 1,
+  "occurredAt": "2026-10-30T10:00:00Z",
+  "locator": "ABC234",
+  "contactEmail": "priya@example.com",
+  "from": { "flightNumber": "SK501", "departureDate": "2026-11-02" },
+  "to": { "flightNumber": "SK501", "departureDate": "2026-11-03" },
+  "passengers": [
+    { "firstName": "Priya", "lastName": "Perera", "seat": "14A" }
+  ]
+}

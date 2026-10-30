@@ -52,7 +52,10 @@ def leg_json(flight: str, date: str) -> dict:
 class World:
     """Records every request, so tests can check what was (and was not) asked."""
 
-    def __init__(self, *, login_ok: bool = True, bookings_status: int = 200, seat_override: dict | None = None):
+    def __init__(self, *, login_ok: bool = True, bookings_status: int = 200, seat_override: dict | None = None,
+                 rebook_responses: dict | None = None):
+        self.rebook_responses = rebook_responses or {}   # locator -> (status, body); default: moved
+        self.rebookings: list[dict] = []
         self.requests: list[httpx.Request] = []
         self.login_ok = login_ok
         self.bookings_status = bookings_status
@@ -68,6 +71,19 @@ class World:
                 return httpx.Response(401, json={"title": "Login failed"})
             return httpx.Response(201, json={"accessToken": TOKEN, "tokenType": "Bearer", "expiresAt": "2026-11-02T09:00:00Z",
                                              "username": "agent.ops", "role": "OPS"})
+        if path.startswith("/api/v1/ops/pnrs/") and path.endswith("/rebooking"):
+            if request.headers.get("Authorization") != f"Bearer {TOKEN}":
+                return httpx.Response(401)
+            locator = path.split("/")[5]
+            body = json.loads(request.content)
+            self.rebookings.append({"locator": locator, **body})
+            status, answer = self.rebook_responses.get(locator, (200, None))
+            if status == 200:
+                return httpx.Response(200, json=answer or {
+                    "locator": locator, "segmentIndex": body["segmentIndex"], "changed": True,
+                    "from": {"flightNumber": "SK501", "departureDate": "2026-11-02"},
+                    "to": {"flightNumber": body["flightNumber"], "departureDate": body["departureDate"]}, "seats": ["14A"]})
+            return httpx.Response(status, json=answer)
         if "/ops/flights/" in path and path.endswith("/bookings"):
             if request.headers.get("Authorization") != f"Bearer {TOKEN}":
                 return httpx.Response(401)

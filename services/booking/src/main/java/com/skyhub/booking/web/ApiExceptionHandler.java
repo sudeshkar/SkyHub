@@ -3,6 +3,7 @@ package com.skyhub.booking.web;
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
 import com.skyhub.booking.application.PaymentUnavailableException;
 import com.skyhub.booking.application.StaffLoginFailedException;
+import com.skyhub.booking.application.rebooking.RebookingRefusedException;
 import com.skyhub.booking.application.StaffUsernameTakenException;
 import com.skyhub.booking.domain.InvalidStaffAccountException;
 import com.skyhub.booking.domain.AlreadyCheckedInException;
@@ -148,6 +149,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidStaffAccountException.class)
     ProblemDetail handleInvalidStaff(InvalidStaffAccountException ex) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid staff account", ex.getMessage());
+    }
+
+    /** A rule forbids this move. The message says which and why; it holds no personal data. */
+    @ExceptionHandler(RebookingRefusedException.class)
+    ProblemDetail handleRebookingRefused(RebookingRefusedException ex) {
+        return problem(HttpStatus.CONFLICT, "Rebooking refused", ex.getMessage());
     }
 
     @ExceptionHandler(PnrNotFoundException.class)
