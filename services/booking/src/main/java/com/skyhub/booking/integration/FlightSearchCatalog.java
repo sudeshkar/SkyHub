@@ -68,7 +68,7 @@ public class FlightSearchCatalog implements FlightCatalog {
     }
 
     /** The part of flight-search's answer we use. */
-    private record Leg(OffsetDateTime departureTime, BigDecimal fare, String currency) {
+    private record Leg(OffsetDateTime departureTime, BigDecimal fare, String currency, String origin, String destination) {
     }
 
     private Optional<FlightInfo> ask(String flightNumber, LocalDate departureDate) {
@@ -82,7 +82,7 @@ public class FlightSearchCatalog implements FlightCatalog {
                                 throw new FlightCatalogUnavailableException("Flight search sent an incomplete flight", null);
                             }
                             yield Optional.of(new FlightInfo(leg.departureTime().toInstant(),
-                                    Money.of(leg.fare(), leg.currency())));
+                                    Money.of(leg.fare(), leg.currency()), leg.origin(), leg.destination()));
                         }
                         case 404 -> Optional.<FlightInfo>empty();
                         default -> throw new FlightCatalogUnavailableException(

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 class NotificationEventsTest {
 
     private static final Path CANCELLED = Path.of("../../api-specs/events/booking-cancelled.v1.example.json");
+    private static final Path REBOOKED = Path.of("../../api-specs/events/booking-rebooked.v1.example.json");
     private static final Path DISRUPTED = Path.of("../../api-specs/events/booking-disrupted.v1.example.json");
 
     @Test
@@ -77,6 +78,29 @@ class NotificationEventsTest {
         String cancelled = Files.readString(CANCELLED);
         assertThatExceptionOfType(InvalidEventException.class)
                 .isThrownBy(() -> EventParser.parse(cancelled.replace("FULL_REFUND", "MAYBE"), BookingCancelledEvent.class));
+    }
+
+    @Test
+    void should_read_the_rebooking_event_with_each_passengers_new_seat() throws Exception {
+        BookingRebookedEvent event = EventParser.parse(Files.readString(REBOOKED), BookingRebookedEvent.class);
+
+        assertThat(event.eventId()).isEqualTo(UUID.fromString("e5a3d7c1-2f48-4b6a-9c10-7d1e8f3b4a55"));
+        assertThat(event.locator()).isEqualTo("ABC234");
+        assertThat(event.from()).isEqualTo(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)));
+        assertThat(event.to()).isEqualTo(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3)));
+        assertThat(event.passengers()).containsExactly(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A"));
+    }
+
+    @Test
+    void should_refuse_a_rebooking_event_without_a_new_flight_or_seats() throws Exception {
+        String valid = Files.readString(REBOOKED);
+        for (String broken : new String[] {
+                valid.replaceAll("(?s)\"to\"\\s*:\\s*\\{.*?\\},", ""),
+                valid.replace("\"booking.rebooked\"", "\"booking.cancelled\""),
+                valid.replaceAll("(?s)\"passengers\".*?\\]", "\"passengers\": []")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, BookingRebookedEvent.class));
+        }
     }
 
     @Test

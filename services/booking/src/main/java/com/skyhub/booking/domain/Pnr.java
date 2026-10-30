@@ -120,6 +120,32 @@ public class Pnr {
         return passengers.get(passengerIndex).replaceSeat(segmentIndex, newSeat);
     }
 
+    /**
+     * Moves one flight of the booking to another flight, with a new seat for every passenger. Seat inventory is updated by
+     * the caller in the same transaction; this keeps the booking itself consistent. Everything is checked before
+     * anything changes.
+     *
+     * @param seats one seat per passenger, in passenger order
+     * @return the flight the booking left
+     */
+    public PnrSegment rebook(int segmentIndex, PnrSegment target, List<String> seats) {
+        requireActive();
+        requirePosition(0, segmentIndex);
+        if (seats.size() != passengers.size() || seats.stream().distinct().count() != seats.size()) {
+            throw new InvalidBookingException("Rebooking needs one different seat for each of the " + passengers.size() + " passengers");
+        }
+        for (int s = 0; s < segments.size(); s++) {
+            if (s != segmentIndex && segments.get(s).equals(target)) {
+                throw new InvalidBookingException("This booking is already on " + target.flightNumber() + " on " + target.departureDate());
+            }
+        }
+        PnrSegment left = segments.set(segmentIndex, target);
+        for (int p = 0; p < passengers.size(); p++) {
+            passengers.get(p).replaceSeat(segmentIndex, seats.get(p));
+        }
+        return left;
+    }
+
     /** Lets callers check before touching seat inventory, so a refused change never books anything. */
     public void requireActive() {
         if (status == PnrStatus.CANCELLED) {

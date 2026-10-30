@@ -19,9 +19,11 @@ import com.skyhub.booking.domain.Payment;
 import com.skyhub.booking.domain.Pnr;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
+import com.skyhub.booking.domain.Rebooking;
 import com.skyhub.booking.domain.RefundPolicy;
 import com.skyhub.booking.persistence.DisruptionRepository;
 import com.skyhub.booking.persistence.PaymentRepository;
+import com.skyhub.booking.persistence.RebookingRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -44,6 +46,7 @@ class CancellationRefundsTest {
     private final DisruptionRepository disruptions = mock(DisruptionRepository.class);
     private final FlightCatalog flights = mock(FlightCatalog.class);
     private final PaymentGateway gateway = mock(PaymentGateway.class);
+    private final RebookingRepository rebookings = mock(RebookingRepository.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private Pnr pnr;
     private Payment payment;
@@ -59,7 +62,8 @@ class CancellationRefundsTest {
         when(payments.findByLocator("ABC234")).thenReturn(Optional.of(payment));
         when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty());
         refunds = new CancellationRefunds(payments, disruptions, flights, new RefundPolicy(), gateway,
-                new PaymentMetrics(registry), Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction());
+                new PaymentMetrics(registry), Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(), rebookings);
+        when(rebookings.findByLocator(anyString())).thenReturn(List.of());
     }
 
     private void departures(Instant first, Instant second) {
@@ -94,6 +98,39 @@ class CancellationRefundsTest {
         departures(NOW.plus(Duration.ofMinutes(30)), NOW.plus(Duration.ofHours(3)));
 
         assertThat(refunds.decide(pnr)).isEqualTo(RefundPolicy.Decision.FULL_REFUND);
+    }
+
+    @Test
+    void should_still_refund_in_full_a_traveller_the_airline_moved_off_a_cancelled_flight() {
+        // SK700 was cancelled and staff moved the booking onto SK501, which leaves in 30 minutes. Cancelling now would
+        // normally refund nothing, but the airline cancelled the flight the traveller booked.
+        when(rebookings.findByLocator("ABC234")).thenReturn(List.of(
+                Rebooking.of("ABC234", 0, new PnrSegment("SK700", DATE), new PnrSegment("SK501", DATE), "priya.ops", NOW)));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK700", DATE))
+                .thenReturn(Optional.of(Disruption.cancelled("SK700", DATE, "Aircraft grounded", NOW)));
+        departures(NOW.plus(Duration.ofMinutes(30)), NOW.plus(Duration.ofHours(3)));
+
+        assertThat(refunds.decide(pnr)).isEqualTo(RefundPolicy.Decision.FULL_REFUND);
+    }
+
+    @Test
+    void should_not_treat_a_move_off_a_merely_delayed_flight_as_an_airline_cancellation() {
+        when(rebookings.findByLocator("ABC234")).thenReturn(List.of(
+                Rebooking.of("ABC234", 0, new PnrSegment("SK700", DATE), new PnrSegment("SK501", DATE), "priya.ops", NOW)));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK700", DATE))
+                .thenReturn(Optional.of(Disruption.delayed("SK700", DATE, NOW.plus(Duration.ofHours(6)), "Weather", NOW)));
+        departures(NOW.plus(Duration.ofMinutes(30)), NOW.plus(Duration.ofHours(3)));
+
+        assertThat(refunds.decide(pnr)).isEqualTo(RefundPolicy.Decision.NO_REFUND);
+    }
+
+    @Test
+    void should_not_look_at_earlier_moves_when_the_fare_rules_already_say_refund() {
+        departures(NOW.plus(Duration.ofDays(3)), NOW.plus(Duration.ofDays(4)));
+
+        assertThat(refunds.decide(pnr)).isEqualTo(RefundPolicy.Decision.FULL_REFUND);
+
+        org.mockito.Mockito.verifyNoInteractions(rebookings);   // the common path costs no extra query
     }
 
     @Test

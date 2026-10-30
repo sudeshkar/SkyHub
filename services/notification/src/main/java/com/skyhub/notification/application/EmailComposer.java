@@ -3,6 +3,7 @@ package com.skyhub.notification.application;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.BookingRebookedEvent;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.stream.Collectors;
@@ -68,6 +69,26 @@ public final class EmailComposer {
                 If you did not cancel this booking, please contact us straight away.
                 """.formatted(event.locator(), flights, money);
         return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " is cancelled", body);
+    }
+
+    public static EmailMessage bookingRebooked(BookingRebookedEvent event) {
+        String seatList = event.passengers().stream()
+                .map(p -> "  " + p.firstName() + " " + p.lastName() + ": " + p.seat())
+                .collect(Collectors.joining("\n"));
+        String oldFlight = event.from().flightNumber() + " on " + event.from().departureDate();
+        String newFlight = event.to().flightNumber() + " on " + event.to().departureDate();
+        String body = """
+                Your booking %s has been moved to a new flight, because your original flight, %s, was disrupted.
+
+                New flight: %s
+
+                Your seats:
+                %s
+
+                If the new flight does not suit you, open Manage booking on SkyHub with your reference and the last name of
+                any passenger: you can change your seats there, or cancel the booking.
+                """.formatted(event.locator(), oldFlight, newFlight, seatList);
+        return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " has moved to " + newFlight, body);
     }
 
     public static EmailMessage bookingDisrupted(BookingDisruptedEvent event) {

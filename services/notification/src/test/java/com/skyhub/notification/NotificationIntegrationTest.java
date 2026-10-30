@@ -89,6 +89,19 @@ class NotificationIntegrationTest {
     }
 
     @Test
+    void should_send_the_rebooking_email_too() throws Exception {
+        UUID rebooked = UUID.randomUUID();
+        String message = Files.readString(Path.of("../../api-specs/events/booking-rebooked.v1.example.json"))
+                .replace("e5a3d7c1-2f48-4b6a-9c10-7d1e8f3b4a55", rebooked.toString()).replace("ABC234", "GGG777");
+
+        kafka.send(TOPIC, "GGG777", message);
+
+        await().atMost(Duration.ofSeconds(30)).until(() -> rows(rebooked) == 1);
+        assertThat(jdbc.queryForObject("SELECT subject FROM sent_notification WHERE event_id = ?", String.class, rebooked))
+                .isEqualTo("Your SkyHub booking GGG777 has moved to SK501 on 2026-11-03");
+    }
+
+    @Test
     void should_send_the_cancellation_and_disruption_emails_too() throws Exception {
         UUID cancelled = UUID.randomUUID();
         UUID disrupted = UUID.randomUUID();

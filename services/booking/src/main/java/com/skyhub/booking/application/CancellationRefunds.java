@@ -9,6 +9,7 @@ import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.RefundPolicy;
 import com.skyhub.booking.persistence.DisruptionRepository;
 import com.skyhub.booking.persistence.PaymentRepository;
+import com.skyhub.booking.persistence.RebookingRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,10 +40,12 @@ public class CancellationRefunds {
     private final PaymentMetrics metrics;
     private final Clock clock;
     private final TransactionOperations transactions;
+    private final RebookingRepository rebookings;
 
     public CancellationRefunds(PaymentRepository payments, DisruptionRepository disruptions, FlightCatalog flights,
                                RefundPolicy policy, PaymentGateway gateway, PaymentMetrics metrics, Clock clock,
-                               TransactionOperations transactions) {
+                               TransactionOperations transactions, RebookingRepository rebookings) {
+        this.rebookings = rebookings;
         this.payments = payments;
         this.disruptions = disruptions;
         this.flights = flights;
@@ -72,7 +75,23 @@ public class CancellationRefunds {
                 first = departure;
             }
         }
-        return policy.decide(first == null ? now.plus(UNKNOWN_FLIGHT_DISTANCE) : first, false, now);
+        RefundPolicy.Decision byTime = policy.decide(first == null ? now.plus(UNKNOWN_FLIGHT_DISTANCE) : first, false, now);
+        // Only when the clock says "no refund" is it worth asking whether staff moved this traveller off a flight the airline
+        // cancelled: the common path (plenty of notice) costs no extra query.
+        if (byTime == RefundPolicy.Decision.NO_REFUND && wasMovedOffACancelledFlight(pnr)) {
+            return policy.decide(now, true, now);
+        }
+        return byTime;
+    }
+
+    /**
+     * Moving a traveller off a cancelled flight takes that flight off the booking, but the airline still cancelled it:
+     * the right to a full refund (ADR-0016) must survive the move (ADR-0023). Moves are few per booking, so this is cheap.
+     */
+    private boolean wasMovedOffACancelledFlight(Pnr pnr) {
+        return rebookings.findByLocator(pnr.getLocator()).stream().anyMatch(move -> disruptions
+                .findByFlightNumberAndDepartureDate(move.getFromFlight(), move.getFromDate())
+                .filter(Disruption::isCancelled).isPresent());
     }
 
     /** Runs inside the cancel transaction. A booking with no payment (made before payments existed) is left alone. */

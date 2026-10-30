@@ -20,7 +20,7 @@ The agent also touches personal data (bookings) and credentials (a staff login),
 
 Option 3, measured against option 4.
 
-- **The agent never changes anything.** It reads, proposes, and prints. Approving and carrying out a proposal is a separate, later step with its own login, audit and screen.
+- **The agent never changes anything.** It reads, proposes, and prints. Approving and carrying out a proposal is a separate step with its own audit (ADR-0023).
 - **The model proposes; the guardrails decide what is believed.** A proposal can only name a flight that a search tool actually returned during the run, which must be on the same route, not the disrupted flight, leave no earlier than the traveller can and land in time for their next flight, and have seats for every passenger, counting everyone already accepted. Anything that fails becomes "needs a person", with the reason recorded. Every booking gets exactly one answer, whatever the model says or forgets.
 - **Rules are small classes run by a pipeline** (single responsibility; open/closed). A new safety check is one new class and one line in the list; no existing rule or the pipeline changes. The same holds for tools (a registry), the model (a `ChatModel` port with Groq as one adapter) and how tools are reached (a `ToolBox` port with MCP as one adapter).
 - **Tools are exposed through MCP.** The tools are a standard MCP server, so this agent, a different agent or an MCP client such as Claude Desktop can use them. The server runs as its own process and holds the staff credentials; the model only ever sees tool results.
@@ -43,4 +43,4 @@ Option 3, measured against option 4.
 - Negative: "earliest that fits" is the only preference. Loyalty, fare, a person's accessibility needs and a delayed flight's real new time are not considered (the timetable time is used).
 - Negative: batches are processed one after another so that seat counts stay consistent; a 500-booking flight takes about 13 model conversations. Grouping bookings with identical windows into cohorts would shrink that, and is the next optimisation if it matters.
 - Negative: seat counts are read from the seat map, which includes seats held for a few minutes by someone else. A proposal can be refused at approval time; staff then see why.
-- Follow-up: an approval screen and a step that rebooks (with audit), cohort grouping, multi-leg re-routing, a live eval baseline recorded in the repository.
+- Follow-up: cohort grouping, multi-leg re-routing, a live eval baseline recorded in the repository. (The step that rebooks, with audit, and the CLI approval now exist: ADR-0023. An approval screen is still to do.)

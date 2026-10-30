@@ -3,6 +3,7 @@ package com.skyhub.booking.application;
 import com.skyhub.booking.domain.Disruption;
 import com.skyhub.booking.domain.Money;
 import com.skyhub.booking.domain.Pnr;
+import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.RefundPolicy;
 import java.util.Optional;
 
@@ -20,6 +21,9 @@ public interface BookingEvents {
      * is what the booking cost, empty for a booking that was never paid. Not called again when cancel is repeated.
      */
     void bookingCancelled(Pnr pnr, RefundPolicy.Decision decision, Optional<Money> paid);
+
+    /** Staff moved one flight of this booking onto another (ADR-0023). Called only for a move that changed something. */
+    void bookingRebooked(Pnr pnr, PnrSegment from, PnrSegment to);
 
     /** A flight on this booking was delayed or cancelled by the airline. One call per affected booking. */
     void bookingDisrupted(Pnr pnr, Disruption disruption);

@@ -5,6 +5,7 @@ import com.skyhub.booking.domain.Disruption;
 import com.skyhub.booking.domain.Money;
 import com.skyhub.booking.domain.OutboxEvent;
 import com.skyhub.booking.domain.Pnr;
+import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.RefundPolicy;
 import com.skyhub.booking.persistence.OutboxEventRepository;
 import com.skyhub.booking.persistence.PiiCipher;
@@ -31,6 +32,7 @@ public class OutboxBookingEvents implements BookingEvents {
     static final String BOOKING_CONFIRMED = "booking.confirmed";
     static final String BOOKING_CANCELLED = "booking.cancelled";
     static final String BOOKING_DISRUPTED = "booking.disrupted";
+    static final String BOOKING_REBOOKED = "booking.rebooked";
 
     private final OutboxEventRepository outbox;
     private final PiiCipher cipher;
@@ -86,6 +88,17 @@ public class OutboxBookingEvents implements BookingEvents {
             event.put("revisedDeparture", disruption.getRevisedDeparture().toString());
         }
         event.put("reason", disruption.getReason());
+        enqueue(pnr, event);
+    }
+
+    @Override
+    public void bookingRebooked(Pnr pnr, PnrSegment from, PnrSegment to) {
+        Map<String, Object> event = event(BOOKING_REBOOKED, pnr);
+        event.put("from", Map.of("flightNumber", from.flightNumber(), "departureDate", from.departureDate().toString()));
+        event.put("to", Map.of("flightNumber", to.flightNumber(), "departureDate", to.departureDate().toString()));
+        int leg = pnr.getSegments().indexOf(to);
+        event.put("passengers", pnr.getPassengers().stream().map(p -> Map.of("firstName", p.getFirstName(),
+                "lastName", p.getLastName(), "seat", p.getSeats().get(leg))).toList());
         enqueue(pnr, event);
     }
 

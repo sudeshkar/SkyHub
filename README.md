@@ -53,7 +53,7 @@ flowchart LR
 - **flight-search** keeps the timetable in memory (copy-on-write) and answers searches without touching the database.
 - **booking** owns seats, holds, bookings and check-in. One database per service.
 - **notification** reads booking events from Kafka and sends the emails, once each. Booking never waits for it, so a mail or broker outage cannot fail a booking.
-- **disruption-agent** (Python) reads a disruption and proposes where affected bookings could go; guardrails verify every proposal and a person decides. It reaches SkyHub through an MCP server and sees no personal data. See [`services/disruption-agent`](services/disruption-agent/README.md).
+- **disruption-agent** (Python) reads a disruption and proposes where affected bookings could go; guardrails verify every proposal and a person decides. It reaches SkyHub through an MCP server and sees no personal data. With `--apply`, a person approves each proposed move and the booking service carries it out, audited. See [`services/disruption-agent`](services/disruption-agent/README.md).
 - **website** is the only thing the public reaches. It talks to the services from the server, so the browser never sees them or their tokens.
 
 More in [`docs/design/01-hld.md`](docs/design/01-hld.md) (high-level) and [`docs/design/02-lld.md`](docs/design/02-lld.md) (classes and patterns).
@@ -151,6 +151,6 @@ docs/           design documents, decision records (ADRs), runbooks, and the [ro
 
 ## Status and honest limits
 
-Built so far: search, seat selection, booking with payment (mock provider), refunds on cancellation, manage booking, seat holds, online check-in, delays and cancellations, staff login with roles and an operations screen, a disruption agent that proposes re-accommodation, emails for a confirmed booking, a cancellation (with its refund) and a delayed or cancelled flight, through an outbox and Kafka, observability.
+Built so far: search, seat selection, booking with payment (mock provider), refunds on cancellation, manage booking, seat holds, online check-in, delays and cancellations, staff login with roles and an operations screen, a disruption agent that proposes re-accommodation and, with a person's approval, moves bookings (audited, seats kept together), emails for a confirmed booking, a cancellation (with its refund) and a delayed or cancelled flight, through an outbox and Kafka, observability.
 
-Not built, on purpose or not yet: a real payment provider, user accounts, acting on the agent's proposals (it only proposes; its Groq model is untested live), a real mail provider (emails go to Mailpit locally; the SMTP adapter works with any relay) and check-in reminders, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.
+Not built, on purpose or not yet: a real payment provider, user accounts, an approval screen (approval is on the command line; the agent's Groq model is untested live), a real mail provider (emails go to Mailpit locally; the SMTP adapter works with any relay) and check-in reminders, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.

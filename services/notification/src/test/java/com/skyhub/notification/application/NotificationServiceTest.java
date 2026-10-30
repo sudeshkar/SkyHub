@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.BookingRebookedEvent;
 import com.skyhub.notification.domain.SentNotification;
 import com.skyhub.notification.persistence.SentNotificationRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -122,6 +123,23 @@ class NotificationServiceTest {
         verify(sent).saveAndFlush(row.capture());
         assertThat(row.getValue().getType()).isEqualTo("booking.disrupted");
         assertThat(count("booking.disrupted", "sent")).isEqualTo(1);
+    }
+
+    @Test
+    void should_send_and_record_a_rebooking_email_once_and_skip_a_redelivery() {
+        BookingRebookedEvent moved = new BookingRebookedEvent(UUID.fromString("e5a3d7c1-2f48-4b6a-9c10-7d1e8f3b4a55"),
+                "booking.rebooked", 1, Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com",
+                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)),
+                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3)),
+                List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A")));
+
+        service.bookingRebooked(moved);
+        when(sent.existsByEventId(moved.eventId())).thenReturn(true);
+        service.bookingRebooked(moved);
+
+        verify(email, org.mockito.Mockito.times(1)).send(any(EmailMessage.class));
+        assertThat(count("booking.rebooked", "sent")).isEqualTo(1);
+        assertThat(count("booking.rebooked", "duplicate")).isEqualTo(1);
     }
 
     @Test

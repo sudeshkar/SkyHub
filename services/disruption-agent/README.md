@@ -22,7 +22,7 @@ booking: a person approves. Design and limits: [ADR-0022](../../docs/adr/0022-di
 cd services/disruption-agent
 python -m venv .venv && source .venv/Scripts/activate     # on macOS/Linux: .venv/bin/activate
 pip install -e ".[dev]"
-python -m pytest                                          # 73 tests: units, guardrails, evals, a fuzz test. No key needed.
+python -m pytest                                          # 86 tests: units, guardrails, evals, a fuzz test. No key needed.
 python -m evals                                           # the baseline planner on four scenarios, with a safety check
 ```
 
@@ -34,11 +34,15 @@ export SKYHUB_AGENT_USERNAME=agent.ops
 export SKYHUB_AGENT_PASSWORD=...            # 12+ characters
 export GROQ_API_KEY=...                     # https://console.groq.com
 python -m disruption_agent SK001 2027-01-01          # prints proposals; add --json for machines
+python -m disruption_agent SK001 2027-01-01 --apply  # then asks about each move: y / n / a (all the rest) / q
 python -m evals --live                               # judge the Groq model against the baseline
 ```
 
 Settings (all environment variables): `SKYHUB_BOOKING_API_URL` (default `http://localhost:8082`),
 `SKYHUB_SEARCH_API_URL` (`http://localhost:8081`), `GROQ_MODEL` (`llama-3.3-70b-versatile`).
+
+`--apply` carries out only what you approve, one booking at a time, through the booking service, which re-checks every rule
+(ADR-0023). There is no unattended mode: it needs a terminal. Moving is deliberately not an MCP tool.
 
 The MCP server can also run alone, for any MCP client: `python -m disruption_agent.server`.
 
@@ -54,6 +58,7 @@ The MCP server can also run alone, for any MCP client: `python -m disruption_age
 | `server.py`, `toolbox.py` | The MCP server, and the adapter the agent reaches tools through |
 | `guardrails.py` | `Rule` classes, the `SeatLedger`, `GuardrailPipeline`, `Policy` |
 | `agent.py`, `llm.py` | The loop, and the `ChatModel` port with the Groq adapter |
+| `apply.py` | `Applier` and the `Approver` port (console prompt): moves only what a person approves |
 | `evals/` | Baseline planner, independent oracle, chaos model, scenarios, runner |
 
 Adding a safety check: write a `Rule`, add it to `default_rules()`. Adding a tool: write a `Tool`, add it to the registry in

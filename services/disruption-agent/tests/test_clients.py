@@ -63,6 +63,37 @@ def test_reports_a_server_error_as_a_service_error():
         client.affected_bookings("SK501", date(2026, 11, 2))
 
 
+def test_asks_the_booking_service_to_move_a_booking_with_its_staff_token():
+    world = World()
+
+    moved = booking(world).rebook("ABC234", 0, "SK503", date(2026, 11, 2))
+
+    sent = world.asked(lambda r: r.url.path.endswith("/rebooking"))[0]
+    assert sent.headers["Authorization"] == f"Bearer {TOKEN}"
+    assert world.rebookings == [{"locator": "ABC234", "segmentIndex": 0, "flightNumber": "SK503", "departureDate": "2026-11-02"}]
+    assert moved["changed"] is True and moved["to"]["flightNumber"] == "SK503"
+
+
+def test_reports_a_refused_move_with_the_reason_the_service_gave():
+    world = World(rebook_responses={"ABC234": (409, {"title": "Rebooking refused", "detail": "SK503 flies DXB to JFK, not DXB to LHR"})})
+
+    with pytest.raises(ServiceError) as refused:
+        booking(world).rebook("ABC234", 0, "SK503", date(2026, 11, 2))
+
+    assert "DXB to JFK" in str(refused.value)
+
+
+def test_logs_in_again_once_when_the_token_has_gone_stale_during_a_move():
+    world = World()
+    client = booking(world)
+    client.rebook("ABC234", 0, "SK503", date(2026, 11, 2))
+    client._token = "expired"
+
+    client.rebook("DEF567", 1, "SK503", date(2026, 11, 2))
+
+    assert world.logins == 2 and len(world.rebookings) == 2
+
+
 def test_reads_a_flight_with_its_times_in_utc():
     leg = search(World()).departure("SK501", date(2026, 11, 2))
 

@@ -15,6 +15,7 @@ tags:
   - name: CheckIn
   - name: Disruptions
   - name: Staff
+  - name: Rebooking
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -420,6 +421,51 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /api/v1/ops/pnrs/{locator}/rebooking:
+    post:
+      tags: [Rebooking]
+      operationId: rebookFlight
+      summary: Move one flight of a booking onto another, after a disruption
+      description: |
+        Staff only (ADR-0023). Moves the given flight of the booking onto another flight, choosing seats for the whole party
+        (kept together, in the cabin they were in). Refused unless the flight being left has a recorded delay or
+        cancellation, the booking is active and not checked in on it, and the new flight operates, is not cancelled, flies
+        the same route and does not leave before the original was due. Everything or nothing happens. Asking again for a
+        move that is already done changes nothing and answers `changed: false`. The traveller is emailed.
+      security:
+        - staffToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RebookRequest'
+      responses:
+        '200':
+          description: Moved, or already there
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rebooked'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
+        '409':
+          description: 'Refused: a rule forbids this move, or the seats are not there'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
 
   /api/v1/ops/sessions:
     post:
@@ -940,6 +986,42 @@ components:
           format: date-time
         pnr:
           $ref: '#/components/schemas/Pnr'
+
+    RebookRequest:
+      type: object
+      required: [segmentIndex, flightNumber, departureDate]
+      properties:
+        segmentIndex:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Position of the flight to move in the booking
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+
+    Rebooked:
+      type: object
+      required: [locator, segmentIndex, from, to, seats, changed]
+      properties:
+        locator:
+          type: string
+        segmentIndex:
+          type: integer
+        from:
+          $ref: '#/components/schemas/Segment'
+        to:
+          $ref: '#/components/schemas/Segment'
+        seats:
+          type: array
+          description: The new seat of each passenger, in passenger order. No names.
+          items:
+            $ref: '#/components/schemas/SeatNumber'
+        changed:
+          type: boolean
+          description: false when the booking was already on that flight
 
     AffectedBookings:
       type: object

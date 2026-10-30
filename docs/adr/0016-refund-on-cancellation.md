@@ -34,6 +34,8 @@ Option 2.
 
 The response carries `refund: { status, amount, currency }` with status `REFUNDED`, `PENDING` or `NOT_REFUNDABLE`. A booking with no payment record (made before payments existed) has no refund object.
 
+**Update (ADR-0023):** a traveller whom staff moved off a flight the airline cancelled keeps the full-refund right. The decision also checks the booking's rebooking history, but only when the fare rules would otherwise refuse a refund.
+
 ## Consequences
 
 - Positive: the traveller always learns what they get back; no money is lost to a provider outage; no booking stays half-cancelled.

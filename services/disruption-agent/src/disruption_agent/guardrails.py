@@ -200,7 +200,7 @@ class GuardrailPipeline:
                 return self._refuse(proposal, result, reason)
         for rule in self._rules:
             rule.commit(proposal, booking, alternative)
-        return proposal
+        return proposal.model_copy(update={"segment_index": booking.disrupted_segment_index})
 
     @staticmethod
     def _refuse(proposal: Proposal, result: Verified, reason: str) -> Proposal:
