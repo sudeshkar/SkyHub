@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { readStaffSession } from "@/lib/staff-session";
 import { DisruptionForm } from "./disruption-form";
 import { LoginForm } from "./login-form";
+import { ProposalsPanel } from "./proposals-panel";
 import { logOut } from "./actions";
 
 // Staff only: keep it out of search results. It is not linked from the public site.
@@ -46,6 +47,7 @@ async function OpsContent() {
         </form>
       </div>
       <DisruptionForm />
+      <ProposalsPanel />
     </>
   );
 }

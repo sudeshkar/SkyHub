@@ -72,6 +72,8 @@ class Proposal(BaseModel):
     rationale: str = ""
     # Which leg of the booking to move. Filled in by the guardrails from the booking, never taken from the model.
     segment_index: int | None = None
+    # How many seats the booking holds, so a screen can show the size of each move. Also filled in by code.
+    passenger_count: int | None = None
 
     @field_validator("rationale", mode="before")
     @classmethod

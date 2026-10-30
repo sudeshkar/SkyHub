@@ -36,7 +36,7 @@ test("staff sign in, record a cancellation, and sign out", async ({ page, contex
   expect(cookie.path).toBe("/ops");
 
   await page.getByLabel("Flight number").fill("SK501");
-  await page.getByLabel(/Scheduled departure date/).fill(date);
+  await page.getByLabel(/Scheduled departure date/).first().fill(date);
   await page.getByLabel("Cancelled").check();
   await page.getByLabel(/Reason shown to travellers/).fill("End-to-end test");
   await page.getByRole("button", { name: "Record" }).click();

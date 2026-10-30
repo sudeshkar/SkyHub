@@ -182,8 +182,8 @@ class GuardrailPipeline:
             else:
                 chosen[locator] = self._decide(proposal, result)
         for booking in batch:                      # every booking gets an answer, in a stable order
-            result.proposals.append(chosen.get(booking.locator) or Proposal.needs_human(
-                booking.locator, "no proposal was made for this booking"))
+            answer = chosen.get(booking.locator) or Proposal.needs_human(booking.locator, "no proposal was made for this booking")
+            result.proposals.append(answer.model_copy(update={"passenger_count": booking.passenger_count}))
         return result
 
     def _decide(self, proposal: Proposal, result: Verified) -> Proposal:

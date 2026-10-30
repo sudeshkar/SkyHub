@@ -143,7 +143,8 @@ def test_passes_through_a_proposal_that_asks_for_a_person():
 
     result = verify([asked], [b], facts(b))
 
-    assert result.proposals == [asked] and result.rejections == []
+    assert [(p.locator, p.action, p.rationale) for p in result.proposals] == [("ABC234", "NEEDS_HUMAN", "no flight fits")]
+    assert result.rejections == []
 
 
 def test_trims_and_bounds_the_rationale():
