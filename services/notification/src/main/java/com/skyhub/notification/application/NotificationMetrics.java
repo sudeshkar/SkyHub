@@ -23,6 +23,11 @@ public class NotificationMetrics {
         registry.counter("skyhub.notifications.dead_lettered").increment();
     }
 
+    /** Parked messages a person put back (ADR-0032). */
+    public void replayed(int count) {
+        registry.counter("skyhub.notifications.replayed").increment(count);
+    }
+
     public void record(String type, Outcome outcome) {
         registry.counter("skyhub.notifications", "type", type, "outcome", outcome.name().toLowerCase(java.util.Locale.ROOT))
                 .increment();
