@@ -46,7 +46,7 @@ Ordered by how much they add to the story, not a commitment.
 
 ## Smaller loose ends
 
-- **Not yet clicked through in a browser:** the seat-hold countdown, check-in, disruption notices and the payment step. Unit, component and integration tests cover them; an end-to-end browser test (Playwright) would cover the whole path.
+- **Browser coverage:** `npm run e2e` (Playwright) drives search, the seat hold countdown, payment, finding a booking, cancelling and the refund panel in a real browser. Still not clicked through: check-in and boarding passes, disruption notices, and the refund-pending retry. It runs by hand against a local stack, not in CI.
 - **Monitoring gaps:** no Next.js tracing yet. (JDBC spans: each SQL statement is a span, from `datasource-micrometer`.) (The disruptions panel exists; no alert on purpose, since recording a disruption is a deliberate operations action.)
 - **Hold abuse:** holds are limited per client at the website (6 a minute); a per-client limit at the gateway is the next step (ADR-0012).
 - **Manage-token revocation:** a token stays valid until it expires (15 minutes); there is no way to revoke one (ADR-0011).
