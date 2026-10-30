@@ -24,6 +24,8 @@ export const POLICIES = {
   lookup: { name: "lookup", limit: 10, windowMs: 15 * 60_000 },
   /** Cancel and change-seat, after a session is open: generous for a person, tight for a script. */
   manage: { name: "manage", limit: 30, windowMs: 60_000 },
+  /** Staff login is a password-guessing target; the service also locks an account after five misses (ADR-0017). */
+  staffLogin: { name: "staff-login", limit: 10, windowMs: 15 * 60_000 },
 } as const satisfies Record<string, Policy>;
 
 export function createRateLimiter(store: CounterStore, now: () => number = Date.now) {
