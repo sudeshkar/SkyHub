@@ -1,0 +1,133 @@
+openapi: 3.0.3
+info:
+  title: SkyHub Disruption Agent API
+  version: 1.0.0
+  description: |
+    Proposes what to do with each booking on a disrupted flight (ADR-0022, ADR-0024). It only proposes: moving a booking is
+    done by the operations page, with the staff member's own login, through the booking API (ADR-0023). Answers hold
+    references and counts only: no names, no contact details, no credentials. Internal: called by the website's server, never
+    by a browser.
+servers:
+  - url: http://localhost:8084
+paths:
+  /v1/proposals:
+    post:
+      operationId: getProposals
+      summary: Proposals for every active booking on one disrupted flight
+      description: |
+        Every booking gets exactly one proposal. A proposal to rebook names a flight that a real search returned and that
+        passed the guardrails (same route, fits the traveller's connections, enough seats counting every proposal in the
+        run); everything else is `NEEDS_HUMAN` with the reason. At most a few runs happen at once; further callers are
+        turned away with 503 after a short wait.
+      security:
+        - agentToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalRequest'
+      responses:
+        '200':
+          description: One proposal per booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalSet'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '502':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+
+components:
+  securitySchemes:
+    agentToken:
+      type: http
+      scheme: bearer
+      description: A shared secret between the website's server and this service (SKYHUB_AGENT_API_TOKEN, 32+ characters).
+
+  responses:
+    Problem:
+      description: 'Refused or failed: the detail says why, in words a person can act on'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    ProposalRequest:
+      type: object
+      required: [flightNumber, departureDate]
+      properties:
+        flightNumber:
+          type: string
+          pattern: '^[A-Z0-9]{2}[0-9]{1,4}$'
+          example: SK501
+        departureDate:
+          type: string
+          format: date
+          description: Scheduled UTC departure date of the disrupted flight
+        planner:
+          type: string
+          description: Which planner decides. Omitted means the server's default. Unknown names are refused.
+          example: first-fit
+
+    ProposalSet:
+      type: object
+      required: [planner, flightNumber, departureDate, bookingsTotal, rebooked, proposals]
+      properties:
+        planner:
+          type: string
+          description: The planner that decided, e.g. first-fit (rule-based) or groq (a language model)
+        flightNumber:
+          type: string
+        departureDate:
+          type: string
+          format: date
+        bookingsTotal:
+          type: integer
+        rebooked:
+          type: integer
+          description: How many proposals are to rebook (the rest need a person)
+        proposals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Proposal'
+
+    Proposal:
+      type: object
+      required: [locator, action, flightNumber, departureDate, segmentIndex, passengerCount, rationale]
+      properties:
+        locator:
+          type: string
+        action:
+          type: string
+          enum: [REBOOK, NEEDS_HUMAN]
+        flightNumber:
+          type: string
+          nullable: true
+          description: The flight to move to. Null unless action is REBOOK.
+        departureDate:
+          type: string
+          format: date
+          nullable: true
+        segmentIndex:
+          type: integer
+          nullable: true
+          description: Which flight of the booking to move. Set by the service from the booking, never by a model.
+        passengerCount:
+          type: integer
+          nullable: true
+        rationale:
+          type: string
+
+    Problem:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string

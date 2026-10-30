@@ -13,7 +13,7 @@ import sys
 import time
 
 from disruption_agent.llm import GroqChatModel
-from evals.baseline import FirstFitModel
+from disruption_agent.firstfit import FirstFitPlanner
 from evals.oracle import violations
 from evals.scenarios import Scenario, installed, standard
 from tests.harness import run_agent
@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"{'scenario':<30} {'planner':<10} {'coverage':>9} {'refused':>8} {'unsafe':>7} {'time':>8}")
     for scenario in standard():
-        print(_row("first-fit", scenario, FirstFitModel()))
+        print(_row("first-fit", scenario, FirstFitPlanner()))
         if live is not None:
             print(_row("groq", scenario, live))
     return 0

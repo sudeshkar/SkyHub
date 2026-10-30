@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { openStaffSession, recordDisruption as recordCall } from "@/lib/api/booking";
+import { getProposals } from "@/lib/api/agent";
+import { openStaffSession, rebookFlight, recordDisruption as recordCall } from "@/lib/api/booking";
 import { rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
-import { logOut, recordDisruption, staffLogin } from "./actions";
+import { loadProposals, logOut, moveBookings, recordDisruption, staffLogin } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: { staffLogin: {}, manage: {} }, rateLimit: vi.fn() }));
 vi.mock("@/lib/staff-session", () => ({
@@ -10,7 +11,8 @@ vi.mock("@/lib/staff-session", () => ({
   saveStaffSession: vi.fn(),
   clearStaffSession: vi.fn(),
 }));
-vi.mock("@/lib/api/booking", () => ({ openStaffSession: vi.fn(), recordDisruption: vi.fn() }));
+vi.mock("@/lib/api/booking", () => ({ openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlight: vi.fn() }));
+vi.mock("@/lib/api/agent", () => ({ getProposals: vi.fn() }));
 // redirect() works by throwing; the real one is not available outside a request.
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((to: string) => {
@@ -153,5 +155,131 @@ describe("recordDisruption", () => {
     expect(await recordDisruption({ status: "idle" }, form(delay))).toMatchObject({
       status: "error", message: expect.stringContaining("not responding"),
     });
+  });
+});
+
+describe("loadProposals", () => {
+  const SET = {
+    planner: "first-fit", flightNumber: "SK501", departureDate: "2026-11-02", bookingsTotal: 1, rebooked: 1,
+    proposals: [{ locator: "ABC234", action: "REBOOK" as const, flightNumber: "SK503", departureDate: "2026-11-02",
+      segmentIndex: 0, passengerCount: 2, rationale: "Earliest flight that fits." }],
+  };
+
+  beforeEach(() => {
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+  });
+
+  it("asks the agent for proposals for the flight, as staff, and hands them to the page", async () => {
+    vi.mocked(getProposals).mockResolvedValue({ kind: "ok", set: SET });
+
+    const result = await loadProposals({ status: "idle" }, form({ flightNumber: " sk501 ", departureDate: "2026-11-02" }));
+
+    expect(getProposals).toHaveBeenCalledWith("SK501", "2026-11-02");
+    expect(result).toEqual({ status: "loaded", set: SET });
+  });
+
+  it.each([
+    ["a bad flight number", { flightNumber: "../x", departureDate: "2026-11-02" }],
+    ["a bad date", { flightNumber: "SK501", departureDate: "soon" }],
+  ])("refuses %s without calling the agent", async (_name, fields) => {
+    const result = await loadProposals({ status: "idle" }, form(fields));
+
+    expect(result.status).toBe("error");
+    expect(getProposals).not.toHaveBeenCalled();
+  });
+
+  it("asks a signed-out person to sign in, and keeps staff-only work behind the login", async () => {
+    vi.mocked(readStaffSession).mockResolvedValue(null);
+
+    expect(await loadProposals({ status: "idle" }, form({ flightNumber: "SK501", departureDate: "2026-11-02" }))).toEqual({ status: "signed-out" });
+    expect(getProposals).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ kind: "busy" as const }, "busy"],
+    [{ kind: "rejected" as const, detail: "The booking service answered 500 for the bookings on SK501" }, "answered 500"],
+    [{ kind: "unavailable" as const }, "not responding"],
+  ])("explains a failure in words a person can act on", async (outcome, expected) => {
+    vi.mocked(getProposals).mockResolvedValue(outcome);
+
+    const result = await loadProposals({ status: "idle" }, form({ flightNumber: "SK501", departureDate: "2026-11-02" }));
+
+    expect(result).toMatchObject({ status: "error", message: expect.stringContaining(expected) });
+  });
+});
+
+describe("moveBookings", () => {
+  const MOVE = { locator: "ABC234", segmentIndex: 0, flightNumber: "SK503", departureDate: "2026-11-02" };
+
+  beforeEach(() => {
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+  });
+
+  it("moves each approved booking with the staff member's own token, so the audit names them", async () => {
+    vi.mocked(rebookFlight).mockResolvedValue({ kind: "moved", seats: ["14A", "14B"] });
+
+    const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567", segmentIndex: 1 }]);
+
+    expect(rebookFlight).toHaveBeenNthCalledWith(1, SESSION.token, "ABC234", { segmentIndex: 0, flightNumber: "SK503", departureDate: "2026-11-02" });
+    expect(rebookFlight).toHaveBeenNthCalledWith(2, SESSION.token, "DEF567", { segmentIndex: 1, flightNumber: "SK503", departureDate: "2026-11-02" });
+    expect(result).toEqual({ status: "done", results: [
+      { locator: "ABC234", status: "moved", seats: ["14A", "14B"] }, { locator: "DEF567", status: "moved", seats: ["14A", "14B"] }] });
+  });
+
+  it("reports a refused move with the booking service's reason and carries on with the rest", async () => {
+    vi.mocked(rebookFlight)
+      .mockResolvedValueOnce({ kind: "refused", detail: "SK503 flies DXB to JFK, not the booked route DXB to LHR" })
+      .mockResolvedValueOnce({ kind: "unchanged", seats: ["14A"] });
+
+    const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567" }]);
+
+    expect(result).toEqual({ status: "done", results: [
+      { locator: "ABC234", status: "refused", detail: "SK503 flies DXB to JFK, not the booked route DXB to LHR" },
+      { locator: "DEF567", status: "unchanged", seats: ["14A"] }] });
+  });
+
+  it("stops at once and signs the person out when the token is refused, keeping what was already done", async () => {
+    vi.mocked(rebookFlight).mockResolvedValueOnce({ kind: "moved", seats: ["14A"] }).mockResolvedValueOnce({ kind: "unauthorized" });
+
+    const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567" }, { ...MOVE, locator: "GHI890" }]);
+
+    expect(result).toEqual({ status: "signed-out", results: [{ locator: "ABC234", status: "moved", seats: ["14A"] }] });
+    expect(clearStaffSession).toHaveBeenCalled();
+    expect(rebookFlight).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops when the booking service stops answering instead of hammering it", async () => {
+    vi.mocked(rebookFlight).mockResolvedValueOnce({ kind: "moved", seats: ["14A"] }).mockResolvedValueOnce({ kind: "unavailable" });
+
+    const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567" }, { ...MOVE, locator: "GHI890" }]);
+
+    expect(result).toMatchObject({ status: "done", results: [{ status: "moved" }, { locator: "DEF567", status: "failed" }] });
+    expect(rebookFlight).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses more than one batch at a time, and anything that is not a valid move, before changing anything", async () => {
+    const tooMany = Array.from({ length: 21 }, (_, i) => ({ ...MOVE, locator: `B${String(i).padStart(5, "0")}` }));
+
+    expect((await moveBookings(tooMany)).status).toBe("error");
+    expect((await moveBookings([])).status).toBe("error");
+    expect((await moveBookings([{ ...MOVE, locator: "abc" }])).status).toBe("error");
+    expect((await moveBookings([{ ...MOVE, segmentIndex: 9 }])).status).toBe("error");
+    expect((await moveBookings([{ ...MOVE, flightNumber: "../x" }])).status).toBe("error");
+    expect((await moveBookings([{ ...MOVE, departureDate: "soon" }])).status).toBe("error");
+    expect(rebookFlight).not.toHaveBeenCalled();
+  });
+
+  it("asks a signed-out person to sign in", async () => {
+    vi.mocked(readStaffSession).mockResolvedValue(null);
+
+    expect(await moveBookings([MOVE])).toEqual({ status: "signed-out", results: [] });
+    expect(rebookFlight).not.toHaveBeenCalled();
+  });
+
+  it("slows a flood of requests", async () => {
+    vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 30 });
+
+    expect((await moveBookings([MOVE])).status).toBe("error");
+    expect(rebookFlight).not.toHaveBeenCalled();
   });
 });

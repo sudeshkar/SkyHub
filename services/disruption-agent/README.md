@@ -22,7 +22,7 @@ booking: a person approves. Design and limits: [ADR-0022](../../docs/adr/0022-di
 cd services/disruption-agent
 python -m venv .venv && source .venv/Scripts/activate     # on macOS/Linux: .venv/bin/activate
 pip install -e ".[dev]"
-python -m pytest                                          # 86 tests: units, guardrails, evals, a fuzz test. No key needed.
+python -m pytest                                          # 98 tests: units, guardrails, evals, a fuzz test. No key needed.
 python -m evals                                           # the baseline planner on four scenarios, with a safety check
 ```
 
@@ -40,6 +40,17 @@ python -m evals --live                               # judge the Groq model agai
 
 Settings (all environment variables): `SKYHUB_BOOKING_API_URL` (default `http://localhost:8082`),
 `SKYHUB_SEARCH_API_URL` (`http://localhost:8081`), `GROQ_MODEL` (`llama-3.3-70b-versatile`).
+
+To use the approval screen on the operations page (ADR-0024), run the agent as a service and give the website the same
+secret:
+
+```bash
+export SKYHUB_AGENT_API_TOKEN=$(openssl rand -base64 32)   # 32+ characters; the website needs the same value
+python -m disruption_agent.web                             # http://127.0.0.1:8084, rule-based planner by default
+# website: SKYHUB_AGENT_API_URL=http://localhost:8084 SKYHUB_AGENT_API_TOKEN=... npm run dev
+```
+
+Set `GROQ_API_KEY` to also register the `groq` planner, and `SKYHUB_AGENT_PLANNER=groq` to make it the default.
 
 `--apply` carries out only what you approve, one booking at a time, through the booking service, which re-checks every rule
 (ADR-0023). There is no unattended mode: it needs a terminal. Moving is deliberately not an MCP tool.
@@ -59,6 +70,7 @@ The MCP server can also run alone, for any MCP client: `python -m disruption_age
 | `guardrails.py` | `Rule` classes, the `SeatLedger`, `GuardrailPipeline`, `Policy` |
 | `agent.py`, `llm.py` | The loop, and the `ChatModel` port with the Groq adapter |
 | `apply.py` | `Applier` and the `Approver` port (console prompt): moves only what a person approves |
+| `web.py`, `firstfit.py` | The HTTP service for the operations page (token, concurrency gate, planner registry) and the rule-based planner |
 | `evals/` | Baseline planner, independent oracle, chaos model, scenarios, runner |
 
 Adding a safety check: write a `Rule`, add it to `default_rules()`. Adding a tool: write a `Tool`, add it to the registry in

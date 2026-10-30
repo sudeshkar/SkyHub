@@ -1,13 +1,16 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { getProposals, type ProposalSet } from "@/lib/api/agent";
 import {
   openStaffSession,
+  rebookFlight,
   recordDisruption as recordDisruptionCall,
   type RecordDisruptionRequest,
 } from "@/lib/api/booking";
 import { POLICIES, rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
+import { MAX_MOVES_PER_CALL } from "./limits";
 
 /** `username` is echoed back so the field keeps its value after React resets the form. */
 export type LoginState = { status: "idle" } | { status: "error"; message: string; username: string };
@@ -112,4 +115,93 @@ export async function recordDisruption(_previous: RecordState, form: FormData): 
     default:
       return fail("The booking service is not responding right now. Please try again.");
   }
+}
+
+export type ProposalsState =
+  | { status: "idle" }
+  | { status: "loaded"; set: ProposalSet }
+  | { status: "error"; message: string; values: { flightNumber: string; departureDate: string } }
+  | { status: "signed-out" };
+
+/**
+ * Asks the disruption agent what to do with everyone booked on a disrupted flight (ADR-0024). It only proposes: the answer
+ * holds references and counts, never names, and nothing is changed until staff approve each move.
+ */
+export async function loadProposals(_previous: ProposalsState, form: FormData): Promise<ProposalsState> {
+  const values = {
+    flightNumber: String(form.get("flightNumber") ?? "").trim().toUpperCase(),
+    departureDate: String(form.get("departureDate") ?? "").trim(),
+  };
+  const fail = (message: string): ProposalsState => ({ status: "error", message, values });
+
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return fail(`Too many requests. Please wait ${decision.retryAfterSeconds} seconds.`);
+  if (!(await readStaffSession())) return { status: "signed-out" };
+  if (!FLIGHT.test(values.flightNumber)) return fail("Enter a flight number such as SK501.");
+  if (!DATE.test(values.departureDate)) return fail("Enter the scheduled departure date.");
+
+  const outcome = await getProposals(values.flightNumber, values.departureDate);
+  switch (outcome.kind) {
+    case "ok":
+      return { status: "loaded", set: outcome.set };
+    case "busy":
+      return fail("The agent is busy right now. Try again in a moment.");
+    case "rejected":
+      return fail(outcome.detail);
+    default:
+      return fail("The agent is not responding right now. Please try again.");
+  }
+}
+
+export type Move = { locator: string; segmentIndex: number; flightNumber: string; departureDate: string };
+export type MoveResult = { locator: string; status: "moved" | "unchanged" | "refused" | "failed"; detail?: string; seats?: string[] };
+export type MoveBatchResult =
+  | { status: "done"; results: MoveResult[] }
+  | { status: "signed-out"; results: MoveResult[] }
+  | { status: "error"; message: string };
+
+const LOCATOR = /^[A-Z0-9]{6}$/;
+
+/**
+ * Carries out the moves a person approved, one booking at a time, with their own staff token, so the audit names whoever
+ * approved. The booking service re-checks every rule and may refuse any of them; each refusal is reported with its reason
+ * and the rest carry on. A refused token ends the batch (the session is dropped); a service that stops answering ends it too,
+ * rather than being hammered with the rest.
+ */
+export async function moveBookings(moves: Move[]): Promise<MoveBatchResult> {
+  if (moves.length < 1 || moves.length > MAX_MOVES_PER_CALL) {
+    return { status: "error", message: `Move between 1 and ${MAX_MOVES_PER_CALL} bookings at a time.` };
+  }
+  const valid = moves.every(
+    (m) => LOCATOR.test(m.locator) && Number.isInteger(m.segmentIndex) && m.segmentIndex >= 0 && m.segmentIndex <= 3 &&
+      FLIGHT.test(m.flightNumber) && DATE.test(m.departureDate),
+  );
+  if (!valid) return { status: "error", message: "One of the moves is not valid. Nothing was changed." };
+
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return { status: "error", message: `Too many requests. Please wait ${decision.retryAfterSeconds} seconds.` };
+  const session = await readStaffSession();
+  if (!session) return { status: "signed-out", results: [] };
+
+  const results: MoveResult[] = [];
+  for (const move of moves) {
+    const outcome = await rebookFlight(session.token, move.locator, {
+      segmentIndex: move.segmentIndex, flightNumber: move.flightNumber, departureDate: move.departureDate,
+    });
+    if (outcome.kind === "unauthorized") {
+      await clearStaffSession(); // expired, or this role may not do it: back to the login
+      return { status: "signed-out", results };
+    }
+    if (outcome.kind === "moved" || outcome.kind === "unchanged") {
+      results.push({ locator: move.locator, status: outcome.kind, seats: outcome.seats });
+    } else if (outcome.kind === "refused") {
+      results.push({ locator: move.locator, status: "refused", detail: outcome.detail });
+    } else if (outcome.kind === "not-found") {
+      results.push({ locator: move.locator, status: "failed", detail: "That booking was not found." });
+    } else {
+      results.push({ locator: move.locator, status: "failed", detail: "The booking service is not responding." });
+      break; // do not keep hammering a service that has stopped answering
+    }
+  }
+  return { status: "done", results };
 }

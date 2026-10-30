@@ -274,6 +274,42 @@ export async function openStaffSession(username: string, password: string): Prom
   return { kind: "unavailable" };
 }
 
+export type RebookOutcome =
+  | { kind: "moved" | "unchanged"; seats: string[] } // unchanged: it was already on that flight
+  | { kind: "refused"; detail: string } // a rule forbids the move, or the seats are not there: the reason is for staff
+  | { kind: "unauthorized" } // token missing, expired, or the role may not do this
+  | { kind: "not-found" }
+  | { kind: "unavailable" };
+
+export type RebookMove = { segmentIndex: number; flightNumber: string; departureDate: string };
+
+/** Moves one flight of a booking onto another. The staff token says who did it, and the booking service re-checks every rule. */
+export async function rebookFlight(token: string, locator: string, move: RebookMove): Promise<RebookOutcome> {
+  const response = await call(`/api/v1/ops/pnrs/${encodeURIComponent(locator)}/rebooking`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(move),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) {
+    const moved = (await response.json()) as components["schemas"]["Rebooked"];
+    return { kind: moved.changed ? "moved" : "unchanged", seats: moved.seats };
+  }
+  switch (response.status) {
+    case 401:
+    case 403:
+      return { kind: "unauthorized" };
+    case 404:
+      return { kind: "not-found" };
+    case 400:
+    case 409:
+      return { kind: "refused", detail: await problemDetail(response, "That move was not accepted.") };
+    default:
+      return { kind: "unavailable" };
+  }
+}
+
 /** Records a delay or cancellation; the staff token says who did it. */
 export async function recordDisruption(token: string, request: RecordDisruptionRequest): Promise<RecordOutcome> {
   const response = await call("/api/v1/ops/disruptions", {
