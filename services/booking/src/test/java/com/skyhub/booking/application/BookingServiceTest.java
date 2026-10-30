@@ -69,6 +69,7 @@ class BookingServiceTest {
     private final PaymentGateway gateway = mock(PaymentGateway.class);
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final BookingEvents events = mock(BookingEvents.class);
+    private final UnrefundedCharges unrefunded = mock(UnrefundedCharges.class);
     /** Every flight costs 100.00 USD a passenger, so SK501 + SK901 for one passenger is 200.00. */
     private final PricingService pricing = new PricingService(
             (flight, date) -> Optional.of(new FlightInfo(NOW.plusSeconds(18000), Money.of("100.00", "USD"))),
@@ -78,7 +79,7 @@ class BookingServiceTest {
                     new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
             Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
             new BookingMetrics(new SimpleMeterRegistry()), new HoldMetrics(holdMetrics),
-            pricing, gateway, payments, new PaymentMetrics(paymentRegistry), events);
+            pricing, gateway, payments, new PaymentMetrics(paymentRegistry), events, unrefunded);
 
     @BeforeEach
     void setUp() {
@@ -192,6 +193,17 @@ class BookingServiceTest {
 
         assertThat(payment("refund_failed")).isEqualTo(1);
         assertThat(payment("refunded")).isZero();
+        verify(unrefunded).record(eq("ch_1"), any(Money.class), eq("SeatUnavailableException"), any());   // so the retry job gives it back
+    }
+
+    @Test
+    void should_still_report_the_real_failure_when_the_charge_cannot_even_be_written_down() {
+        inventory.get("SK90124A").book("OTHER1");
+        org.mockito.Mockito.doThrow(new PaymentUnavailableException("no answer", null)).when(gateway).refund("ch_1");
+        org.mockito.Mockito.doThrow(new IllegalStateException("database down")).when(unrefunded).record(any(), any(), any(), any());
+
+        assertThatExceptionOfType(SeatUnavailableException.class)
+                .isThrownBy(() -> service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY));
     }
 
     @Test

@@ -52,13 +52,15 @@ public class BookingService {
     private final PaymentRepository payments;
     private final PaymentMetrics paymentMetrics;
     private final BookingEvents events;
+    private final UnrefundedCharges unrefunded;
 
     public BookingService(SeatInventoryRepository seats, PnrRepository pnrs, SeatInventoryInitializer inventory,
                           SeatMapCache seatMaps, CreatePnrValidator validator, LocatorGenerator locators, Clock clock,
                           TransactionOperations transactions, BookingMetrics metrics, HoldMetrics holdMetrics,
                           PricingService pricing, PaymentGateway gateway, PaymentRepository payments,
-                          PaymentMetrics paymentMetrics, BookingEvents events) {
+                          PaymentMetrics paymentMetrics, BookingEvents events, UnrefundedCharges unrefunded) {
         this.events = events;
+        this.unrefunded = unrefunded;
         this.pricing = pricing;
         this.gateway = gateway;
         this.payments = payments;
@@ -129,7 +131,7 @@ public class BookingService {
         try {
             return transactions.execute(status -> book(command, contactEmail, keyHash, fingerprint, charge));
         } catch (RuntimeException failed) {
-            refund(charge); // paid but not booked: give the money back, then report the real failure
+            refund(charge, failed); // paid but not booked: give the money back, then report the real failure
             throw failed;
         } finally {
             // Seats changed (or a conflict showed this instance's map is stale): show fresh maps next time.
@@ -160,16 +162,23 @@ public class BookingService {
     }
 
     /** Never throws: the caller is already reporting a failure, and a refund error must not hide it. */
-    private void refund(PaymentGateway.Charge charge) {
+    private void refund(PaymentGateway.Charge charge, RuntimeException bookingFailure) {
         try {
             gateway.refund(charge.id());
             paymentMetrics.record(PaymentMetrics.Outcome.REFUNDED);
             log.atInfo().addKeyValue("payment.charge", charge.id()).log("Charge refunded after a failed booking");
         } catch (RuntimeException refundFailed) {
             paymentMetrics.record(PaymentMetrics.Outcome.REFUND_FAILED);
-            // Money taken, no booking, refund failed: a person must fix this (runbook: RefundFailed).
+            // Money taken, no booking, refund failed. Write it down so the retry job gives it back (ADR-0030);
+            // only if even that fails does a person have to find the charge in the log (runbook: RefundFailed).
             log.atError().addKeyValue("payment.charge", charge.id()).setCause(refundFailed)
                     .log("Refund failed after a failed booking; the traveller has been charged");
+            try {
+                unrefunded.record(charge.id(), charge.amount(), bookingFailure.getClass().getSimpleName(), clock.instant());
+            } catch (RuntimeException notRecorded) {
+                log.atError().addKeyValue("payment.charge", charge.id()).setCause(notRecorded)
+                        .log("Could not record the unrefunded charge; refund it by hand");
+            }
         }
     }
 
