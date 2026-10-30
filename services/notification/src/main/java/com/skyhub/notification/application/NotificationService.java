@@ -1,7 +1,10 @@
 package com.skyhub.notification.application;
 
 import com.skyhub.notification.application.NotificationMetrics.Outcome;
+import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
+import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.NotificationEvent;
 import com.skyhub.notification.domain.SentNotification;
 import com.skyhub.notification.persistence.SentNotificationRepository;
 import java.time.Clock;
@@ -36,27 +39,39 @@ public class NotificationService {
     }
 
     public void bookingConfirmed(BookingConfirmedEvent event) {
-        Outcome outcome;
-        try {
-            outcome = transactions.execute(status -> handle(event));
-        } catch (RuntimeException failed) {
-            metrics.record(BookingConfirmedEvent.TYPE, Outcome.FAILED);
-            log.atWarn().addKeyValue("event.id", event.eventId()).addKeyValue("pnr.locator", event.locator())
-                    .setCause(failed).log("Confirmation email not sent; it will be retried");
-            throw failed;
-        }
-        metrics.record(BookingConfirmedEvent.TYPE, outcome);
+        deliver(event, EmailComposer.bookingConfirmed(event));
     }
 
-    private Outcome handle(BookingConfirmedEvent event) {
+    public void bookingCancelled(BookingCancelledEvent event) {
+        deliver(event, EmailComposer.bookingCancelled(event));
+    }
+
+    public void bookingDisrupted(BookingDisruptedEvent event) {
+        deliver(event, EmailComposer.bookingDisrupted(event));
+    }
+
+    private void deliver(NotificationEvent event, EmailMessage message) {
+        Outcome outcome;
+        try {
+            outcome = transactions.execute(status -> handle(event, message));
+        } catch (RuntimeException failed) {
+            metrics.record(event.type(), Outcome.FAILED);
+            log.atWarn().addKeyValue("event.id", event.eventId()).addKeyValue("event.type", event.type())
+                    .addKeyValue("pnr.locator", event.locator()).setCause(failed)
+                    .log("Email not sent; it will be retried");
+            throw failed;
+        }
+        metrics.record(event.type(), outcome);
+    }
+
+    private Outcome handle(NotificationEvent event, EmailMessage message) {
         if (sent.existsByEventId(event.eventId())) {
             log.atInfo().addKeyValue("event.id", event.eventId()).log("Event already handled; skipped");
             return Outcome.DUPLICATE;
         }
-        EmailMessage message = EmailComposer.bookingConfirmed(event);
         // Claim first and flush: a concurrent duplicate hits the unique constraint here, before anything is sent.
-        sent.saveAndFlush(SentNotification.of(event.eventId(), BookingConfirmedEvent.TYPE, event.locator(),
-                message.maskedTo(), message.subject(), clock.instant()));
+        sent.saveAndFlush(SentNotification.of(event.eventId(), event.type(), event.locator(), message.maskedTo(),
+                message.subject(), clock.instant()));
         email.send(message);
         return Outcome.SENT;
     }

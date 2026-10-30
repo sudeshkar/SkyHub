@@ -1,0 +1,16 @@
+{
+  "eventId": "7d2c1a90-5b1e-4c55-8a3a-2f9a6f1c0a22",
+  "type": "booking.cancelled",
+  "version": 1,
+  "occurredAt": "2026-10-30T10:00:00Z",
+  "locator": "ABC234",
+  "contactEmail": "priya@example.com",
+  "segments": [
+    { "flightNumber": "SK501", "departureDate": "2026-11-02" }
+  ],
+  "refund": {
+    "decision": "FULL_REFUND",
+    "amount": 100.00,
+    "currency": "USD"
+  }
+}

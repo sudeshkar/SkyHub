@@ -95,6 +95,12 @@ public class Disruption {
         this.recordedBy = username;
     }
 
+    /** True when recording this again would change nothing a traveller could see. */
+    public boolean sameAs(DisruptionType type, Instant revisedDeparture, String reason) {
+        return this.type == type && java.util.Objects.equals(this.revisedDeparture, revisedDeparture)
+                && this.reason.equals(cleaned(reason));
+    }
+
     public boolean isCancelled() {
         return type == DisruptionType.CANCELLED;
     }

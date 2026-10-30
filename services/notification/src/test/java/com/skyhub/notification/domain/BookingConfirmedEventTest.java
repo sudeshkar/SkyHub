@@ -18,7 +18,7 @@ class BookingConfirmedEventTest {
 
     @Test
     void should_read_the_event_the_booking_service_publishes() throws Exception {
-        BookingConfirmedEvent event = EventParser.parse(Files.readString(EXAMPLE));
+        BookingConfirmedEvent event = EventParser.parse(Files.readString(EXAMPLE), BookingConfirmedEvent.class);
 
         assertThat(event.eventId()).isEqualTo(UUID.fromString("0b8f6f5e-3c47-4a58-9d0e-6a4f7e2f1c11"));
         assertThat(event.occurredAt()).isEqualTo(Instant.parse("2026-10-30T10:00:00Z"));
@@ -35,7 +35,7 @@ class BookingConfirmedEventTest {
     void should_ignore_fields_added_later_so_the_producer_can_grow_the_event() throws Exception {
         String withExtra = Files.readString(EXAMPLE).replaceFirst("\\{", "{\"seatClass\": \"economy\", ");
 
-        assertThat(EventParser.parse(withExtra).locator()).isEqualTo("ABC234");
+        assertThat(EventParser.parse(withExtra, BookingConfirmedEvent.class).locator()).isEqualTo("ABC234");
     }
 
     @Test
@@ -52,7 +52,7 @@ class BookingConfirmedEventTest {
                 "{\"eventId\":\"0b8f6f5e-3c47-4a58-9d0e-6a4f7e2f1c11\",\"type\":\"booking.confirmed\"}",
                 "{\"eventId\":\"nope\",\"type\":\"booking.confirmed\",\"locator\":\"ABC234\",\"contactEmail\":\"a@b.co\","
                         + "\"passengers\":[],\"segments\":[],\"totalAmount\":1,\"currency\":\"USD\"}"}) {
-            assertThatExceptionOfType(InvalidEventException.class).as(broken).isThrownBy(() -> EventParser.parse(broken));
+            assertThatExceptionOfType(InvalidEventException.class).as(broken).isThrownBy(() -> EventParser.parse(broken, BookingConfirmedEvent.class));
         }
     }
 }

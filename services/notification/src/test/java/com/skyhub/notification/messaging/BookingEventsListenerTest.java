@@ -7,7 +7,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.skyhub.notification.application.NotificationService;
+import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
+import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.InvalidEventException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,8 +33,26 @@ class BookingEventsListenerTest {
     }
 
     @Test
+    void should_hand_a_cancellation_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/booking-cancelled.v1.example.json")));
+
+        ArgumentCaptor<BookingCancelledEvent> event = ArgumentCaptor.forClass(BookingCancelledEvent.class);
+        verify(service).bookingCancelled(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().locator()).isEqualTo("ABC234");
+    }
+
+    @Test
+    void should_hand_a_disruption_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/booking-disrupted.v1.example.json")));
+
+        ArgumentCaptor<BookingDisruptedEvent> event = ArgumentCaptor.forClass(BookingDisruptedEvent.class);
+        verify(service).bookingDisrupted(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().flightNumber()).isEqualTo("SK501");
+    }
+
+    @Test
     void should_ignore_event_types_it_does_not_know_so_the_topic_can_grow() {
-        listener.onMessage("{\"type\":\"booking.cancelled\",\"eventId\":\"0b8f6f5e-3c47-4a58-9d0e-6a4f7e2f1c11\"}");
+        listener.onMessage("{\"type\":\"seat.changed\",\"eventId\":\"0b8f6f5e-3c47-4a58-9d0e-6a4f7e2f1c11\"}");
 
         verify(service, never()).bookingConfirmed(any());
     }

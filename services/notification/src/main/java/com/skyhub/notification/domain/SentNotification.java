@@ -58,6 +58,10 @@ public class SentNotification {
         return eventId;
     }
 
+    public String getType() {
+        return type;
+    }
+
     public String getLocator() {
         return locator;
     }

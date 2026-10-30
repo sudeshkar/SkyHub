@@ -35,4 +35,4 @@ Option 3, with a small polling relay, and a separate notification service as the
 - Negative: a broker and a third service to run, and the traveller's email is on the broker for its retention period.
 - Negative: eventual consistency. The email arrives seconds after the booking, and if the broker is down for an hour it arrives an hour late.
 - Negative: polling adds a small constant load, and the table grows until published rows are purged (a daily purge of rows older than seven days is part of the relay).
-- Follow-up: events for cancellation and refund, disruptions and check-in opening; a real SMTP adapter; SMS; a replay tool for the dead-letter topic.
+- Follow-up: events for check-in opening; a real SMTP adapter; SMS; a replay tool for the dead-letter topic. (Cancellation and disruption events: ADR-0020.)

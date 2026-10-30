@@ -9,7 +9,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
+import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.SentNotification;
 import com.skyhub.notification.persistence.SentNotificationRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -78,6 +80,61 @@ class NotificationServiceTest {
         assertThat(row.getValue().getRecipient()).isEqualTo("p****@example.com"); // never the real address
         assertThat(row.getValue().getSentAt()).isEqualTo(NOW);
         assertThat(count("sent")).isEqualTo(1);
+    }
+
+    private double count(String type, String outcome) {
+        return registry.get("skyhub.notifications").tag("type", type).tag("outcome", outcome).counter().count();
+    }
+
+    private BookingCancelledEvent cancelled() {
+        return new BookingCancelledEvent(UUID.fromString("7d2c1a90-5b1e-4c55-8a3a-2f9a6f1c0a22"), "booking.cancelled", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", event.segments(),
+                new BookingCancelledEvent.Refund("FULL_REFUND", new BigDecimal("100.00"), "USD"));
+    }
+
+    private BookingDisruptedEvent disrupted() {
+        return new BookingDisruptedEvent(UUID.fromString("c4e1b6d2-91a7-4f3e-b0d5-5a8e2c7f9b33"), "booking.disrupted", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2),
+                "DELAYED", Instant.parse("2026-11-02T14:30:00Z"), "Late inbound aircraft");
+    }
+
+    @Test
+    void should_send_and_record_a_cancellation_email_once() {
+        service.bookingCancelled(cancelled());
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().subject()).isEqualTo("Your SkyHub booking ABC234 is cancelled");
+        ArgumentCaptor<SentNotification> row = ArgumentCaptor.forClass(SentNotification.class);
+        verify(sent).saveAndFlush(row.capture());
+        assertThat(row.getValue().getType()).isEqualTo("booking.cancelled");
+        assertThat(count("booking.cancelled", "sent")).isEqualTo(1);
+    }
+
+    @Test
+    void should_send_and_record_a_disruption_email_once() {
+        service.bookingDisrupted(disrupted());
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().subject()).contains("SK501").contains("delayed");
+        ArgumentCaptor<SentNotification> row = ArgumentCaptor.forClass(SentNotification.class);
+        verify(sent).saveAndFlush(row.capture());
+        assertThat(row.getValue().getType()).isEqualTo("booking.disrupted");
+        assertThat(count("booking.disrupted", "sent")).isEqualTo(1);
+    }
+
+    @Test
+    void should_skip_a_redelivered_cancellation_or_disruption() {
+        when(sent.existsByEventId(cancelled().eventId())).thenReturn(true);
+        when(sent.existsByEventId(disrupted().eventId())).thenReturn(true);
+
+        service.bookingCancelled(cancelled());
+        service.bookingDisrupted(disrupted());
+
+        verify(email, never()).send(any(EmailMessage.class));
+        assertThat(count("booking.cancelled", "duplicate")).isEqualTo(1);
+        assertThat(count("booking.disrupted", "duplicate")).isEqualTo(1);
     }
 
     @Test

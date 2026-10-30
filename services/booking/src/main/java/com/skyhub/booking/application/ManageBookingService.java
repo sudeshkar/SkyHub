@@ -4,6 +4,7 @@ import com.skyhub.booking.application.ManageMetrics.Action;
 import com.skyhub.booking.application.view.PnrView;
 import com.skyhub.booking.domain.AlreadyCheckedInException;
 import com.skyhub.booking.domain.InvalidBookingException;
+import com.skyhub.booking.domain.Money;
 import com.skyhub.booking.domain.Pnr;
 import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrSegment;
@@ -15,6 +16,7 @@ import com.skyhub.booking.persistence.CheckInRepository;
 import com.skyhub.booking.persistence.PnrRepository;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -39,10 +41,12 @@ public class ManageBookingService {
     private final ManageMetrics metrics;
     private final CancellationRefunds refunds;
     private final TransactionOperations transactions;
+    private final BookingEvents events;
 
     public ManageBookingService(PnrRepository pnrs, SeatInventoryRepository seats, CheckInRepository checkIns,
                                 SeatMapCache seatMaps, ManageTokenIssuer tokens, ManageMetrics metrics,
-                                CancellationRefunds refunds, TransactionOperations transactions) {
+                                CancellationRefunds refunds, TransactionOperations transactions, BookingEvents events) {
+        this.events = events;
         this.pnrs = pnrs;
         this.seats = seats;
         this.checkIns = checkIns;
@@ -134,7 +138,9 @@ public class ManageBookingService {
                 seatOf(flights.get(s), pnr.seatOf(p, s)).release(locator);
             }
         }
-        refunds.record(locator, decision);
+        Optional<Money> paid = refunds.record(locator, decision);
+        // Same transaction as the cancel, and only the cancel that changed something: a repeat press sends nothing.
+        events.bookingCancelled(pnr, decision, paid);
         return new Cancellation(PnrView.of(pnrs.saveAndFlush(pnr)), flights, true);
     }
 
