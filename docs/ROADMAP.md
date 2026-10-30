@@ -28,6 +28,7 @@ How a slice goes, every time:
 | 11 | Refund on cancellation by simple fare rules | ADR-0016 |
 | 12 | Staff login and roles (replaces the shared operations key) | ADR-0017 |
 | 13 | Operations screen for recording delays and cancellations | ADR-0018 |
+| 14 | Booking-confirmed email: transactional outbox, Kafka, notification service | ADR-0019 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -36,7 +37,7 @@ Ordered by how much they add to the story, not a commitment.
 | Slice | What it adds | Notes |
 |---|---|---|
 | **Disruption agent (Python, Groq)** | An agent that reads a disruption, finds the affected bookings and proposes re-accommodation; MCP server exposing booking tools; an eval suite | The "Python/AI" part of the plan. Uses Groq's free API key (no Claude key). Builds on slice 9. |
-| **Notifications with an outbox** | Email/SMS on booking, disruption, check-in opening; transactional outbox + Kafka | Replaces "travellers are not notified". Introduces a broker. |
+| **More notifications** | Events and emails for cancellation and refund, disruptions (per affected booking) and check-in opening; a real SMTP adapter (Mailpit locally); SMS; a dead-letter replay tool | The outbox, Kafka and the notification service exist (ADR-0019); each new message is one event type plus one email. |
 | **Disruptions in search** | Flight search shows delayed/cancelled flights | flight-search would read disruptions. |
 | **Reconcile charges without a booking** | A job that finds charges with no booking and refunds them | Removes the manual step in the `RefundFailed` runbook. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |

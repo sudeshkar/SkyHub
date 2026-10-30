@@ -22,3 +22,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0016](0016-refund-on-cancellation.md) | Refund on cancellation by simple fare rules | Accepted |
 | [0017](0017-staff-login-and-roles.md) | Staff login and roles instead of a shared operations key | Accepted |
 | [0018](0018-ops-screen-through-the-website-server.md) | The operations screen is a page on the website, and its token stays on the server | Accepted |
+| [0019](0019-transactional-outbox-and-kafka.md) | Notifications through a transactional outbox and Kafka | Accepted |

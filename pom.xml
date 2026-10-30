@@ -20,6 +20,7 @@
     <modules>
         <module>services/flight-search</module>
         <module>services/booking</module>
+        <module>services/notification</module>
     </modules>
 
     <properties>

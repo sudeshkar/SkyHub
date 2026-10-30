@@ -16,6 +16,17 @@ spring:
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   application:
     name: booking
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      # Wait for the broker to confirm, and never write a message twice from one send (ADR-0019).
+      acks: all
+      properties:
+        enable.idempotence: true
+        # Fail fast when the broker is away: the relay retries on its next poll, and bookings never wait for it.
+        max.block.ms: 3000
+        delivery.timeout.ms: 5000
+        request.timeout.ms: 3000
   threads:
     virtual:
       enabled: true
@@ -34,6 +45,13 @@ spring:
         order_updates: true
 
 skyhub:
+  outbox:
+    # Events travel from the outbox table to this topic (ADR-0019). Switch the relay off only in tests.
+    topic: skyhub.booking.events
+    relay:
+      enabled: true
+      interval: PT2S
+    retention: P7D
   flight-search:
     url: ${FLIGHT_SEARCH_URL:http://localhost:8081}
   security:

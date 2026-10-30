@@ -41,10 +41,14 @@ flowchart LR
     BK -->|does the flight operate,<br/>when does it leave| FS
     FS --> P1[(PostgreSQL<br/>flightsearch)]
     BK --> P2[(PostgreSQL<br/>booking)]
+    BK -->|outbox relay| K{{Kafka}}
+    K --> N[notification<br/>:8083]
+    N --> P3[(PostgreSQL<br/>notification)]
 ```
 
 - **flight-search** keeps the timetable in memory (copy-on-write) and answers searches without touching the database.
 - **booking** owns seats, holds, bookings and check-in. One database per service.
+- **notification** reads booking events from Kafka and sends the emails, once each. Booking never waits for it, so a mail or broker outage cannot fail a booking.
 - **website** is the only thing the public reaches. It talks to the services from the server, so the browser never sees them or their tokens.
 
 More in [`docs/design/01-hld.md`](docs/design/01-hld.md) (high-level) and [`docs/design/02-lld.md`](docs/design/02-lld.md) (classes and patterns).
@@ -54,6 +58,7 @@ More in [`docs/design/01-hld.md`](docs/design/01-hld.md) (high-level) and [`docs
 - **No double-selling.** Seats use optimistic locking (`@Version`). A test makes ten threads grab one seat at once; exactly one wins. → [ADR-0002](docs/adr/0002-optimistic-locking-for-seats.md)
 - **Holds that cannot be abused or outlive their time.** All-or-nothing, 10 minutes, expiry checked when a hold becomes a booking *and* swept every 30 s by one idempotent SQL statement. → [ADR-0012](docs/adr/0012-seat-holds-that-expire.md)
 - **Money that cannot be charged twice.** Charge first, book second, refund if booking fails; the charge key comes from the request's Idempotency-Key, so a retry after a crash finds the charge instead of making another. The price is the server's, never the browser's. → [ADR-0015](docs/adr/0015-payment-before-booking-with-compensation.md)
+- **Events that cannot be lost or doubled.** A booking and its "confirmed" event are saved in one database transaction (outbox); a relay publishes to Kafka afterwards, and the consumer records each event id before sending, so a redelivery sends nothing twice. Stopping Kafka mid-booking delays the email; it does not fail the booking. → [ADR-0019](docs/adr/0019-transactional-outbox-and-kafka.md)
 - **Unique boarding numbers under concurrency** via a single atomic upsert; eight simultaneous check-ins get eight different numbers. Barcodes are HMAC-signed. → [ADR-0013](docs/adr/0013-online-check-in-and-boarding-passes.md)
 - **Security.** Deny-by-default Spring Security; short-lived booking-scoped JWTs; personal data encrypted at rest (AES-256-GCM) and idempotency keys stored hashed; DTOs only at API boundaries; rate limiting at the edge. → [ADR-0009](docs/adr/0009-rate-limiting-at-the-edge.md), [0010](docs/adr/0010-encrypt-personal-data-at-rest.md), [0011](docs/adr/0011-manage-booking-with-a-short-lived-token.md)
 - **Performance, measured on a laptop.** In-memory timetable: search went from 1,558 to 9,085 requests/s (median latency 92 ms to 2 ms). Cached seat maps: 1,762 to about 23,000 requests/s. → [ADR-0006](docs/adr/0006-in-memory-timetable-instead-of-result-cache.md)
@@ -70,11 +75,13 @@ Java 25, Spring Boot 4.1, Spring Security, Spring Data JPA (Hibernate), Flyway, 
 
 You need **JDK 25**, **Node.js 24** (what CI uses), and **Docker**. The commands below are for a Unix-style shell (Git Bash on Windows works).
 
-**1. Start PostgreSQL and Redis**
+**1. Start PostgreSQL, Redis and Kafka**
 
 ```bash
 docker compose up -d
 ```
+
+If your PostgreSQL volume is from before the notification service existed, create its database once: `docker compose exec postgres psql -U skyhub -d postgres -c "CREATE DATABASE notification OWNER skyhub;"`.
 
 **2. Create your keys.** The booking service refuses to start without them. Spring does not read `.env`, so export them in the shell that starts the service (see [`.env.example`](.env.example)). Use a different key for each.
 
@@ -86,12 +93,15 @@ export SKYHUB_BOARDING_PASS_KEY=$(openssl rand -base64 32)
 
 Keep `SKYHUB_PII_KEY` somewhere safe: bookings saved with one key cannot be read with another.
 
-**3. Start the two services** (each in its own terminal)
+**3. Start the services** (each in its own terminal)
 
 ```bash
 ./mvnw -pl services/flight-search spring-boot:run     # http://localhost:8081
 ./mvnw -pl services/booking spring-boot:run           # http://localhost:8082  (needs the keys from step 2)
+./mvnw -pl services/notification spring-boot:run      # no public API; reads Kafka, "sends" emails to its log
 ```
+
+The notification service is optional for booking: bookings succeed without it, and the confirmation emails are sent when it starts (see ADR-0019). Watch its log for `Email sent (log only)`.
 
 **4. Start the website**
 
@@ -127,7 +137,7 @@ CI runs the same on every pull request.
 
 ```
 api-specs/      OpenAPI contracts, written before the code (the services generate their interfaces from them)
-services/       flight-search and booking (Spring Boot)
+services/       flight-search, booking and notification (Spring Boot)
 frontend/       the website (Next.js)
 observability/  Prometheus rules, Grafana dashboard, Loki / Tempo / Alloy config
 docs/           design documents, decision records (ADRs), runbooks, and the [roadmap](docs/ROADMAP.md) of what is done and pending
@@ -135,6 +145,6 @@ docs/           design documents, decision records (ADRs), runbooks, and the [ro
 
 ## Status and honest limits
 
-Built so far: search, seat selection, booking with payment (mock provider), manage booking, seat holds, online check-in, delays and cancellations, observability.
+Built so far: search, seat selection, booking with payment (mock provider), refunds on cancellation, manage booking, seat holds, online check-in, delays and cancellations, staff login with roles and an operations screen, a booking-confirmed email through an outbox and Kafka, observability.
 
-Not built, on purpose or not yet: a real payment provider and refunds on cancellation, user accounts, staff login (operations use a shared key), email delivery, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.
+Not built, on purpose or not yet: a real payment provider, user accounts, a real mail server (emails are written to the notification service's log) and emails for anything except a confirmed booking, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.

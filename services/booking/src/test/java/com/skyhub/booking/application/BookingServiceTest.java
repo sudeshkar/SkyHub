@@ -68,6 +68,7 @@ class BookingServiceTest {
     private final SimpleMeterRegistry paymentRegistry = new SimpleMeterRegistry();
     private final PaymentGateway gateway = mock(PaymentGateway.class);
     private final PaymentRepository payments = mock(PaymentRepository.class);
+    private final BookingEvents events = mock(BookingEvents.class);
     /** Every flight costs 100.00 USD a passenger, so SK501 + SK901 for one passenger is 200.00. */
     private final PricingService pricing = new PricingService(
             (flight, date) -> Optional.of(new FlightInfo(NOW.plusSeconds(18000), Money.of("100.00", "USD"))));
@@ -76,7 +77,7 @@ class BookingServiceTest {
                     new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
             Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
             new BookingMetrics(new SimpleMeterRegistry()), new HoldMetrics(holdMetrics),
-            pricing, gateway, payments, new PaymentMetrics(paymentRegistry));
+            pricing, gateway, payments, new PaymentMetrics(paymentRegistry), events);
 
     @BeforeEach
     void setUp() {
@@ -203,6 +204,26 @@ class BookingServiceTest {
 
         assertThat(result.created()).isFalse();
         verifyNoInteractions(gateway);
+    }
+
+    @Test
+    void should_record_a_booking_confirmed_event_with_the_total_charged() {
+        service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY);
+
+        var total = org.mockito.ArgumentCaptor.forClass(Money.class);
+        verify(events).bookingConfirmed(any(Pnr.class), total.capture());
+        assertThat(total.getValue()).isEqualTo(Money.of("200.00", "USD"));
+    }
+
+    @Test
+    void should_record_no_event_for_a_replay_a_decline_or_a_taken_seat() {
+        var existing = Pnr.confirmed("XYZ789", new ContactEmail("priya@example.com"), List.of(SK501, SK901),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("11D", "24A"))), NOW, KEY,
+                RequestFingerprint.of(command(passenger("Priya", "Perera", "11D", "24A"))));
+        when(pnrs.findByIdempotencyKeyHash(Sha256.hex(KEY))).thenReturn(Optional.of(existing));
+        service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY);
+
+        verifyNoInteractions(events);
     }
 
     @Test
