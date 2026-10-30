@@ -129,6 +129,18 @@ class OutboxBookingEventsTest {
     }
 
     @Test
+    void should_write_the_refund_completed_event_as_the_notification_service_expects() throws Exception {
+        events(UUID.fromString("f1a9c3e7-6b25-4d80-9e14-2a7c5b8d0f66")).refundCompleted(pnr(), Money.of("100.00", "USD"));
+
+        OutboxEvent event = saved();
+
+        assertThat(event.getEventType()).isEqualTo("booking.refund-completed");
+        assertThat(event.getAggregateId()).isEqualTo("ABC234");
+        assertThat(json.readTree(cipher.decrypt(event.getPayload())))
+                .isEqualTo(json.readTree(Files.readString(Path.of("../../api-specs/events/booking-refund-completed.v1.example.json"))));
+    }
+
+    @Test
     void should_write_the_check_in_open_event_as_the_notification_service_expects() throws Exception {
         events(UUID.fromString("a3b7c9d1-5e24-4f68-8a10-9c2d4e6f8b55")).checkInOpened(pnr(),
                 new PnrSegment("SK501", LocalDate.of(2026, 11, 2)),

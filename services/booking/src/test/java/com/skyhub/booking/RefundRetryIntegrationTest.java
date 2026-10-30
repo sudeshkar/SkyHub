@@ -134,9 +134,29 @@ class RefundRetryIntegrationTest {
         mvc.perform(post("/api/v1/pnrs/{l}/cancellation", locator).header("Authorization", tokenFor(locator))).andExpect(status().isOk());
         assertThat(paymentStatus(locator)).isEqualTo("REFUND_DUE");
 
+        long before = refundEmails();
+
         retrier.sweep(LATER);
 
         assertThat(paymentStatus(locator)).isEqualTo("REFUNDED");
+        assertThat(refundEmails() - before).isEqualTo(1);   // the traveller is told the late refund was paid
+        retrier.sweep(LATER.plus(Duration.ofDays(1)));
+        assertThat(refundEmails() - before).isEqualTo(1);   // and only once
+    }
+
+    @Test
+    void should_not_tell_the_traveller_again_when_they_paid_themselves_by_cancelling_again_before_the_job_ran() throws Exception {
+        String locator = book("SK777", "2027-06-02", "14D");
+        doThrow(new PaymentUnavailableException("The payment provider did not answer", null))
+                .doCallRealMethod().when(gateway).refund(anyString());
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", locator).header("Authorization", tokenFor(locator))).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", locator).header("Authorization", tokenFor(locator))).andExpect(status().isOk());
+        assertThat(paymentStatus(locator)).isEqualTo("REFUNDED");
+        long before = refundEmails();
+
+        retrier.sweep(LATER);
+
+        assertThat(refundEmails()).isEqualTo(before);   // nothing was still owed, so nothing is announced
     }
 
     @Test
@@ -160,6 +180,10 @@ class RefundRetryIntegrationTest {
     }
 
     // ---- helpers -------------------------------------------------------------------------------------------------
+
+    private long refundEmails() {
+        return jdbc.queryForObject("SELECT count(*) FROM outbox_event WHERE event_type = 'booking.refund-completed'", Long.class);
+    }
 
     private String paymentStatus(String locator) {
         return jdbc.queryForObject("SELECT status FROM payment WHERE locator = ?", String.class, locator);

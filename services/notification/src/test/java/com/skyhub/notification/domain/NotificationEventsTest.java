@@ -18,6 +18,7 @@ class NotificationEventsTest {
     private static final Path REBOOKED = Path.of("../../api-specs/events/booking-rebooked.v1.example.json");
     private static final Path DISRUPTED = Path.of("../../api-specs/events/booking-disrupted.v1.example.json");
     private static final Path CHECK_IN_OPEN = Path.of("../../api-specs/events/booking-check-in-open.v1.example.json");
+    private static final Path REFUND_COMPLETED = Path.of("../../api-specs/events/booking-refund-completed.v1.example.json");
     private static final Path WITHDRAWN = Path.of("../../api-specs/events/booking-disruption-withdrawn.v1.example.json");
 
     @Test
@@ -73,6 +74,30 @@ class NotificationEventsTest {
                 open.replace("\"flightNumber\": \"SK501\",", "")}) {
             assertThatExceptionOfType(InvalidEventException.class).as(broken)
                     .isThrownBy(() -> EventParser.parse(broken, BookingCheckInOpenEvent.class));
+        }
+    }
+
+    @Test
+    void should_read_the_refund_completed_event_with_its_amount() throws Exception {
+        BookingRefundCompletedEvent event = EventParser.parse(Files.readString(REFUND_COMPLETED), BookingRefundCompletedEvent.class);
+
+        assertThat(event.eventId()).isEqualTo(UUID.fromString("f1a9c3e7-6b25-4d80-9e14-2a7c5b8d0f66"));
+        assertThat(event.locator()).isEqualTo("ABC234");
+        assertThat(event.amount()).isEqualByComparingTo(new BigDecimal("100.00"));
+        assertThat(event.currency()).isEqualTo("USD");
+    }
+
+    @Test
+    void should_refuse_a_refund_event_without_a_positive_amount_or_a_currency() throws Exception {
+        String completed = Files.readString(REFUND_COMPLETED);
+        for (String broken : new String[] {
+                completed.replace("booking.refund-completed", "booking.cancelled"),
+                completed.replace("100.00", "0"),
+                completed.replace("100.00", "-5"),
+                completed.replace("\"currency\": \"USD\"", "\"currency\": \"\""),
+                completed.replaceAll(",\\s*\"amount\": 100.00", "")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, BookingRefundCompletedEvent.class));
         }
     }
 

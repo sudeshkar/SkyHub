@@ -1,0 +1,10 @@
+{
+  "eventId": "f1a9c3e7-6b25-4d80-9e14-2a7c5b8d0f66",
+  "type": "booking.refund-completed",
+  "version": 1,
+  "occurredAt": "2026-10-30T10:00:00Z",
+  "locator": "ABC234",
+  "contactEmail": "priya@example.com",
+  "amount": 100.00,
+  "currency": "USD"
+}

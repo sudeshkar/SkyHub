@@ -35,4 +35,4 @@ Both are money owed to a traveller, and both were forgotten unless someone looke
 - Negative: if even the insert fails (the database is down at that moment), the charge is only in the log. The log line says so and the runbook covers it.
 - Negative: the job can refund a cancellation in the instant between the cancel transaction and the traveller's own refund; the provider call is repeated, harmlessly.
 - Negative: refunds are sequential, so a provider that hangs slows a sweep; the next sweep continues.
-- Negative: the traveller is not emailed that a delayed refund has now been paid (a "refund completed" email is on the notifications list).
+- Negative: the traveller is not emailed by this change alone that a delayed refund has now been paid; ADR-0031 adds that for cancellation refunds.

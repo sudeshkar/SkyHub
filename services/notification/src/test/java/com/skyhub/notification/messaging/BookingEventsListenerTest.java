@@ -13,6 +13,7 @@ import com.skyhub.notification.domain.BookingCheckInOpenEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
+import com.skyhub.notification.domain.BookingRefundCompletedEvent;
 import com.skyhub.notification.domain.InvalidEventException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -60,6 +61,15 @@ class BookingEventsListenerTest {
         ArgumentCaptor<BookingDisruptedEvent> event = ArgumentCaptor.forClass(BookingDisruptedEvent.class);
         verify(service).bookingDisrupted(event.capture());
         org.assertj.core.api.Assertions.assertThat(event.getValue().flightNumber()).isEqualTo("SK501");
+    }
+
+    @Test
+    void should_hand_a_completed_refund_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/booking-refund-completed.v1.example.json")));
+
+        ArgumentCaptor<BookingRefundCompletedEvent> event = ArgumentCaptor.forClass(BookingRefundCompletedEvent.class);
+        verify(service).refundCompleted(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().currency()).isEqualTo("USD");
     }
 
     @Test

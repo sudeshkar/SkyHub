@@ -40,6 +40,7 @@ How a slice goes, every time:
 | 23 | "Disruption withdrawn" email to every traveller still holding the flight | ADR-0028 |
 | 24 | Check-in-open reminder emails, sent by a sweep that scales with flights, not bookings | ADR-0029 |
 | 25 | Refunds that failed are retried automatically: charges for failed bookings and refunds owed after cancellation | ADR-0030 |
+| 26 | Refund-completed email when a delayed refund is finally paid | ADR-0031 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -48,7 +49,7 @@ Ordered by how much they add to the story, not a commitment.
 | Slice | What it adds | Notes |
 |---|---|---|
 | **Fuller rebooking** | A bulk rebooking endpoint; grouping and filtering proposals for big flights; arrival times and a connection rule in the booking service; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline (needs a Groq key; `python -m evals --live`) | Approval and rebooking exist (ADR-0022, 0023, 0024). Run `python -m evals --live` with a Groq key first: the live model has not been run yet. |
-| **More notifications** | a refund-completed email; HTML email and a boarding-pass attachment; SMS; non-blocking retry topics and a dead-letter replay tool | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
+| **More notifications** | HTML email and a boarding-pass attachment; SMS; non-blocking retry topics and a dead-letter replay tool | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
 | **User accounts** | Sign in, see all my bookings, saved passengers | Today a booking is found by reference + last name only. |
 | **Check-in extras** | Per-passenger check-in, check-out (to allow seat changes), QR/PDF417 boarding pass image | |
