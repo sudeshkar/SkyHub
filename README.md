@@ -116,6 +116,8 @@ Keep `SKYHUB_PII_KEY` somewhere safe: bookings saved with one key cannot be read
 ./mvnw -pl services/notification spring-boot:run      # no public API; reads Kafka, sends emails to Mailpit
 ```
 
+Emailed links (a new account's "choose a password" link) point at the website. They use `http://localhost:3000` unless the notification service has `SKYHUB_SITE_URL` set, which any non-local setup must do (ADR-0033).
+
 The notification service is optional for booking: bookings succeed without it, and the confirmation emails are sent when it starts (see ADR-0019). Open **http://localhost:8025** (Mailpit) to read the emails it sends: nothing is delivered outside your machine. To run with no mail server at all, set `SKYHUB_EMAIL_MODE=log` and the emails are written to the notification service's log instead (ADR-0021).
 
 **4. Start the website**

@@ -5,7 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.HexFormat;
+import java.util.Locale;
 import javax.crypto.Cipher;
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -27,6 +30,7 @@ public class PiiCipher {
     private static final int KEY_BYTES = 32;
 
     private final SecretKey key;
+    private final SecretKey indexKey;
     private final SecureRandom random = new SecureRandom();
 
     public PiiCipher(@Value("${skyhub.security.pii-key:}") String base64Key) {
@@ -41,6 +45,32 @@ public class PiiCipher {
                     "skyhub.security.pii-key must be a Base64 256-bit key (set the SKYHUB_PII_KEY environment variable)");
         }
         this.key = new SecretKeySpec(bytes, "AES");
+        this.indexKey = deriveIndexKey(bytes);
+    }
+
+    /**
+     * A keyed hash of a value, for finding a row by an encrypted attribute (an email address) without storing it in the clear.
+     * The same value always gives the same result; without the key the result reveals nothing. The index key is derived from the
+     * encryption key with a fixed label, so the two are different keys and no new setting is needed.
+     */
+    public String blindIndex(String value) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(indexKey);
+            return HexFormat.of().formatHex(mac.doFinal(value.strip().toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Index computation failed", e);
+        }
+    }
+
+    private static SecretKey deriveIndexKey(byte[] piiKey) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(piiKey, "HmacSHA256"));
+            return new SecretKeySpec(mac.doFinal("skyhub-blind-index-v1".getBytes(StandardCharsets.UTF_8)), "HmacSHA256");
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Index key derivation failed", e);
+        }
     }
 
     public String encrypt(String plaintext) {

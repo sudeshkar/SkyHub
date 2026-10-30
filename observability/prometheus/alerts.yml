@@ -163,6 +163,14 @@ groups:
           summary: "A refund failed on every retry for over a day: a traveller is owed money and only a person can fix it"
           runbook: "docs/runbooks/README.md#refundgaveup"
 
+      - alert: AccountLoginGuessing
+        expr: sum(increase(skyhub_account_logins_total{outcome=~"failed|locked"}[10m])) > 30
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "More than 30 failed or locked traveller sign-ins in 10 minutes: someone may be guessing passwords"
+          runbook: "docs/runbooks/README.md#accountloginguessing"
+
       - alert: ServiceDown
         expr: up == 0
         for: 1m

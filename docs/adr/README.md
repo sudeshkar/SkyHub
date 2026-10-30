@@ -36,3 +36,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0030](0030-refund-retries.md) | Refunds that failed are retried, not forgotten | Accepted |
 | [0031](0031-refund-completed-email.md) | Tell travellers when a delayed refund is paid | Accepted |
 | [0032](0032-dead-letter-replay.md) | Putting parked notifications back | Accepted |
+| [0033](0033-traveller-accounts.md) | Traveller accounts: sign up and sign in with an emailed link | Accepted |

@@ -298,6 +298,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/password-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a link to choose a password (sign up, or reset a forgotten one)
+         * @description The same request signs up a new traveller and resets a forgotten password: the link lets the person who
+         *     receives it choose a password, which is how the address is proven to be theirs (ADR-0033). The answer is always
+         *     202 and never says whether an account already exists. A second request within two minutes sends nothing.
+         */
+        post: operations["requestPasswordLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/passwords": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose a password using the emailed link
+         * @description The token comes from the emailed link. It works once and for one hour. A wrong, used or expired token all
+         *     return the same 400. Choosing a password also confirms the email address.
+         */
+        post: operations["setAccountPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Traveller sign-in
+         * @description Exchanges an email address and password for an account token (30 minutes). An unknown address, a wrong
+         *     password, an account with no password yet and a locked account all return the same 401. Five wrong passwords
+         *     lock the account for 15 minutes.
+         */
+        post: operations["openAccountSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in traveller's account */
+        get: operations["getMyAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/sessions": {
         parameters: {
             query?: never;
@@ -583,6 +665,28 @@ export interface components {
         };
         /** @enum {string} */
         StaffRole: "OPS" | "ADMIN";
+        PasswordLinkRequest: {
+            email: string;
+        };
+        SetPasswordRequest: {
+            token: string;
+            password: string;
+        };
+        AccountLoginRequest: {
+            email: string;
+            password: string;
+        };
+        AccountSession: {
+            accessToken: string;
+            /** @example Bearer */
+            tokenType: string;
+            /** Format: date-time */
+            expiresAt: string;
+            email: string;
+        };
+        Account: {
+            email: string;
+        };
         StaffSession: {
             accessToken: string;
             /** @example Bearer */
@@ -1164,6 +1268,108 @@ export interface operations {
                 };
             };
             503: components["responses"]["ScheduleUnavailable"];
+        };
+    };
+    requestPasswordLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description If the address is valid, a link is on its way */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    setAccountPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password set; the account can sign in */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    openAccountSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Wrong email or password, or the account is locked */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMyAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     openStaffSession: {

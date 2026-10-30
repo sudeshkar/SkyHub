@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.skyhub.notification.application.NotificationService;
+import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingCheckInOpenEvent;
@@ -61,6 +62,15 @@ class BookingEventsListenerTest {
         ArgumentCaptor<BookingDisruptedEvent> event = ArgumentCaptor.forClass(BookingDisruptedEvent.class);
         verify(service).bookingDisrupted(event.capture());
         org.assertj.core.api.Assertions.assertThat(event.getValue().flightNumber()).isEqualTo("SK501");
+    }
+
+    @Test
+    void should_hand_a_password_link_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/account-password-link.v1.example.json")));
+
+        ArgumentCaptor<AccountPasswordLinkEvent> event = ArgumentCaptor.forClass(AccountPasswordLinkEvent.class);
+        verify(service).passwordLink(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().purpose()).isEqualTo("SIGN_UP");
     }
 
     @Test

@@ -2,7 +2,10 @@ package com.skyhub.booking.web;
 
 import com.skyhub.booking.application.FlightCatalogUnavailableException;
 import com.skyhub.booking.application.PaymentUnavailableException;
+import com.skyhub.booking.application.AccountLoginFailedException;
+import com.skyhub.booking.application.PasswordLinkInvalidException;
 import com.skyhub.booking.application.StaffLoginFailedException;
+import com.skyhub.booking.domain.InvalidAccountException;
 import com.skyhub.booking.application.rebooking.RebookingRefusedException;
 import com.skyhub.booking.application.StaffUsernameTakenException;
 import com.skyhub.booking.domain.InvalidStaffAccountException;
@@ -145,6 +148,22 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 .header(HttpHeaders.RETRY_AFTER, "5")
                 .body(problem(HttpStatus.SERVICE_UNAVAILABLE, "Schedule unavailable",
                         "We couldn't check the flight schedule. Please try again shortly."));
+    }
+
+    @ExceptionHandler(InvalidAccountException.class)
+    ProblemDetail handleInvalidAccount(InvalidAccountException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid account request", ex.getMessage());
+    }
+
+    @ExceptionHandler(PasswordLinkInvalidException.class)
+    ProblemDetail handlePasswordLinkInvalid(PasswordLinkInvalidException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Link not valid", ex.getMessage());
+    }
+
+    /** One answer for every sign-in failure, so nothing says which addresses have accounts (ADR-0033). */
+    @ExceptionHandler(AccountLoginFailedException.class)
+    ProblemDetail handleAccountLoginFailed(AccountLoginFailedException ex) {
+        return problem(HttpStatus.UNAUTHORIZED, "Sign-in failed", ex.getMessage());
     }
 
     /** One answer for every login failure, so nothing says which usernames exist (ADR-0017). */

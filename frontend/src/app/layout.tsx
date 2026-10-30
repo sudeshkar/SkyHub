@@ -47,6 +47,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/manage" className="hover:text-copper">
                 Manage booking
               </Link>
+              <Link href="/account" className="hover:text-copper">
+                Account
+              </Link>
             </nav>
           </div>
         </header>

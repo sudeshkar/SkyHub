@@ -8,12 +8,13 @@ import java.util.UUID;
  */
 public sealed interface NotificationEvent permits BookingConfirmedEvent, BookingCancelledEvent, BookingDisruptedEvent,
         BookingRebookedEvent, BookingDisruptionWithdrawnEvent, BookingCheckInOpenEvent,
-        BookingRefundCompletedEvent {
+        BookingRefundCompletedEvent, AccountPasswordLinkEvent {
 
     UUID eventId();
 
     String type();
 
+    /** The booking reference, or null for an event that belongs to no booking (an account link). */
     String locator();
 
     String contactEmail();

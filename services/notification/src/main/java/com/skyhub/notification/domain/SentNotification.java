@@ -27,7 +27,8 @@ public class SentNotification {
     @Column(nullable = false, length = 60)
     private String type;
 
-    @Column(nullable = false, length = 40)
+    /** Null for an event that belongs to no booking (an account link). */
+    @Column(length = 40)
     private String locator;
 
     @Column(nullable = false, length = 254)

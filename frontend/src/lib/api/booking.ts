@@ -274,6 +274,76 @@ export async function openStaffSession(username: string, password: string): Prom
   return { kind: "unavailable" };
 }
 
+export type PasswordLinkOutcome = { kind: "sent" } | { kind: "rejected"; detail: string } | { kind: "unavailable" };
+
+/** Asks for an emailed link to choose a password: signs up a new traveller or resets a forgotten password (ADR-0033). */
+export async function requestPasswordLink(email: string): Promise<PasswordLinkOutcome> {
+  const response = await call("/api/v1/accounts/password-links", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 202) return { kind: "sent" };
+  if (response.status === 400) return { kind: "rejected", detail: await problemDetail(response, "Enter a valid email address.") };
+  return { kind: "unavailable" };
+}
+
+export type SetPasswordOutcome =
+  | { kind: "set" }
+  | { kind: "invalid-link" } // wrong, used or expired: the service does not say which
+  | { kind: "rejected"; detail: string } // the password was not acceptable
+  | { kind: "unavailable" };
+
+export async function setAccountPassword(token: string, password: string): Promise<SetPasswordOutcome> {
+  const response = await call("/api/v1/accounts/passwords", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 204) return { kind: "set" };
+  if (response.status === 400) {
+    const problem = (await response.json().catch(() => null)) as Problem | null;
+    if (problem?.title === "Link not valid") return { kind: "invalid-link" };
+    return { kind: "rejected", detail: problem?.detail ?? "That password was not accepted." };
+  }
+  return { kind: "unavailable" };
+}
+
+export type AccountSignInOutcome =
+  | { kind: "opened"; accessToken: string; expiresAt: string; email: string }
+  | { kind: "denied" } // wrong address or password, no password yet, or locked: the service does not say which
+  | { kind: "unavailable" };
+
+export async function openAccountSession(email: string, password: string): Promise<AccountSignInOutcome> {
+  const response = await call("/api/v1/accounts/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 201) {
+    const session = (await response.json()) as components["schemas"]["AccountSession"];
+    return { kind: "opened", accessToken: session.accessToken, expiresAt: session.expiresAt, email: session.email };
+  }
+  if (response.status === 401 || response.status === 400) return { kind: "denied" };
+  return { kind: "unavailable" };
+}
+
+export type MyAccountOutcome = { kind: "account"; email: string } | { kind: "unauthorized" } | { kind: "unavailable" };
+
+export async function getMyAccount(token: string): Promise<MyAccountOutcome> {
+  const response = await call("/api/v1/accounts/me", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) return { kind: "account", email: ((await response.json()) as components["schemas"]["Account"]).email };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
 export type RebookOutcome =
   | { kind: "moved" | "unchanged"; seats: string[] } // unchanged: it was already on that flight
   | { kind: "refused"; detail: string } // a rule forbids the move, or the seats are not there: the reason is for staff
