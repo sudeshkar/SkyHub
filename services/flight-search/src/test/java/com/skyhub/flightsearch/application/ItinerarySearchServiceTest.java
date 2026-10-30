@@ -117,6 +117,38 @@ class ItinerarySearchServiceTest {
     }
 
     @Test
+    void should_drop_a_connection_the_delay_of_the_first_flight_makes_impossible() {
+        givenSchedule("SK501", "CMB", "DXB", "02:00", 290);   // arrives 06:50, onward leaves 08:30
+        givenSchedule("SK001", "DXB", "LHR", "08:30", 470);
+        statuses = (flight, day) -> flight.equals("SK501")
+                ? FlightStatus.delayedTo(OffsetDateTime.parse("2026-11-02T03:30:00Z")) : FlightStatus.SCHEDULED;   // arrives 08:20: 10 min
+
+        assertThat(search("CMB", "LHR")).isEmpty();
+    }
+
+    @Test
+    void should_keep_a_connection_a_small_delay_leaves_possible_and_show_the_real_layover() {
+        givenSchedule("SK501", "CMB", "DXB", "02:00", 290);
+        givenSchedule("SK001", "DXB", "LHR", "08:30", 470);
+        statuses = (flight, day) -> flight.equals("SK501")
+                ? FlightStatus.delayedTo(OffsetDateTime.parse("2026-11-02T02:20:00Z")) : FlightStatus.SCHEDULED;   // arrives 07:10
+
+        assertThat(search("CMB", "LHR")).singleElement()
+                .satisfies(it -> assertThat(it.connections().getFirst().layover()).isEqualTo(Duration.ofMinutes(80)));
+    }
+
+    @Test
+    void should_offer_a_connection_that_a_delay_of_the_onward_flight_makes_possible() {
+        givenSchedule("SK501", "CMB", "DXB", "02:00", 290);   // arrives 06:50
+        givenSchedule("SK001", "DXB", "LHR", "07:30", 470);   // only 40 min: too short on schedule
+        statuses = (flight, day) -> flight.equals("SK001") && day.equals(MONDAY)
+                ? FlightStatus.delayedTo(OffsetDateTime.parse("2026-11-02T08:30:00Z")) : FlightStatus.SCHEDULED;
+
+        assertThat(search("CMB", "LHR")).singleElement()
+                .satisfies(it -> assertThat(it.connections().getFirst().layover()).isEqualTo(Duration.ofMinutes(100)));
+    }
+
+    @Test
     void should_reject_connection_shorter_than_mct() {
         givenSchedule("SK501", "CMB", "DXB", "02:00", 290);   // arrives 06:50
         givenSchedule("SK001", "DXB", "LHR", "07:50", 470);   // 60 min later, MCT 75

@@ -30,3 +30,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0024](0024-approval-screen-on-the-operations-page.md) | Approving the agent's proposals on the operations page | Accepted |
 | [0025](0025-cancelled-flights-are-not-sold-and-search-follows-disruptions.md) | Cancelled flights are not sold, and search follows disruptions | Accepted |
 | [0026](0026-withdrawing-a-disruption.md) | Withdrawing a disruption | Accepted |
+| [0027](0027-connections-follow-delays.md) | Connections follow delays | Accepted |
