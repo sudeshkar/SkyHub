@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.Disruption;
+import com.skyhub.booking.domain.DisruptionNotFoundException;
 import com.skyhub.booking.domain.DisruptionType;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.Pnr;
@@ -39,6 +40,7 @@ class DisruptionServiceTest {
     private final PnrRepository pnrs = mock(PnrRepository.class);
     private final BookingEvents events = mock(BookingEvents.class);
     private final FlightEvents flightEvents = mock(FlightEvents.class);
+    private final com.skyhub.booking.persistence.RebookingRepository rebookings = mock(com.skyhub.booking.persistence.RebookingRepository.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private DisruptionService service;
 
@@ -48,7 +50,7 @@ class DisruptionServiceTest {
         when(disruptions.findByFlightNumberAndDepartureDate(any(), any())).thenReturn(Optional.empty());
         when(pnrs.findActiveOnFlight("SK501", DATE)).thenReturn(bookings(42));
         service = new DisruptionService(disruptions, pnrs, Clock.fixed(NOW, ZoneOffset.UTC), new DisruptionMetrics(registry),
-                events, flightEvents, org.springframework.transaction.support.TransactionOperations.withoutTransaction());
+                events, flightEvents, rebookings, org.springframework.transaction.support.TransactionOperations.withoutTransaction());
     }
 
     private static List<Pnr> bookings(int count) {
@@ -138,6 +140,45 @@ class DisruptionServiceTest {
         service.record(new RecordDisruptionCommand("SK501", DATE, DisruptionType.CANCELLED, null, "Aircraft grounded", "priya.ops"));
 
         verify(flightEvents).flightDisrupted(earlier);
+    }
+
+    @Test
+    void should_withdraw_a_disruption_tell_search_and_report_how_many_bookings_are_on_the_flight() {
+        Disruption recorded = Disruption.cancelled("SK501", DATE, "Mistake", NOW.minusSeconds(60));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE)).thenReturn(Optional.of(recorded));
+        when(rebookings.existsByFromFlightAndFromDate("SK501", DATE)).thenReturn(false);
+
+        int onTheFlight = service.withdraw("SK501", DATE, "priya.ops");
+
+        assertThat(onTheFlight).isEqualTo(42);
+        var order = org.mockito.Mockito.inOrder(disruptions, flightEvents);
+        order.verify(disruptions).delete(recorded);
+        order.verify(flightEvents).flightCleared("SK501", DATE);
+        assertThat(registry.get("skyhub.disruptions.withdrawn").counter().count()).isEqualTo(1);
+    }
+
+    @Test
+    void should_say_so_when_there_is_nothing_to_withdraw_and_publish_nothing() {
+        assertThatExceptionOfType(DisruptionNotFoundException.class)
+                .isThrownBy(() -> service.withdraw("SK501", DATE, "priya.ops"))
+                .withMessageContaining("SK501");
+
+        verify(flightEvents, never()).flightCleared(any(), any());
+        verify(disruptions, never()).delete(any());
+    }
+
+    @Test
+    void should_refuse_to_withdraw_once_bookings_were_moved_off_the_flight_because_their_refund_right_rests_on_it() {
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE))
+                .thenReturn(Optional.of(Disruption.cancelled("SK501", DATE, "Aircraft grounded", NOW)));
+        when(rebookings.existsByFromFlightAndFromDate("SK501", DATE)).thenReturn(true);
+
+        assertThatExceptionOfType(WithdrawalRefusedException.class)
+                .isThrownBy(() -> service.withdraw("SK501", DATE, "priya.ops"))
+                .withMessageContaining("moved");
+
+        verify(disruptions, never()).delete(any());
+        verify(flightEvents, never()).flightCleared(any(), any());
     }
 
     @Test

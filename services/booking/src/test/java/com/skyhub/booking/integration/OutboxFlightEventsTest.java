@@ -59,6 +59,21 @@ class OutboxFlightEventsTest {
     }
 
     @Test
+    void should_publish_that_a_flight_is_back_to_normal_on_the_same_compacted_key() throws Exception {
+        new OutboxFlightEvents(outbox, cipher, json, Clock.fixed(NOW, ZoneOffset.UTC), () -> ID)
+                .flightCleared("SK501", LocalDate.of(2026, 11, 2));
+        ArgumentCaptor<OutboxEvent> saved = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outbox).save(saved.capture());
+
+        var payload = json.readTree(cipher.decrypt(saved.getValue().getPayload()));
+
+        assertThat(saved.getValue().getAggregateId()).isEqualTo("SK501@2026-11-02");   // the key the disruption used: it replaces it
+        assertThat(saved.getValue().getTopic()).isEqualTo("skyhub.flight.disruptions");
+        assertThat(payload.get("disruption").asString()).isEqualTo("CLEARED");
+        assertThat(payload.has("revisedDeparture")).isFalse();
+    }
+
+    @Test
     void should_leave_the_revised_time_out_for_a_cancelled_flight() throws Exception {
         OutboxEvent event = recorded(Disruption.cancelled("SK501", LocalDate.of(2026, 11, 2), "Aircraft grounded", NOW));
 

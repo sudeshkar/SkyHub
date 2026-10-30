@@ -1,0 +1,9 @@
+{
+  "eventId": "9c1d7e52-3a40-4b86-a1f5-6d2e8b0c4f33",
+  "type": "flight.disrupted",
+  "version": 1,
+  "occurredAt": "2026-10-30T11:00:00Z",
+  "flightNumber": "SK501",
+  "departureDate": "2026-11-02",
+  "disruption": "CLEARED"
+}

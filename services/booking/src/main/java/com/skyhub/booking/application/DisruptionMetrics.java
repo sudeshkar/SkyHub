@@ -14,13 +14,22 @@ public class DisruptionMetrics {
 
     private final Map<DisruptionType, Counter> counters = new EnumMap<>(DisruptionType.class);
 
+    private final Counter withdrawn;
+
     public DisruptionMetrics(MeterRegistry registry) {
+        withdrawn = Counter.builder("skyhub.disruptions.withdrawn")
+                .description("Flight disruptions taken back by operations")
+                .register(registry);
         for (DisruptionType type : DisruptionType.values()) {
             counters.put(type, Counter.builder("skyhub.disruptions")
                     .description("Flight disruptions recorded, by type")
                     .tag("type", type.name().toLowerCase(Locale.ROOT))
                     .register(registry));
         }
+    }
+
+    public void withdrawn() {
+        withdrawn.increment();
     }
 
     public void record(DisruptionType type) {

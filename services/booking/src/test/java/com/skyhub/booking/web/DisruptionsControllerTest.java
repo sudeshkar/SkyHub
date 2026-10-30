@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -16,6 +17,8 @@ import com.skyhub.booking.application.AffectedBooking;
 import com.skyhub.booking.application.BookingDisruption;
 import com.skyhub.booking.application.DisruptionService;
 import com.skyhub.booking.application.ManageTokenIssuer;
+import com.skyhub.booking.application.WithdrawalRefusedException;
+import com.skyhub.booking.domain.DisruptionNotFoundException;
 import com.skyhub.booking.application.StaffTokenIssuer;
 import com.skyhub.booking.domain.StaffRole;
 import com.skyhub.booking.domain.DisruptionType;
@@ -105,6 +108,37 @@ class DisruptionsControllerTest {
         mvc.perform(record("""
                         {"flightNumber": "SK501", "departureDate": "2026-11-02", "type": "EXPLODED"}""", ops))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void should_withdraw_a_disruption_as_the_logged_in_staff_member() throws Exception {
+        when(disruptionService.withdraw("SK501", LocalDate.of(2026, 11, 2), "priya.ops")).thenReturn(12);
+
+        mvc.perform(delete("/api/v1/ops/disruptions/SK501/2026-11-02").header("Authorization", ops))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.affectedBookings").value(12));
+    }
+
+    @Test
+    void should_answer_404_when_there_is_nothing_to_withdraw_and_409_when_bookings_were_moved() throws Exception {
+        when(disruptionService.withdraw("SK501", LocalDate.of(2026, 11, 2), "priya.ops"))
+                .thenThrow(new DisruptionNotFoundException("No disruption is recorded for SK501 on 2026-11-02"));
+        when(disruptionService.withdraw("SK502", LocalDate.of(2026, 11, 2), "priya.ops"))
+                .thenThrow(new WithdrawalRefusedException("3 bookings were moved off SK502, so its disruption cannot be withdrawn"));
+
+        mvc.perform(delete("/api/v1/ops/disruptions/SK501/2026-11-02").header("Authorization", ops)).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/ops/disruptions/SK502/2026-11-02").header("Authorization", ops))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("moved")));
+    }
+
+    @Test
+    void should_keep_withdrawal_from_travellers_and_anonymous_callers() throws Exception {
+        mvc.perform(delete("/api/v1/ops/disruptions/SK501/2026-11-02")).andExpect(status().isUnauthorized());
+        mvc.perform(delete("/api/v1/ops/disruptions/SK501/2026-11-02").header("Authorization", "Bearer " + manageTokens.issue("ABC234").value()))
+                .andExpect(status().isForbidden());
+        verify(disruptionService, never()).withdraw(any(), any(), any());
     }
 
     @Test

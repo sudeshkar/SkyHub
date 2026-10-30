@@ -1,6 +1,7 @@
 package com.skyhub.booking.application;
 
 import com.skyhub.booking.domain.Disruption;
+import com.skyhub.booking.domain.DisruptionNotFoundException;
 import com.skyhub.booking.domain.DisruptionType;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.Pnr;
@@ -8,6 +9,7 @@ import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.persistence.DisruptionRepository;
 import com.skyhub.booking.persistence.PnrRepository;
+import com.skyhub.booking.persistence.RebookingRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -34,12 +36,15 @@ public class DisruptionService {
     private final DisruptionMetrics metrics;
     private final BookingEvents events;
     private final FlightEvents flightEvents;
+    private final RebookingRepository rebookings;
     private final TransactionOperations transactions;
 
     public DisruptionService(DisruptionRepository disruptions, PnrRepository pnrs, Clock clock, DisruptionMetrics metrics,
-                             BookingEvents events, FlightEvents flightEvents, TransactionOperations transactions) {
+                             BookingEvents events, FlightEvents flightEvents, RebookingRepository rebookings,
+                             TransactionOperations transactions) {
         this.events = events;
         this.flightEvents = flightEvents;
+        this.rebookings = rebookings;
         this.transactions = transactions;
         this.disruptions = disruptions;
         this.pnrs = pnrs;
@@ -67,6 +72,36 @@ public class DisruptionService {
                 .addKeyValue("disruption.affected_bookings", affected)
                 .log("Disruption recorded");
         return affected;
+    }
+
+    /**
+     * Takes a disruption back (ADR-0026): the flight is for sale again and search shows it as scheduled. Refused once any
+     * booking was moved off the flight, because those travellers' refund right is decided by this record
+     * ({@code CancellationRefunds.wasMovedOffACancelledFlight}). Travellers are not emailed: they were told something
+     * was wrong, and the ops page tells staff that.
+     *
+     * @return how many active bookings are on the flight
+     */
+    public int withdraw(String flightNumber, LocalDate departureDate, String withdrawnBy) {
+        int onTheFlight = transactions.execute(status -> {
+            Disruption disruption = disruptions.findByFlightNumberAndDepartureDate(flightNumber, departureDate)
+                    .orElseThrow(() -> new DisruptionNotFoundException(
+                            "No disruption is recorded for " + flightNumber + " on " + departureDate));
+            if (rebookings.existsByFromFlightAndFromDate(flightNumber, departureDate)) {
+                throw new WithdrawalRefusedException("Bookings were moved off " + flightNumber + " on " + departureDate
+                        + ", so its disruption has to stay on record");
+            }
+            disruptions.delete(disruption);
+            flightEvents.flightCleared(flightNumber, departureDate);
+            return pnrs.findActiveOnFlight(flightNumber, departureDate).size();
+        });
+        metrics.withdrawn();
+        log.atInfo()
+                .addKeyValue("flight", flightNumber)
+                .addKeyValue("disruption.withdrawn_by", withdrawnBy)
+                .addKeyValue("disruption.affected_bookings", onTheFlight)
+                .log("Disruption withdrawn");
+        return onTheFlight;
     }
 
     /**

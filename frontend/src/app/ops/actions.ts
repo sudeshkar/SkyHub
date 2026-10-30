@@ -7,6 +7,7 @@ import {
   rebookFlight,
   recordDisruption as recordDisruptionCall,
   type RecordDisruptionRequest,
+  withdrawDisruption as withdrawDisruptionCall,
 } from "@/lib/api/booking";
 import { POLICIES, rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
@@ -111,6 +112,47 @@ export async function recordDisruption(_previous: RecordState, form: FormData): 
       await clearStaffSession(); // expired, or this role may not do it: back to the login
       return { status: "signed-out" };
     case "rejected":
+      return fail(outcome.detail);
+    default:
+      return fail("The booking service is not responding right now. Please try again.");
+  }
+}
+
+export type WithdrawState =
+  | { status: "idle" }
+  | { status: "withdrawn"; flightNumber: string; departureDate: string; affectedBookings: number }
+  | { status: "error"; message: string; values: { flightNumber: string; departureDate: string } }
+  | { status: "signed-out" };
+
+/**
+ * Takes a disruption back (ADR-0026). Needs an explicit confirmation, because travellers who were emailed are not
+ * emailed again. Whether this person may do it, and whether it is allowed at all, is decided by the booking service.
+ */
+export async function withdrawDisruption(_previous: WithdrawState, form: FormData): Promise<WithdrawState> {
+  const values = {
+    flightNumber: String(form.get("flightNumber") ?? "").trim().toUpperCase(),
+    departureDate: String(form.get("departureDate") ?? "").trim(),
+  };
+  const fail = (message: string): WithdrawState => ({ status: "error", message, values });
+
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return fail(`Too many requests. Please wait ${decision.retryAfterSeconds} seconds.`);
+
+  const session = await readStaffSession();
+  if (!session) return { status: "signed-out" };
+
+  if (!FLIGHT.test(values.flightNumber)) return fail("Enter a flight number such as SK501.");
+  if (!DATE.test(values.departureDate)) return fail("Enter the scheduled departure date.");
+  if (!form.get("confirm")) return fail("Please confirm that you want to withdraw this disruption.");
+
+  const outcome = await withdrawDisruptionCall(session.token, values.flightNumber, values.departureDate);
+  switch (outcome.kind) {
+    case "withdrawn":
+      return { status: "withdrawn", ...values, affectedBookings: outcome.affectedBookings };
+    case "unauthorized":
+      await clearStaffSession();
+      return { status: "signed-out" };
+    case "refused":
       return fail(outcome.detail);
     default:
       return fail("The booking service is not responding right now. Please try again.");

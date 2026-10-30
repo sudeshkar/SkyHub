@@ -29,3 +29,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0023](0023-staff-rebooking-after-a-disruption.md) | Staff move bookings off a disrupted flight, and the service checks the rules again | Accepted |
 | [0024](0024-approval-screen-on-the-operations-page.md) | Approving the agent's proposals on the operations page | Accepted |
 | [0025](0025-cancelled-flights-are-not-sold-and-search-follows-disruptions.md) | Cancelled flights are not sold, and search follows disruptions | Accepted |
+| [0026](0026-withdrawing-a-disruption.md) | Withdrawing a disruption | Accepted |

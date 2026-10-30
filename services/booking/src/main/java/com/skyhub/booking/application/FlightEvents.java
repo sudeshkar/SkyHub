@@ -10,4 +10,7 @@ public interface FlightEvents {
 
     /** A flight was delayed or cancelled, or its record changed. Not called when a repeated request changes nothing. */
     void flightDisrupted(Disruption disruption);
+
+    /** A disruption was withdrawn: the flight is back to its schedule. Replaces the disruption on the compacted topic. */
+    void flightCleared(String flightNumber, java.time.LocalDate departureDate);
 }

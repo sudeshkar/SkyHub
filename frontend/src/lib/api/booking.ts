@@ -328,6 +328,30 @@ export async function recordDisruption(token: string, request: RecordDisruptionR
   return { kind: "unavailable" };
 }
 
+export type WithdrawOutcome =
+  | { kind: "withdrawn"; affectedBookings: number }
+  | { kind: "unauthorized" }
+  | { kind: "refused"; detail: string } // nothing to withdraw (404), or bookings were moved off the flight (409)
+  | { kind: "unavailable" };
+
+/** Takes a disruption back (ADR-0026); the staff token says who did it. */
+export async function withdrawDisruption(token: string, flightNumber: string, departureDate: string): Promise<WithdrawOutcome> {
+  const response = await call(
+    `/api/v1/ops/disruptions/${encodeURIComponent(flightNumber)}/${encodeURIComponent(departureDate)}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) {
+    const withdrawn = (await response.json()) as components["schemas"]["DisruptionRecorded"];
+    return { kind: "withdrawn", affectedBookings: withdrawn.affectedBookings };
+  }
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  if (response.status === 400 || response.status === 404 || response.status === 409) {
+    return { kind: "refused", detail: await problemDetail(response, "That disruption could not be withdrawn.") };
+  }
+  return { kind: "unavailable" };
+}
+
 /** A failure here must not break the page, so it quietly means "nothing to show". */
 export async function getDisruptions(locator: string, token: string): Promise<Disruption[]> {
   const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/disruptions`, {

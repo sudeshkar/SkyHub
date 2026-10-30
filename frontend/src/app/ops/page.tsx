@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { readStaffSession } from "@/lib/staff-session";
 import { DisruptionForm } from "./disruption-form";
+import { WithdrawForm } from "./withdraw-form";
 import { LoginForm } from "./login-form";
 import { ProposalsPanel } from "./proposals-panel";
 import { logOut } from "./actions";
@@ -48,6 +49,7 @@ async function OpsContent() {
       </div>
       <DisruptionForm />
       <ProposalsPanel />
+      <WithdrawForm />
     </>
   );
 }
