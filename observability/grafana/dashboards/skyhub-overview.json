@@ -604,7 +604,49 @@
         {
           "refId": "A",
           "expr": "sum by (outcome) (rate(skyhub_payments_total[5m])) * 60",
-          "legendFormat": "{{action}}",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Disruptions recorded per hour by type",
+      "description": "Delays and cancellations recorded by operations. A burst means a weather or airport event: expect more manage-page traffic and seat changes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (type) (increase(skyhub_disruptions_total[1h]))",
+          "legendFormat": "{{type}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -634,7 +676,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "targets": [
         {
