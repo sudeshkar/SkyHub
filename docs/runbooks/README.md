@@ -67,6 +67,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** the booking log line `Refund failed after a failed booking; the traveller has been charged` carries `payment.charge`, the provider's charge reference. In Loki: `{service="booking"} |= "Refund failed"`. Overview → *Payments per minute by outcome* (`refund_failed`).
 **Mitigate:** refund that charge by hand in the payment provider's dashboard using the `payment.charge` reference, then check the provider is reachable (see PaymentProviderUnavailable). There is no booking to cancel: no `payment` row exists for it. Automated reconciliation of charges without a booking is the planned follow-up (ADR-0015).
 
+## CancellationRefundFailed
+
+**Means:** a traveller cancelled a paid booking that qualifies for a refund (ADR-0016), the booking was cancelled, but the payment provider did not confirm the refund. The traveller is owed money and sees the refund as *pending*. Unlike RefundFailed, nothing is wrongly booked: the seats are free and the booking is cancelled.
+**Confirm:** Loki `{service="booking"} |= "Refund after cancellation failed"` (carries `pnr.locator` and `payment.charge`). Overview → *Payments per minute by outcome* (`cancel_refund_failed`). Payments still owed: `SELECT locator, charge_id, amount, currency FROM payment WHERE status = 'REFUND_DUE';` in the booking database.
+**Mitigate:** check the provider is reachable (see PaymentProviderUnavailable). Cancelling the booking again retries the refund (it is safe to repeat), so ask the traveller to press *Cancel* again from the manage page, or refund the `charge_id` by hand in the provider's dashboard and then set the row to `REFUNDED`. There is no automatic retry yet (ADR-0016 follow-up).
+
 ## PaymentProviderUnavailable
 
 **Means:** more than half of payment attempts in the last 10 minutes could not reach the payment provider. Nobody is charged and nobody is booked while this lasts: travellers see "payment provider unavailable" and can retry.

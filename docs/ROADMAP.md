@@ -25,6 +25,7 @@ How a slice goes, every time:
 | 8 | Online check-in with signed boarding passes | ADR-0013 |
 | 9 | Flight delays and cancellations | ADR-0014 |
 | 10 | Payments with a mock provider (charge, book, refund on failure) | ADR-0015 |
+| 11 | Refund on cancellation by simple fare rules | ADR-0016 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -32,7 +33,6 @@ Ordered by how much they add to the story, not a commitment.
 
 | Slice | What it adds | Notes |
 |---|---|---|
-| **Refund on cancellation** | Cancelling a booking gives money back by simple fare rules | Finishes the money story. The `refund` port already exists. Needs a fare-rules decision (ADR). |
 | **Disruption agent (Python, Groq)** | An agent that reads a disruption, finds the affected bookings and proposes re-accommodation; MCP server exposing booking tools; an eval suite | The "Python/AI" part of the plan. Uses Groq's free API key (no Claude key). Builds on slice 9. |
 | **Notifications with an outbox** | Email/SMS on booking, disruption, check-in opening; transactional outbox + Kafka | Replaces "travellers are not notified". Introduces a broker. |
 | **Staff login and roles** | Real operations login instead of the shared `SKYHUB_OPS_KEY`; audit of who recorded a disruption | Spring Security + JWT; roles. |

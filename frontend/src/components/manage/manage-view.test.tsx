@@ -88,6 +88,55 @@ describe("ManageView", () => {
     });
   });
 
+  describe("the money after cancelling (ADR-0016)", () => {
+    const CANCELLED: Pnr = { ...PNR, status: "CANCELLED" };
+
+    it("tells the traveller the refund rule before they cancel", () => {
+      render(<ManageView pnr={PNR} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Cancel booking" }));
+
+      expect(screen.getByRole("alertdialog")).toHaveTextContent(
+        "full refund if you cancel 24 hours or more before the first flight, or if the airline cancelled a flight",
+      );
+    });
+
+    it("says the money went back", () => {
+      render(<ManageView pnr={{ ...CANCELLED, refund: { status: "REFUNDED", amount: 200, currency: "USD" } }} />);
+
+      expect(screen.getByRole("region", { name: "Refund" })).toHaveTextContent("$200.00 has been refunded");
+      expect(screen.queryByRole("button", { name: "Try the refund again" })).not.toBeInTheDocument();
+    });
+
+    it("explains that a late cancellation gets nothing back", () => {
+      render(<ManageView pnr={{ ...CANCELLED, refund: { status: "NOT_REFUNDABLE", amount: 200, currency: "USD" } }} />);
+
+      expect(screen.getByRole("region", { name: "Refund" })).toHaveTextContent(
+        "This booking was cancelled less than 24 hours before departure, so the $200.00 you paid is not refundable.",
+      );
+    });
+
+    it("shows a refund the provider has not confirmed and lets the traveller try again", async () => {
+      vi.mocked(cancelBooking).mockResolvedValue({ kind: "ok", pnr: CANCELLED });
+      render(<ManageView pnr={{ ...CANCELLED, refund: { status: "PENDING", amount: 200, currency: "USD" } }} />);
+
+      expect(screen.getByRole("region", { name: "Refund" })).toHaveTextContent("Your $200.00 refund is on its way");
+
+      fireEvent.click(screen.getByRole("button", { name: "Try the refund again" }));
+
+      await waitFor(() => expect(cancelBooking).toHaveBeenCalledTimes(1));
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it("shows no refund panel when the booking was never paid or is still active", () => {
+      const { rerender } = render(<ManageView pnr={CANCELLED} />);
+      expect(screen.queryByRole("region", { name: "Refund" })).not.toBeInTheDocument();
+
+      rerender(<ManageView pnr={PNR} />);
+      expect(screen.queryByRole("region", { name: "Refund" })).not.toBeInTheDocument();
+    });
+  });
+
   describe("checking in", () => {
     const PASS = {
       passengerName: "PERERA/PRIYA",
