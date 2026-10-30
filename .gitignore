@@ -26,3 +26,7 @@ logs/
 
 # Generated knowledge graph (rebuild with: graphify update .)
 graphify-out/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/

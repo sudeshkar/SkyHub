@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test",
     "typecheck": "next typegen && tsc --noEmit",
     "api:types": "openapi-typescript ../api-specs/flight-search-api.yaml -o src/lib/api/flight-search.d.ts && openapi-typescript ../api-specs/booking-api.yaml -o src/lib/api/booking-contract.d.ts"
   },
@@ -19,6 +20,7 @@
     "redis": "^6.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
