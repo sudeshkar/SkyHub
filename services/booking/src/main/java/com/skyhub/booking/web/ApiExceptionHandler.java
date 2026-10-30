@@ -12,6 +12,8 @@ import com.skyhub.booking.domain.CheckInClosedException;
 import com.skyhub.booking.domain.NotCheckedInException;
 import com.skyhub.booking.domain.PaymentDeclinedException;
 import com.skyhub.booking.domain.PriceChangedException;
+import com.skyhub.booking.application.WithdrawalRefusedException;
+import com.skyhub.booking.domain.DisruptionNotFoundException;
 import com.skyhub.booking.domain.FlightCancelledException;
 import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
@@ -118,6 +120,16 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(NotCheckedInException.class)
     ProblemDetail handleNotCheckedIn(NotCheckedInException ex) {
         return problem(HttpStatus.NOT_FOUND, "Not checked in", ex.getMessage());
+    }
+
+    @ExceptionHandler(DisruptionNotFoundException.class)
+    ProblemDetail handleDisruptionNotFound(DisruptionNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Disruption not found", ex.getMessage());
+    }
+
+    @ExceptionHandler(WithdrawalRefusedException.class)
+    ProblemDetail handleWithdrawalRefused(WithdrawalRefusedException ex) {
+        return problem(HttpStatus.CONFLICT, "Disruption cannot be withdrawn", ex.getMessage());
     }
 
     @ExceptionHandler(FlightNotFoundException.class)

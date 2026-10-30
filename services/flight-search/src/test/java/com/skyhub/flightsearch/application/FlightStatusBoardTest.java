@@ -64,6 +64,29 @@ class FlightStatusBoardTest {
         assertThat(board.statusOf("SK501", DAY).isCancelled()).isTrue();
     }
 
+    private static FlightDisruption cleared(String flight, LocalDate day, Instant at) {
+        return new FlightDisruption(UUID.randomUUID(), "flight.disrupted", 1, at, flight, day, "CLEARED", null, null);
+    }
+
+    @Test
+    void should_show_a_flight_as_scheduled_again_once_its_disruption_is_withdrawn() {
+        board.apply(cancelled("SK501", DAY, NOW));
+
+        board.apply(cleared("SK501", DAY, NOW.plusSeconds(60)));
+
+        assertThat(board.statusOf("SK501", DAY)).isEqualTo(FlightStatus.SCHEDULED);
+    }
+
+    @Test
+    void should_not_let_a_late_older_disruption_bring_back_a_withdrawn_one() {
+        board.apply(cleared("SK501", DAY, NOW.plusSeconds(60)));
+
+        FlightStatusBoard.Outcome outcome = board.apply(cancelled("SK501", DAY, NOW));
+
+        assertThat(outcome).isEqualTo(FlightStatusBoard.Outcome.STALE);
+        assertThat(board.statusOf("SK501", DAY)).isEqualTo(FlightStatus.SCHEDULED);
+    }
+
     @Test
     void should_ignore_an_older_report_that_arrives_late_such_as_a_replay() {
         board.apply(cancelled("SK501", DAY, NOW.plusSeconds(60)));

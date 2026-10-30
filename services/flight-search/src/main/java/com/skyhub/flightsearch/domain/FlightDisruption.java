@@ -14,7 +14,14 @@ public record FlightDisruption(UUID eventId, String type, int version, Instant o
 
     public static final String TYPE = "flight.disrupted";
 
+    /** A withdrawn disruption replaces the earlier one on the compacted topic, so it must travel as an event (ADR-0026). */
+    public static final String CLEARED = "CLEARED";
+
     public FlightStatus status() {
-        return "CANCELLED".equals(disruption) ? FlightStatus.cancelled() : FlightStatus.delayedTo(revisedDeparture);
+        return switch (disruption) {
+            case "CANCELLED" -> FlightStatus.cancelled();
+            case CLEARED -> FlightStatus.SCHEDULED;
+            default -> FlightStatus.delayedTo(revisedDeparture);
+        };
     }
 }

@@ -33,6 +33,13 @@ public class DisruptionsController implements DisruptionsApi {
     }
 
     @Override
+    public ResponseEntity<DisruptionRecordedDto> withdrawDisruption(String flightNumber, LocalDate departureDate) {
+        String staff = SecurityContextHolder.getContext().getAuthentication().getName();
+        int affected = disruptions.withdraw(flightNumber, departureDate, staff);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new DisruptionRecordedDto(affected));
+    }
+
+    @Override
     public ResponseEntity<AffectedBookingsDto> getAffectedBookings(String flightNumber, LocalDate departureDate) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(BookingDtoMapper.toAffectedDto(flightNumber, departureDate, disruptions.affectedBookings(flightNumber, departureDate)));

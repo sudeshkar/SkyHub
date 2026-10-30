@@ -229,6 +229,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/disruptions/{flightNumber}/{departureDate}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take back a disruption that was recorded by mistake or has been resolved
+         * @description Staff only. The flight is for sale again and search shows it as scheduled. Travellers who were already
+         *     emailed about the disruption are not emailed again (ADR-0026). Refused with 409 once any booking has been
+         *     moved off the flight, because the refund those travellers were promised rests on the disruption record.
+         *     Returns how many active bookings are on the flight. A second request finds nothing and answers 404.
+         */
+        delete: operations["withdrawDisruption"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/flights/{flightNumber}/departures/{departureDate}/bookings": {
         parameters: {
             query?: never;
@@ -1029,6 +1052,51 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    withdrawDisruption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flightNumber: components["schemas"]["FlightNumber"];
+                /** @description Scheduled UTC departure date of the flight */
+                departureDate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisruptionRecorded"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description No disruption is recorded for that flight and date */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Bookings were moved off the flight, so the disruption has to stay on record */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getAffectedBookings: {

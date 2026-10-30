@@ -384,6 +384,57 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/v1/ops/disruptions/{flightNumber}/{departureDate}:
+    delete:
+      tags: [Disruptions]
+      operationId: withdrawDisruption
+      summary: Take back a disruption that was recorded by mistake or has been resolved
+      description: |
+        Staff only. The flight is for sale again and search shows it as scheduled. Travellers who were already
+        emailed about the disruption are not emailed again (ADR-0026). Refused with 409 once any booking has been
+        moved off the flight, because the refund those travellers were promised rests on the disruption record.
+        Returns how many active bookings are on the flight. A second request finds nothing and answers 404.
+      security:
+        - staffToken: []
+      parameters:
+        - name: flightNumber
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/FlightNumber'
+        - name: departureDate
+          in: path
+          required: true
+          description: Scheduled UTC departure date of the flight
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisruptionRecorded'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No disruption is recorded for that flight and date
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Bookings were moved off the flight, so the disruption has to stay on record
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /api/v1/ops/flights/{flightNumber}/departures/{departureDate}/bookings:
     get:
       tags: [Disruptions]

@@ -30,6 +30,16 @@ class FlightDisruptionParserTest {
     }
 
     @Test
+    void should_read_that_a_disruption_was_withdrawn_which_has_no_reason_and_no_new_time() throws Exception {
+        String message = java.nio.file.Files.readString(java.nio.file.Path.of("../../api-specs/events/flight-cleared.v1.example.json"));
+
+        var event = FlightDisruptionParser.parse(message);
+
+        assertThat(event.disruption()).isEqualTo("CLEARED");
+        assertThat(event.status()).isEqualTo(com.skyhub.flightsearch.domain.FlightStatus.SCHEDULED);
+    }
+
+    @Test
     void should_read_a_cancellation_which_has_no_new_time() throws Exception {
         String cancelled = Files.readString(EXAMPLE).replace("\"DELAYED\"", "\"CANCELLED\"").replaceAll("\\s*\"revisedDeparture\"[^,]*,", "");
 

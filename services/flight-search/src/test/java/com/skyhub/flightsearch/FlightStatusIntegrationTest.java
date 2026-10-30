@@ -88,6 +88,17 @@ class FlightStatusIntegrationTest {
     }
 
     @Test
+    void should_offer_a_cancelled_flight_again_once_its_disruption_is_withdrawn() throws Exception {
+        String date = day(13);
+        kafka.send(TOPIC, "SK501@" + date, event("SK501", date, "CANCELLED", null));
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(directFlights(date)).doesNotContain("SK501"));
+
+        kafka.send(TOPIC, "SK501@" + date, event("SK501", date, "CLEARED", null));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(directFlights(date)).contains("SK501"));
+    }
+
+    @Test
     void should_ignore_a_message_that_is_not_an_event_and_carry_on() throws Exception {
         String date = day(12);
         kafka.send(TOPIC, "junk", "this is not json");

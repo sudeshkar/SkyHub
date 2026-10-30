@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProposals } from "@/lib/api/agent";
-import { openStaffSession, rebookFlight, recordDisruption as recordCall } from "@/lib/api/booking";
+import { openStaffSession, rebookFlight, recordDisruption as recordCall, withdrawDisruption as withdrawCall } from "@/lib/api/booking";
 import { rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
-import { loadProposals, logOut, moveBookings, recordDisruption, staffLogin } from "./actions";
+import { loadProposals, logOut, moveBookings, recordDisruption, staffLogin, withdrawDisruption } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: { staffLogin: {}, manage: {} }, rateLimit: vi.fn() }));
 vi.mock("@/lib/staff-session", () => ({
@@ -11,7 +11,9 @@ vi.mock("@/lib/staff-session", () => ({
   saveStaffSession: vi.fn(),
   clearStaffSession: vi.fn(),
 }));
-vi.mock("@/lib/api/booking", () => ({ openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlight: vi.fn() }));
+vi.mock("@/lib/api/booking", () => ({
+  openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlight: vi.fn(), withdrawDisruption: vi.fn(),
+}));
 vi.mock("@/lib/api/agent", () => ({ getProposals: vi.fn() }));
 // redirect() works by throwing; the real one is not available outside a request.
 vi.mock("next/navigation", () => ({
@@ -281,5 +283,57 @@ describe("moveBookings", () => {
 
     expect((await moveBookings([MOVE])).status).toBe("error");
     expect(rebookFlight).not.toHaveBeenCalled();
+  });
+});
+
+describe("withdrawDisruption", () => {
+  const request = { flightNumber: "sk501", departureDate: "2026-11-02", confirm: "yes" };
+
+  beforeEach(() => {
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+  });
+
+  it("withdraws the disruption with the staff member's own token and says how many bookings are on the flight", async () => {
+    vi.mocked(withdrawCall).mockResolvedValue({ kind: "withdrawn", affectedBookings: 12 });
+
+    const result = await withdrawDisruption({ status: "idle" }, form(request));
+
+    expect(withdrawCall).toHaveBeenCalledWith(SESSION.token, "SK501", "2026-11-02");
+    expect(result).toEqual({ status: "withdrawn", flightNumber: "SK501", departureDate: "2026-11-02", affectedBookings: 12 });
+  });
+
+  it("does nothing until the person has ticked the confirmation", async () => {
+    const result = await withdrawDisruption({ status: "idle" }, form({ ...request, confirm: "" }));
+
+    expect(result).toMatchObject({ status: "error", message: expect.stringContaining("confirm") });
+    expect(withdrawCall).not.toHaveBeenCalled();
+  });
+
+  it("refuses a malformed flight or date before calling the service", async () => {
+    expect(await withdrawDisruption({ status: "idle" }, form({ ...request, flightNumber: "nope" }))).toMatchObject({ status: "error" });
+    expect(await withdrawDisruption({ status: "idle" }, form({ ...request, departureDate: "" }))).toMatchObject({ status: "error" });
+    expect(withdrawCall).not.toHaveBeenCalled();
+  });
+
+  it("sends the person back to log in when there is no session or the token was refused", async () => {
+    vi.mocked(readStaffSession).mockResolvedValue(null);
+    expect(await withdrawDisruption({ status: "idle" }, form(request))).toEqual({ status: "signed-out" });
+
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+    vi.mocked(withdrawCall).mockResolvedValue({ kind: "unauthorized" });
+    expect(await withdrawDisruption({ status: "idle" }, form(request))).toEqual({ status: "signed-out" });
+    expect(clearStaffSession).toHaveBeenCalled();
+  });
+
+  it("shows the service's reason when there is nothing to withdraw or bookings were moved, and says when it is unreachable", async () => {
+    vi.mocked(withdrawCall).mockResolvedValue({ kind: "refused", detail: "Bookings were moved off SK501, so its disruption has to stay on record" });
+    expect(await withdrawDisruption({ status: "idle" }, form(request))).toMatchObject({
+      status: "error", message: "Bookings were moved off SK501, so its disruption has to stay on record",
+    });
+
+    vi.mocked(withdrawCall).mockResolvedValue({ kind: "unavailable" });
+    expect(await withdrawDisruption({ status: "idle" }, form(request))).toMatchObject({
+      status: "error", message: expect.stringContaining("not responding"),
+    });
   });
 });
