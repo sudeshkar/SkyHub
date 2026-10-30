@@ -14,6 +14,22 @@ SkyHub is a **portfolio project, not a real airline**. It is built the way a pro
 | **Manage** | Look up a booking with its reference and a passenger's last name, then change seats or cancel. |
 | **Check in** | Opens 24 hours before departure. Gives each passenger a boarding pass with a signed barcode. |
 
+## Screenshots
+
+Taken from a local run (`docs/images/`).
+
+| Search | Choose seats |
+|---|---|
+| ![Search results for Dubai to London](docs/images/search-results.png) | ![Seat map with business and economy cabins](docs/images/seat-map.png) |
+
+| Pay | Manage a booking |
+|---|---|
+| ![Review step with the test card chosen](docs/images/payment.png) | ![A confirmed booking with check-in, change seat and cancel](docs/images/manage-booking.png) |
+
+| After cancelling: the refund | Grafana: *SkyHub overview* |
+|---|---|
+| ![A cancelled booking with its refund](docs/images/refund.png) | ![Grafana dashboard with request, booking, seat hold and payment panels](docs/images/grafana-overview.png) |
+
 ## Architecture
 
 ```mermaid
