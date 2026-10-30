@@ -1,6 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 const SEARCH_API = process.env.SKYHUB_SEARCH_API_URL ?? "http://localhost:8081";
+/** Set this (for example http://localhost:8025) to also check that the confirmation email arrives. Needs the notification service. */
+const MAILPIT = process.env.SKYHUB_MAILPIT_URL;
 
 /** The schedule is not daily, so ask the search service for a date that has a direct flight, a few weeks out. */
 async function dateWithAFlight(request: APIRequestContext, origin: string, destination: string): Promise<string> {
@@ -15,6 +17,13 @@ async function dateWithAFlight(request: APIRequestContext, origin: string, desti
     if (found.some((itinerary) => itinerary.stops === 0)) return date;
   }
   throw new Error(`No direct ${origin} to ${destination} flight found in the next weeks`);
+}
+
+/** The messages Mailpit holds whose subject mentions the booking reference. */
+async function emailsAbout(request: APIRequestContext, locator: string): Promise<{ Subject: string; To: { Address: string }[] }[]> {
+  const response = await request.get(`${MAILPIT}/api/v1/messages`);
+  const inbox = (await response.json()) as { messages: { Subject: string; To: { Address: string }[] }[] };
+  return inbox.messages.filter((message) => message.Subject.includes(locator));
 }
 
 /** Picks the first seat that is free, whatever cabin it is in. */
@@ -51,6 +60,14 @@ test("book a flight, pay, then cancel it and see the money come back", async ({ 
   const locator = (await page.getByLabel(/^Booking reference /).textContent())?.trim() ?? "";
   expect(locator).toMatch(/^[A-Z0-9]{6}$/);
 
+  // The confirmation email follows through the outbox and Kafka, a moment after the booking.
+  if (MAILPIT) {
+    await expect.poll(async () => (await emailsAbout(request, locator)).length, { timeout: 30_000 }).toBe(1);
+    const [email] = await emailsAbout(request, locator);
+    expect(email.Subject).toBe(`Your SkyHub booking ${locator} is confirmed`);
+    expect(email.To[0].Address).toBe("priya@example.com");
+  }
+
   // Find the booking again with the reference and a passenger's last name.
   await page.goto("/manage");
   await page.getByLabel("Booking reference").fill(locator);
@@ -67,6 +84,13 @@ test("book a flight, pay, then cancel it and see the money come back", async ({ 
   // The flight is weeks away, so the whole fare goes back.
   await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Refund" })).toContainText("has been refunded to your original payment method");
+
+  // And the traveller is told, with the money line the fare rules decided.
+  if (MAILPIT) {
+    await expect.poll(async () => (await emailsAbout(request, locator)).length, { timeout: 30_000 }).toBe(2);
+    const subjects = (await emailsAbout(request, locator)).map((message) => message.Subject);
+    expect(subjects).toContain(`Your SkyHub booking ${locator} is cancelled`);
+  }
 });
 
 test("a wrong last name does not reveal whether the booking exists", async ({ page }) => {

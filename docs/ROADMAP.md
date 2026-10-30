@@ -30,6 +30,7 @@ How a slice goes, every time:
 | 13 | Operations screen for recording delays and cancellations | ADR-0018 |
 | 14 | Booking-confirmed email: transactional outbox, Kafka, notification service | ADR-0019 |
 | 15 | Cancellation (with refund) and flight delay / cancellation emails | ADR-0020 |
+| 16 | Real SMTP adapter, Mailpit as the local mail server | ADR-0021 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -38,7 +39,7 @@ Ordered by how much they add to the story, not a commitment.
 | Slice | What it adds | Notes |
 |---|---|---|
 | **Disruption agent (Python, Groq)** | An agent that reads a disruption, finds the affected bookings and proposes re-accommodation; MCP server exposing booking tools; an eval suite | The "Python/AI" part of the plan. Uses Groq's free API key (no Claude key). Builds on slice 9. |
-| **More notifications** | Check-in-opening reminders; a refund-completed email; a real SMTP adapter (Mailpit locally); SMS; a dead-letter replay tool | The outbox, Kafka and the notification service exist (ADR-0019, 0020); each new message is one event type plus one email. |
+| **More notifications** | Check-in-opening reminders; a refund-completed email; HTML email and a boarding-pass attachment; SMS; non-blocking retry topics and a dead-letter replay tool | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Disruptions in search** | Flight search shows delayed/cancelled flights | flight-search would read disruptions. |
 | **Reconcile charges without a booking** | A job that finds charges with no booking and refunds them | Removes the manual step in the `RefundFailed` runbook. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |

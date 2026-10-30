@@ -26,6 +26,10 @@ Taken from a local run (`docs/images/`).
 |---|---|
 | ![Review step with the test card chosen](docs/images/payment.png) | ![A confirmed booking with check-in, change seat and cancel](docs/images/manage-booking.png) |
 
+| The confirmation email, caught by Mailpit | |
+|---|---|
+| ![The booking-confirmed email in Mailpit](docs/images/email.png) | |
+
 | After cancelling: the refund | Grafana: *SkyHub overview* |
 |---|---|
 | ![A cancelled booking with its refund](docs/images/refund.png) | ![Grafana dashboard with request, booking, seat hold and payment panels](docs/images/grafana-overview.png) |
@@ -75,7 +79,7 @@ Java 25, Spring Boot 4.1, Spring Security, Spring Data JPA (Hibernate), Flyway, 
 
 You need **JDK 25**, **Node.js 24** (what CI uses), and **Docker**. The commands below are for a Unix-style shell (Git Bash on Windows works).
 
-**1. Start PostgreSQL, Redis and Kafka**
+**1. Start PostgreSQL, Redis, Kafka and Mailpit**
 
 ```bash
 docker compose up -d
@@ -98,10 +102,10 @@ Keep `SKYHUB_PII_KEY` somewhere safe: bookings saved with one key cannot be read
 ```bash
 ./mvnw -pl services/flight-search spring-boot:run     # http://localhost:8081
 ./mvnw -pl services/booking spring-boot:run           # http://localhost:8082  (needs the keys from step 2)
-./mvnw -pl services/notification spring-boot:run      # no public API; reads Kafka, "sends" emails to its log
+./mvnw -pl services/notification spring-boot:run      # no public API; reads Kafka, sends emails to Mailpit
 ```
 
-The notification service is optional for booking: bookings succeed without it, and the confirmation emails are sent when it starts (see ADR-0019). Watch its log for `Email sent (log only)`.
+The notification service is optional for booking: bookings succeed without it, and the confirmation emails are sent when it starts (see ADR-0019). Open **http://localhost:8025** (Mailpit) to read the emails it sends: nothing is delivered outside your machine. To run with no mail server at all, set `SKYHUB_EMAIL_MODE=log` and the emails are written to the notification service's log instead (ADR-0021).
 
 **4. Start the website**
 
@@ -129,7 +133,7 @@ cd frontend && npm test        # unit and component tests
 cd frontend && npm run typecheck && npx eslint src
 ```
 
-**End-to-end (a real browser):** with both services, PostgreSQL and the website running as in *Run it locally*, run `cd frontend && npx playwright install chromium` once, then `npm run e2e`. It books a flight, pays with the test card, looks the booking up, cancels it and checks the refund. A second test signs in to the operations screen (`/ops`) and records a cancellation; it needs a staff account, so start the booking service with `SKYHUB_BOOTSTRAP_ADMIN_USERNAME` / `SKYHUB_BOOTSTRAP_ADMIN_PASSWORD` and pass the same pair as `SKYHUB_E2E_STAFF_USER` / `SKYHUB_E2E_STAFF_PASSWORD` (without them that test is skipped). It is not part of CI because it needs the whole stack.
+**End-to-end (a real browser):** with both services, PostgreSQL and the website running as in *Run it locally*, run `cd frontend && npx playwright install chromium` once, then `npm run e2e`. It books a flight, pays with the test card, looks the booking up, cancels it and checks the refund. A second test signs in to the operations screen (`/ops`) and records a cancellation; it needs a staff account, so start the booking service with `SKYHUB_BOOTSTRAP_ADMIN_USERNAME` / `SKYHUB_BOOTSTRAP_ADMIN_PASSWORD` and pass the same pair as `SKYHUB_E2E_STAFF_USER` / `SKYHUB_E2E_STAFF_PASSWORD` (without them that test is skipped). With the notification service and Mailpit running, set `SKYHUB_MAILPIT_URL=http://localhost:8025` and the journey also checks that the confirmation email arrives after booking and the cancellation email after cancelling. It is not part of CI because it needs the whole stack.
 
 CI runs the same on every pull request.
 
@@ -147,4 +151,4 @@ docs/           design documents, decision records (ADRs), runbooks, and the [ro
 
 Built so far: search, seat selection, booking with payment (mock provider), refunds on cancellation, manage booking, seat holds, online check-in, delays and cancellations, staff login with roles and an operations screen, emails for a confirmed booking, a cancellation (with its refund) and a delayed or cancelled flight, through an outbox and Kafka, observability.
 
-Not built, on purpose or not yet: a real payment provider, user accounts, a real mail server (emails are written to the notification service's log) and check-in reminders, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.
+Not built, on purpose or not yet: a real payment provider, user accounts, a real mail provider (emails go to Mailpit locally; the SMTP adapter works with any relay) and check-in reminders, automatic re-accommodation, a real boarding-pass image (QR/PDF417), and per-passenger check-in. The airline and its flights are fictional.

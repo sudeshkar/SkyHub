@@ -38,7 +38,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * becomes exactly one recorded email, however many times it is delivered, and a message that can never be handled
  * ends up on the dead-letter topic instead of blocking everything behind it.
  */
-@SpringBootTest(properties = {"skyhub.notifications.retry-interval=PT0.2S", "skyhub.notifications.retry-attempts=3"})
+@SpringBootTest(properties = {"skyhub.notifications.retry-interval=PT0.2S", "skyhub.notifications.retry-attempts=3",
+        "skyhub.notifications.email.mode=log"})
 @EmbeddedKafka(topics = {"skyhub.booking.events", "skyhub.booking.events.DLT"},
         bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 @Import(PostgresTestcontainer.class)

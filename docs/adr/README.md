@@ -24,3 +24,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0018](0018-ops-screen-through-the-website-server.md) | The operations screen is a page on the website, and its token stays on the server | Accepted |
 | [0019](0019-transactional-outbox-and-kafka.md) | Notifications through a transactional outbox and Kafka | Accepted |
 | [0020](0020-cancellation-and-disruption-emails.md) | Cancellation and disruption emails | Accepted |
+| [0021](0021-smtp-email-and-mailpit.md) | Send email over SMTP, with Mailpit as the local mail server | Accepted |

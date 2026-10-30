@@ -16,6 +16,17 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  mail:
+    # Mailpit in docker compose catches every email and shows it at http://localhost:8025 (ADR-0021).
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      # A mail server that hangs must fail fast, so the message is retried instead of tying up the consumer.
+      mail.smtp.connectiontimeout: 3000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -27,11 +38,19 @@ spring:
 skyhub:
   notifications:
     topic: skyhub.booking.events
+    email:
+      # smtp (default) sends through the mail server above; log only writes the email to the log.
+      mode: ${SKYHUB_EMAIL_MODE:smtp}
+      from: ${SKYHUB_EMAIL_FROM:SkyHub <no-reply@skyhub.example>}
     # A message that fails is tried again this many times in total, this far apart, then parked on <topic>.DLT.
     retry-attempts: 4
     retry-interval: PT2S
 
 management:
+  health:
+    mail:
+      # A mail outage must not make the service look down: messages are retried, then parked (ADR-0021).
+      enabled: false
   # Actuator lives on its own port, never exposed publicly (docs/design/04-observability.md §7).
   server:
     port: 9083

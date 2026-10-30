@@ -94,8 +94,8 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 ## NotificationDeadLettered
 
 **Means:** the notification service could not handle a message after its retries and copied it to the dead-letter topic `skyhub.booking.events.DLT` (ADR-0019). Usually the mail provider was down for longer than the retries, or a message is malformed. The traveller did not get that email.
-**Confirm:** Loki `{service="notification"} |= "Confirmation email not sent"` (carries `pnr.locator`), and `skyhub_notifications_total{outcome="failed"}`. Read the parked messages: `kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic skyhub.booking.events.DLT --from-beginning` (the headers say why).
-**Mitigate:** fix the cause (mail provider, bad message). To resend, publish the parked message's value back to `skyhub.booking.events`: it is safe, because the consumer skips any event it has already recorded as sent. There is no replay tool yet (ADR-0019 follow-up).
+**Confirm:** Loki `{service="notification"} |= "Email not sent"` (carries `pnr.locator` and `event.type`), and `skyhub_notifications_total{outcome="failed"}`. Read the parked messages: `kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic skyhub.booking.events.DLT --from-beginning` (the headers say why).
+**Mitigate:** fix the cause (mail provider, bad message). Locally, `docker compose ps mailpit`; a mail outage longer than about six seconds ends here by design (ADR-0021). To resend, publish the parked message's value back to `skyhub.booking.events`: it is safe, because the consumer skips any event it has already recorded as sent. There is no replay tool yet (ADR-0019 follow-up).
 
 ## ServiceDown
 
