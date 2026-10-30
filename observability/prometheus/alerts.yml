@@ -139,6 +139,14 @@ groups:
           summary: "A notification gave up after its retries and was parked on the dead-letter topic"
           runbook: "docs/runbooks/README.md#notificationdeadlettered"
 
+      - alert: FlightDisruptionEventsUnreadable
+        expr: increase(skyhub_flight_status_events_total{outcome="invalid"}[10m]) > 0
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Flight search skipped a disruption message it could not read: a cancelled flight may still be offered"
+          runbook: "docs/runbooks/README.md#flightdisruptioneventsunreadable"
+
       - alert: ServiceDown
         expr: up == 0
         for: 1m

@@ -44,6 +44,7 @@ class HoldServiceTest {
     private final SeatMapCache seatMapCache = new SeatMapCache(registry);
     private final Map<String, SeatInventory> rows = new HashMap<>();
     private HoldService service;
+    private final FlightSalesGuard guard = mock(FlightSalesGuard.class);
 
     @BeforeEach
     void setUp() {
@@ -58,7 +59,19 @@ class HoldServiceTest {
         when(seats.findByHoldId(HOLD_ID)).thenAnswer(call -> rows.values().stream()
                 .filter(seat -> HOLD_ID.equals(seat.getHoldId())).toList());
         service = new HoldService(seats, inventory, seatMapCache, Clock.fixed(NOW, ZoneOffset.UTC),
-                TransactionOperations.withoutTransaction(), new HoldMetrics(registry), () -> HOLD_ID, Duration.ofMinutes(10));
+                TransactionOperations.withoutTransaction(), new HoldMetrics(registry), () -> HOLD_ID, Duration.ofMinutes(10), guard);
+    }
+
+    @Test
+    void should_refuse_to_hold_seats_on_a_cancelled_flight_and_touch_no_seat() {
+        org.mockito.Mockito.doThrow(new com.skyhub.booking.domain.FlightCancelledException("SK501 is cancelled"))
+                .when(guard).requireSellable(org.mockito.ArgumentMatchers.anyList());
+
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(com.skyhub.booking.domain.FlightCancelledException.class)
+                .isThrownBy(() -> service.createHold(new CreateHoldCommand(List.of(seat("SK501", "11D")))));
+
+        org.mockito.Mockito.verifyNoInteractions(inventory);
+        assertThat(rows.get("SK50111D").getStatus()).isEqualTo(SeatStatus.AVAILABLE);
     }
 
     private static HeldSeat seat(String flight, String seat) {

@@ -97,6 +97,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** Loki `{service="notification"} |= "Email not sent"` (carries `pnr.locator` and `event.type`), and `skyhub_notifications_total{outcome="failed"}`. Read the parked messages: `kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic skyhub.booking.events.DLT --from-beginning` (the headers say why).
 **Mitigate:** fix the cause (mail provider, bad message). Locally, `docker compose ps mailpit`; a mail outage longer than about six seconds ends here by design (ADR-0021). To resend, publish the parked message's value back to `skyhub.booking.events`: it is safe, because the consumer skips any event it has already recorded as sent. There is no replay tool yet (ADR-0019 follow-up).
 
+## FlightDisruptionEventsUnreadable
+
+**Means:** flight search read a message on `skyhub.flight.disruptions` that it could not understand and skipped it (ADR-0025). If it was a cancellation, search may still offer that flight. Booking will still refuse to sell it, so nobody is charged; travellers just see a flight they cannot buy.
+**Confirm:** Loki `{service="flight-search"} |= "Skipped a flight disruption message"` (the reason is in the line). `skyhub_flight_status_events_total{outcome="invalid"}`. Read the topic: `kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic skyhub.flight.disruptions --from-beginning`.
+**Mitigate:** usually a booking and search version mismatch (a new field search rejects) or a bad manual publish. Fix the producer or consumer; record the disruption again (any change republishes it) so search hears it. If a search instance has been down or cut off from Kafka, restart it: it rebuilds from the start of the topic. Disruptions recorded before the topic existed need the one-off backfill: start booking once with `SKYHUB_OUTBOX_BACKFILL_FLIGHT_EVENTS=true`.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.

@@ -50,7 +50,7 @@ class KafkaOutboxRelayTest {
     @BeforeEach
     void setUp() {
         relay = new KafkaOutboxRelay(outbox, kafka, cipher, Clock.fixed(NOW, ZoneOffset.UTC),
-                TransactionOperations.withoutTransaction(), registry, TOPIC, 50, Duration.ofSeconds(1), Duration.ofDays(7));
+                TransactionOperations.withoutTransaction(), registry, 50, Duration.ofSeconds(1), Duration.ofDays(7));
         when(kafka.send(any(String.class), any(String.class), any(String.class)))
                 .thenReturn(CompletableFuture.completedFuture(null));
     }
@@ -78,6 +78,19 @@ class KafkaOutboxRelayTest {
         assertThat(second.isPublished()).isTrue();
         verify(outbox).saveAll(List.of(first, second));
         assertThat(count("skyhub.outbox.published")).isEqualTo(2);
+    }
+
+    @Test
+    void should_send_each_event_to_the_topic_it_was_written_for() {
+        OutboxEvent booking = pending("ABC234", "{\"n\":1}");
+        OutboxEvent flight = OutboxEvent.pending(UUID.randomUUID(), "SK501@2026-11-02", "flight.disrupted",
+                cipher.encrypt("{\"n\":2}"), NOW.minusSeconds(5), "skyhub.flight.disruptions");
+        when(outbox.lockPending(50)).thenReturn(List.of(booking, flight));
+
+        relay.publishPending();
+
+        verify(kafka).send(TOPIC, "ABC234", "{\"n\":1}");
+        verify(kafka).send("skyhub.flight.disruptions", "SK501@2026-11-02", "{\"n\":2}");
     }
 
     @Test

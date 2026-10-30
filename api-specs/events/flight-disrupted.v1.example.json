@@ -1,0 +1,11 @@
+{
+  "eventId": "4f8a2b6c-91d3-4e7a-8c52-3b1d9e6f7a10",
+  "type": "flight.disrupted",
+  "version": 1,
+  "occurredAt": "2026-10-30T10:00:00Z",
+  "flightNumber": "SK501",
+  "departureDate": "2026-11-02",
+  "disruption": "DELAYED",
+  "revisedDeparture": "2026-11-02T14:30:00Z",
+  "reason": "Late inbound aircraft"
+}

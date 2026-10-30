@@ -23,14 +23,24 @@ class PricingServiceTest {
             "SK501", Money.of("310.50", "USD"),
             "SK901", Money.of("120.00", "USD"),
             "AE100", Money.of("500.00", "AED"));
+    private final FlightSalesGuard guard = org.mockito.Mockito.mock(FlightSalesGuard.class);
     private final PricingService pricing = new PricingService(
-            (flight, date) -> Optional.ofNullable(fares.get(flight)).map(fare -> new FlightInfo(LEAVES, fare)));
+            (flight, date) -> Optional.ofNullable(fares.get(flight)).map(fare -> new FlightInfo(LEAVES, fare)), guard);
 
     @Test
     void should_add_the_fare_of_every_flight_for_every_passenger() {
         Money price = pricing.quote(List.of(new PnrSegment("SK501", DATE), new PnrSegment("SK901", DATE)), 2);
 
         assertThat(price).isEqualTo(Money.of("861.00", "USD")); // (310.50 + 120.00) * 2
+    }
+
+    @Test
+    void should_refuse_to_price_a_trip_the_guard_says_is_not_for_sale_before_looking_at_any_fare() {
+        List<PnrSegment> trip = List.of(new PnrSegment("SK501", DATE));
+        org.mockito.Mockito.doThrow(new com.skyhub.booking.domain.FlightCancelledException("SK501 is cancelled")).when(guard).requireSellable(trip);
+
+        assertThatExceptionOfType(com.skyhub.booking.domain.FlightCancelledException.class).isThrownBy(() -> pricing.quote(trip, 1))
+                .withMessageContaining("cancelled");
     }
 
     @Test

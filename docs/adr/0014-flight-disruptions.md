@@ -27,6 +27,6 @@ Option 3.
 
 - Positive: no new infrastructure; the timetable and its caches are untouched; the rule "disruption beats schedule" lives in one place (the check-in use case asks one question).
 - Positive: recording is idempotent, so an operations tool can retry safely.
-- Negative: only the booking service knows about disruptions. Search results still show the scheduled time; a delayed flight in search is a follow-up (flight-search would read them).
+- Negative: only the booking service knows about disruptions. Search results still show the scheduled time. **Superseded by ADR-0025:** search now follows disruptions, and a cancelled flight cannot be sold.
 - Negative: a shared key is coarse. Anyone holding it can disrupt any flight, and there is no audit of *who*. Mitigation for now: the key is separate and server-side only, and every recording is logged with the flight and type.
 - Follow-up: staff login with roles; notify affected travellers; automatic re-accommodation; show disruptions in search.

@@ -18,6 +18,12 @@ spring:
     name: booking
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      # Create the compacted flight-disruptions topic at startup, and fix its settings if it already exists (ADR-0025).
+      modify-topic-configs: true
+      properties:
+        request.timeout.ms: 3000
+        default.api.timeout.ms: 5000
     producer:
       # Wait for the broker to confirm, and never write a message twice from one send (ADR-0019).
       acks: all
@@ -46,12 +52,14 @@ spring:
 
 skyhub:
   outbox:
-    # Events travel from the outbox table to this topic (ADR-0019). Switch the relay off only in tests.
-    topic: skyhub.booking.events
+    # Each event names its own topic: booking events and the compacted flight-disruptions topic (ADR-0019, ADR-0025).
+    # Switch the relay off only in tests.
     relay:
       enabled: true
       interval: PT2S
     retention: P7D
+    # Set to true for ONE start to republish disruptions recorded before the flight topic existed (ADR-0025).
+    backfill-flight-events: false
   flight-search:
     url: ${FLIGHT_SEARCH_URL:http://localhost:8081}
   security:

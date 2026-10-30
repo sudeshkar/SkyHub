@@ -3,6 +3,7 @@ package com.skyhub.booking.application;
 import com.skyhub.booking.application.HoldMetrics.Outcome;
 import com.skyhub.booking.domain.HoldIdGenerator;
 import com.skyhub.booking.domain.InvalidBookingException;
+import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.SeatInventory;
 import com.skyhub.booking.domain.SeatUnavailableException;
 import com.skyhub.booking.persistence.SeatInventoryRepository;
@@ -41,10 +42,12 @@ public class HoldService {
     private final HoldMetrics metrics;
     private final HoldIdGenerator holdIds;
     private final Duration timeToLive;
+    private final FlightSalesGuard guard;
 
     public HoldService(SeatInventoryRepository seats, SeatInventoryInitializer inventory, SeatMapCache seatMaps,
                        Clock clock, TransactionOperations transactions, HoldMetrics metrics, HoldIdGenerator holdIds,
-                       @Value("${skyhub.booking.hold-ttl:PT10M}") Duration timeToLive) {
+                       @Value("${skyhub.booking.hold-ttl:PT10M}") Duration timeToLive, FlightSalesGuard guard) {
+        this.guard = guard;
         this.seats = seats;
         this.inventory = inventory;
         this.seatMaps = seatMaps;
@@ -57,6 +60,7 @@ public class HoldService {
 
     public HoldView createHold(CreateHoldCommand command) {
         List<HeldSeat> items = validated(command);
+        guard.requireSellable(flights(items).stream().map(f -> new PnrSegment(f.flightNumber(), f.departureDate())).toList());   // nothing is locked on a flight that cannot be bought (ADR-0025)
         // Outside the hold's transaction on purpose: see SeatInventoryInitializer.
         flights(items).forEach(f -> inventory.ensureInventory(f.flightNumber(), f.departureDate()));
 
