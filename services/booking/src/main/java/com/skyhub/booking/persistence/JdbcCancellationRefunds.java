@@ -1,5 +1,6 @@
 package com.skyhub.booking.persistence;
 
+import com.skyhub.booking.application.BookingEvents;
 import com.skyhub.booking.application.PaymentMetrics;
 import com.skyhub.booking.application.RefundBackoff;
 import com.skyhub.booking.application.RefundSource;
@@ -23,9 +24,13 @@ class JdbcCancellationRefunds implements RefundSource {
     private final TransactionOperations transactions;
     private final PaymentRepository payments;
     private final PaymentMetrics paymentMetrics;
+    private final PnrRepository pnrs;
+    private final BookingEvents events;
 
     JdbcCancellationRefunds(JdbcTemplate jdbc, TransactionOperations transactions, PaymentRepository payments,
-                            PaymentMetrics paymentMetrics) {
+                            PaymentMetrics paymentMetrics, PnrRepository pnrs, BookingEvents events) {
+        this.pnrs = pnrs;
+        this.events = events;
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.payments = payments;
@@ -62,6 +67,8 @@ class JdbcCancellationRefunds implements RefundSource {
                     payment.refunded();
                     payments.save(payment);
                     paymentMetrics.record(PaymentMetrics.Outcome.CANCEL_REFUNDED);
+                    // Written with the status change, so the traveller is told exactly once (ADR-0031).
+                    pnrs.findByLocator(payment.getLocator()).ifPresent(pnr -> events.refundCompleted(pnr, payment.getAmount()));
                 }));
     }
 }

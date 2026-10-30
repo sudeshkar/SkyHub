@@ -32,5 +32,8 @@ public interface BookingEvents {
     void bookingDisruptionWithdrawn(Pnr pnr, Disruption withdrawn);
 
     /** Check-in has opened for one flight of this booking (ADR-0029). Called at most once per booking and flight. */
+    /** A refund that had been pending was paid by the retry job (ADR-0031). Not called for a refund paid at once. */
+    void refundCompleted(Pnr pnr, Money amount);
+
     void checkInOpened(Pnr pnr, PnrSegment segment, java.time.Instant departure, java.time.Instant closes);
 }

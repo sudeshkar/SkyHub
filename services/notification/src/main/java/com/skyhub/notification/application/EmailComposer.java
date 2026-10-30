@@ -6,6 +6,7 @@ import com.skyhub.notification.domain.BookingCheckInOpenEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
+import com.skyhub.notification.domain.BookingRefundCompletedEvent;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.stream.Collectors;
@@ -91,6 +92,15 @@ public final class EmailComposer {
                 any passenger: you can change your seats there, or cancel the booking.
                 """.formatted(event.locator(), oldFlight, newFlight, seatList);
         return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " has moved to " + newFlight, body);
+    }
+
+    public static EmailMessage refundCompleted(BookingRefundCompletedEvent event) {
+        return new EmailMessage(event.contactEmail(), "Your SkyHub refund for booking " + event.locator() + " has been paid", """
+                Your refund for booking %s has now been paid: %s %s has been sent back to your original payment method.
+                It can take a few days to appear on your statement.
+
+                We are sorry it took longer than it should. You do not need to do anything.
+                """.formatted(event.locator(), event.amount().toPlainString(), event.currency()));
     }
 
     public static EmailMessage checkInOpen(BookingCheckInOpenEvent event) {

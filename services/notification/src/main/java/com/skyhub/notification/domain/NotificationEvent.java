@@ -7,7 +7,8 @@ import java.util.UUID;
  * booking it is about, and where to write. The address is personal data, so implementations never print it.
  */
 public sealed interface NotificationEvent permits BookingConfirmedEvent, BookingCancelledEvent, BookingDisruptedEvent,
-        BookingRebookedEvent, BookingDisruptionWithdrawnEvent, BookingCheckInOpenEvent {
+        BookingRebookedEvent, BookingDisruptionWithdrawnEvent, BookingCheckInOpenEvent,
+        BookingRefundCompletedEvent {
 
     UUID eventId();
 

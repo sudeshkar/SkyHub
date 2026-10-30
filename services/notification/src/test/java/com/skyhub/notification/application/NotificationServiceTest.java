@@ -94,6 +94,17 @@ class NotificationServiceTest {
     }
 
     @Test
+    void should_send_a_refund_completed_email() {
+        service.refundCompleted(new com.skyhub.notification.domain.BookingRefundCompletedEvent(
+                UUID.fromString("f1a9c3e7-6b25-4d80-9e14-2a7c5b8d0f66"), "booking.refund-completed", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", new BigDecimal("100.00"), "USD"));
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().subject()).contains("refund").contains("ABC234");
+    }
+
+    @Test
     void should_send_a_check_in_reminder_email() {
         service.checkInOpen(new com.skyhub.notification.domain.BookingCheckInOpenEvent(
                 UUID.fromString("a3b7c9d1-5e24-4f68-8a10-9c2d4e6f8b55"), "booking.check-in-open", 1,

@@ -8,6 +8,7 @@ import com.skyhub.notification.domain.BookingCheckInOpenEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
+import com.skyhub.notification.domain.BookingRefundCompletedEvent;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -112,6 +113,16 @@ class EmailComposerTest {
 
         assertThat(message.subject()).isEqualTo("Your SkyHub flight SK501 on 2026-11-02 is cancelled");
         assertThat(message.body()).contains("full refund").contains("Manage booking").contains("Aircraft grounded");
+    }
+
+    @Test
+    void should_tell_the_traveller_a_delayed_refund_has_now_been_paid() {
+        EmailMessage message = EmailComposer.refundCompleted(new BookingRefundCompletedEvent(UUID.randomUUID(),
+                "booking.refund-completed", 1, Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com",
+                new java.math.BigDecimal("100.00"), "USD"));
+
+        assertThat(message.subject()).isEqualTo("Your SkyHub refund for booking ABC234 has been paid");
+        assertThat(message.body()).contains("100.00 USD").contains("original payment method").contains("few days");
     }
 
     @Test

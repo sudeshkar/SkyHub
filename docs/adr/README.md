@@ -34,3 +34,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0028](0028-disruption-withdrawn-email.md) | Tell travellers when a disruption is withdrawn | Accepted |
 | [0029](0029-check-in-reminders.md) | Check-in-open reminders | Accepted |
 | [0030](0030-refund-retries.md) | Refunds that failed are retried, not forgotten | Accepted |
+| [0031](0031-refund-completed-email.md) | Tell travellers when a delayed refund is paid | Accepted |
