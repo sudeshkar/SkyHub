@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
+import com.skyhub.notification.domain.BookingCheckInOpenEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
@@ -111,6 +112,17 @@ class EmailComposerTest {
 
         assertThat(message.subject()).isEqualTo("Your SkyHub flight SK501 on 2026-11-02 is cancelled");
         assertThat(message.body()).contains("full refund").contains("Manage booking").contains("Aircraft grounded");
+    }
+
+    @Test
+    void should_tell_the_traveller_check_in_is_open_when_it_closes_and_where_to_do_it() {
+        EmailMessage message = EmailComposer.checkInOpen(new BookingCheckInOpenEvent(UUID.randomUUID(), "booking.check-in-open", 1,
+                Instant.parse("2026-11-01T14:30:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2),
+                Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z")));
+
+        assertThat(message.subject()).isEqualTo("Check-in is open for your SkyHub flight SK501 on 2026-11-02");
+        assertThat(message.body()).contains("2026-11-02 14:30 UTC").contains("2026-11-02 13:30 UTC")
+                .contains("Manage booking").contains("ABC234");
     }
 
     @Test

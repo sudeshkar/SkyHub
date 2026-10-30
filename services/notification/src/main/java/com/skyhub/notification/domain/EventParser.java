@@ -59,6 +59,11 @@ public final class EventParser {
                 require(e.passengers() != null && !e.passengers().isEmpty()
                         && e.passengers().stream().allMatch(p -> p.seat() != null && !p.seat().isBlank()), "no seats");
             }
+            case BookingCheckInOpenEvent e -> {
+                require(BookingCheckInOpenEvent.TYPE.equals(e.type()), "wrong type");
+                require(notBlank(e.flightNumber()) && e.departureDate() != null, "no flight");
+                require(e.departure() != null && e.checkInCloses() != null, "no times");
+            }
             case BookingDisruptionWithdrawnEvent e -> {
                 require(BookingDisruptionWithdrawnEvent.TYPE.equals(e.type()), "wrong type");
                 require(notBlank(e.flightNumber()) && e.departureDate() != null, "no flight");

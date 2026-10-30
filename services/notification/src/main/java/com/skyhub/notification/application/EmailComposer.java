@@ -2,6 +2,7 @@ package com.skyhub.notification.application;
 
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
+import com.skyhub.notification.domain.BookingCheckInOpenEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
@@ -90,6 +91,19 @@ public final class EmailComposer {
                 any passenger: you can change your seats there, or cancel the booking.
                 """.formatted(event.locator(), oldFlight, newFlight, seatList);
         return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " has moved to " + newFlight, body);
+    }
+
+    public static EmailMessage checkInOpen(BookingCheckInOpenEvent event) {
+        String flight = event.flightNumber() + " on " + event.departureDate();
+        return new EmailMessage(event.contactEmail(), "Check-in is open for your SkyHub flight " + flight, """
+                Online check-in is now open for your flight %s.
+
+                Departure: %s
+                Check-in closes: %s
+
+                To check in, open Manage booking and enter your booking reference %s and your last name. Everyone on the
+                booking checks in together, and you get your boarding passes straight away.
+                """.formatted(flight, UTC_TIME.format(event.departure()), UTC_TIME.format(event.checkInCloses()), event.locator()));
     }
 
     public static EmailMessage bookingDisruptionWithdrawn(BookingDisruptionWithdrawnEvent event) {

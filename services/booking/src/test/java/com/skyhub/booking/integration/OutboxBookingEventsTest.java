@@ -129,6 +129,20 @@ class OutboxBookingEventsTest {
     }
 
     @Test
+    void should_write_the_check_in_open_event_as_the_notification_service_expects() throws Exception {
+        events(UUID.fromString("a3b7c9d1-5e24-4f68-8a10-9c2d4e6f8b55")).checkInOpened(pnr(),
+                new PnrSegment("SK501", LocalDate.of(2026, 11, 2)),
+                Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z"));
+
+        OutboxEvent event = saved();
+
+        assertThat(event.getEventType()).isEqualTo("booking.check-in-open");
+        assertThat(event.getAggregateId()).isEqualTo("ABC234");
+        assertThat(json.readTree(cipher.decrypt(event.getPayload())))
+                .isEqualTo(json.readTree(Files.readString(Path.of("../../api-specs/events/booking-check-in-open.v1.example.json"))));
+    }
+
+    @Test
     void should_write_the_withdrawal_event_as_the_notification_service_expects() throws Exception {
         events(WITHDRAWN_ID).bookingDisruptionWithdrawn(pnr(), Disruption.cancelled("SK501", LocalDate.of(2026, 11, 2), "Mistake", NOW));
 

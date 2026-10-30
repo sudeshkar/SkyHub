@@ -30,4 +30,7 @@ public interface BookingEvents {
 
     /** Staff withdrew the disruption (ADR-0028). One call per booking still active on the flight. */
     void bookingDisruptionWithdrawn(Pnr pnr, Disruption withdrawn);
+
+    /** Check-in has opened for one flight of this booking (ADR-0029). Called at most once per booking and flight. */
+    void checkInOpened(Pnr pnr, PnrSegment segment, java.time.Instant departure, java.time.Instant closes);
 }

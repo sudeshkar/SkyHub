@@ -103,6 +103,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** Loki `{service="flight-search"} |= "Skipped a flight disruption message"` (the reason is in the line). `skyhub_flight_status_events_total{outcome="invalid"}`. Read the topic: `kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic skyhub.flight.disruptions --from-beginning`.
 **Mitigate:** usually a booking and search version mismatch (a new field search rejects) or a bad manual publish. Fix the producer or consumer; record the disruption again (any change republishes it) so search hears it. If a search instance has been down or cut off from Kafka, restart it: it rebuilds from the start of the topic. Disruptions recorded before the topic existed need the one-off backfill: start booking once with `SKYHUB_OUTBOX_BACKFILL_FLIGHT_EVENTS=true`.
 
+## CheckInRemindersFailing
+
+**Means:** the sweep that queues "check-in is open" emails (ADR-0029) failed more than twice in 30 minutes. Travellers are not told their check-in opened. They can still check in; only the reminder is late. Nothing is lost: a booking is reminded on the first sweep that works, as long as check-in is still open.
+**Confirm:** Loki `{service="booking"} |= "Check-in reminder sweep failed"` (the cause is in the stack trace; usually the database). `skyhub_checkin_reminders_total{outcome="failed"}`. A related counter, `outcome="flight_unavailable"`, rising means flight search could not be asked a flight's time, so that flight is skipped until it answers.
+**Mitigate:** fix the cause (database or flight search). The sweep runs every 5 minutes and catches up by itself. To see who is still waiting: bookings with no row in `check_in_reminder` for a flight whose check-in is open. A reminder that was never sent after check-in closed is not sent late.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.

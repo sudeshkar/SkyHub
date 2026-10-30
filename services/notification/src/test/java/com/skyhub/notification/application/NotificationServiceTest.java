@@ -94,6 +94,18 @@ class NotificationServiceTest {
     }
 
     @Test
+    void should_send_a_check_in_reminder_email() {
+        service.checkInOpen(new com.skyhub.notification.domain.BookingCheckInOpenEvent(
+                UUID.fromString("a3b7c9d1-5e24-4f68-8a10-9c2d4e6f8b55"), "booking.check-in-open", 1,
+                Instant.parse("2026-11-01T14:30:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2),
+                Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z")));
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().subject()).contains("Check-in is open").contains("SK501");
+    }
+
+    @Test
     void should_send_a_withdrawal_email_once_even_if_the_event_is_delivered_twice() {
         var event = new com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent(
                 UUID.fromString("d8f2a4b6-17c3-4e90-b5a1-3c6e9d0f2b44"), "booking.disruption-withdrawn", 1,

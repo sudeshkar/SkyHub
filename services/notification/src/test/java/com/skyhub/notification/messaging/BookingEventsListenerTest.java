@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import com.skyhub.notification.application.NotificationService;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
+import com.skyhub.notification.domain.BookingCheckInOpenEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
@@ -59,6 +60,15 @@ class BookingEventsListenerTest {
         ArgumentCaptor<BookingDisruptedEvent> event = ArgumentCaptor.forClass(BookingDisruptedEvent.class);
         verify(service).bookingDisrupted(event.capture());
         org.assertj.core.api.Assertions.assertThat(event.getValue().flightNumber()).isEqualTo("SK501");
+    }
+
+    @Test
+    void should_hand_a_check_in_reminder_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/booking-check-in-open.v1.example.json")));
+
+        ArgumentCaptor<BookingCheckInOpenEvent> event = ArgumentCaptor.forClass(BookingCheckInOpenEvent.class);
+        verify(service).checkInOpen(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().locator()).isEqualTo("ABC234");
     }
 
     @Test

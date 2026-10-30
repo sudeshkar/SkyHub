@@ -17,6 +17,7 @@ class NotificationEventsTest {
     private static final Path CANCELLED = Path.of("../../api-specs/events/booking-cancelled.v1.example.json");
     private static final Path REBOOKED = Path.of("../../api-specs/events/booking-rebooked.v1.example.json");
     private static final Path DISRUPTED = Path.of("../../api-specs/events/booking-disrupted.v1.example.json");
+    private static final Path CHECK_IN_OPEN = Path.of("../../api-specs/events/booking-check-in-open.v1.example.json");
     private static final Path WITHDRAWN = Path.of("../../api-specs/events/booking-disruption-withdrawn.v1.example.json");
 
     @Test
@@ -50,6 +51,29 @@ class NotificationEventsTest {
         assertThat(event.disruption()).isEqualTo("DELAYED");
         assertThat(event.revisedDeparture()).isEqualTo(Instant.parse("2026-11-02T14:30:00Z"));
         assertThat(event.reason()).isEqualTo("Late inbound aircraft");
+    }
+
+    @Test
+    void should_read_the_check_in_open_event_with_both_times() throws Exception {
+        BookingCheckInOpenEvent event = EventParser.parse(Files.readString(CHECK_IN_OPEN), BookingCheckInOpenEvent.class);
+
+        assertThat(event.eventId()).isEqualTo(UUID.fromString("a3b7c9d1-5e24-4f68-8a10-9c2d4e6f8b55"));
+        assertThat(event.flightNumber()).isEqualTo("SK501");
+        assertThat(event.departure()).isEqualTo(Instant.parse("2026-11-02T14:30:00Z"));
+        assertThat(event.checkInCloses()).isEqualTo(Instant.parse("2026-11-02T13:30:00Z"));
+    }
+
+    @Test
+    void should_refuse_a_check_in_event_missing_what_the_email_needs() throws Exception {
+        String open = Files.readString(CHECK_IN_OPEN);
+        for (String broken : new String[] {
+                open.replace("booking.check-in-open", "booking.disrupted"),
+                open.replaceAll("\\s*\"departure\": \"[^\"]*\",", ""),
+                open.replaceAll(",\\s*\"checkInCloses\": \"[^\"]*\"", ""),
+                open.replace("\"flightNumber\": \"SK501\",", "")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, BookingCheckInOpenEvent.class));
+        }
     }
 
     @Test
