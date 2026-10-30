@@ -94,6 +94,20 @@ class NotificationServiceTest {
     }
 
     @Test
+    void should_send_the_password_link_with_the_site_address_and_record_it_without_a_booking_reference() {
+        service.passwordLink(new com.skyhub.notification.domain.AccountPasswordLinkEvent(
+                UUID.fromString("2b6d8f10-4c93-4a57-9e21-8f0a1c3d5e77"), "account.password-link", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "priya@example.com", "SIGN_UP", "abc", Instant.parse("2026-10-30T11:00:00Z")));
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().body()).contains("http://localhost:3000/account/set-password?token=abc");
+        ArgumentCaptor<SentNotification> row = ArgumentCaptor.forClass(SentNotification.class);
+        verify(sent).saveAndFlush(row.capture());
+        assertThat(row.getValue().getLocator()).isNull();
+    }
+
+    @Test
     void should_send_a_refund_completed_email() {
         service.refundCompleted(new com.skyhub.notification.domain.BookingRefundCompletedEvent(
                 UUID.fromString("f1a9c3e7-6b25-4d80-9e14-2a7c5b8d0f66"), "booking.refund-completed", 1,

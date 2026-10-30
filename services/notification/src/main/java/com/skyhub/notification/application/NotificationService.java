@@ -1,6 +1,7 @@
 package com.skyhub.notification.application;
 
 import com.skyhub.notification.application.NotificationMetrics.Outcome;
+import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingCheckInOpenEvent;
@@ -14,6 +15,8 @@ import com.skyhub.notification.persistence.SentNotificationRepository;
 import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -32,9 +35,18 @@ public class NotificationService {
     private final Clock clock;
     private final TransactionOperations transactions;
     private final NotificationMetrics metrics;
+    private final String siteUrl;
 
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
                                TransactionOperations transactions, NotificationMetrics metrics) {
+        this(sent, email, clock, transactions, metrics, "http://localhost:3000");
+    }
+
+    @Autowired
+    public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
+                               TransactionOperations transactions, NotificationMetrics metrics,
+                               @Value("${skyhub.notifications.site-url:http://localhost:3000}") String siteUrl) {
+        this.siteUrl = siteUrl;
         this.sent = sent;
         this.email = email;
         this.clock = clock;
@@ -52,6 +64,10 @@ public class NotificationService {
 
     public void bookingDisrupted(BookingDisruptedEvent event) {
         deliver(event, EmailComposer.bookingDisrupted(event));
+    }
+
+    public void passwordLink(AccountPasswordLinkEvent event) {
+        deliver(event, EmailComposer.passwordLink(event, siteUrl));
     }
 
     public void refundCompleted(BookingRefundCompletedEvent event) {

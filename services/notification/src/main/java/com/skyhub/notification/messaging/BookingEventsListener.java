@@ -1,6 +1,7 @@
 package com.skyhub.notification.messaging;
 
 import com.skyhub.notification.application.NotificationService;
+import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingCheckInOpenEvent;
@@ -48,6 +49,8 @@ public class BookingEventsListener {
                     notifications.checkInOpen(EventParser.parse(message, BookingCheckInOpenEvent.class));
             case BookingRefundCompletedEvent.TYPE ->
                     notifications.refundCompleted(EventParser.parse(message, BookingRefundCompletedEvent.class));
+            case AccountPasswordLinkEvent.TYPE ->
+                    notifications.passwordLink(EventParser.parse(message, AccountPasswordLinkEvent.class));
             default -> log.atDebug().addKeyValue("event.type", type).log("Event type not handled here; skipped");
         }
     }

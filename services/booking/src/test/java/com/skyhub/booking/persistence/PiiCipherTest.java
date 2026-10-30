@@ -53,4 +53,23 @@ class PiiCipherTest {
         assertThatIllegalStateException().isThrownBy(() -> new PiiCipher(""));
         assertThatIllegalStateException().isThrownBy(() -> new PiiCipher("not base64!"));
     }
+
+    @Test
+    void should_give_the_same_index_for_the_same_address_whatever_its_case_or_spacing() {
+        assertThat(cipher.blindIndex("Priya@Example.com ")).isEqualTo(cipher.blindIndex("priya@example.com"));
+    }
+
+    @Test
+    void should_give_different_indexes_for_different_addresses_and_reveal_nothing_of_the_address() {
+        String index = cipher.blindIndex("priya@example.com");
+
+        assertThat(index).isNotEqualTo(cipher.blindIndex("priyb@example.com")).hasSize(64).doesNotContain("priya");
+    }
+
+    @Test
+    void should_give_a_different_index_under_a_different_key() {
+        PiiCipher other = new PiiCipher("AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=");
+
+        assertThat(other.blindIndex("priya@example.com")).isNotEqualTo(cipher.blindIndex("priya@example.com"));
+    }
 }

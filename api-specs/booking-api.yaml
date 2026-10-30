@@ -16,6 +16,7 @@ tags:
   - name: Disruptions
   - name: Staff
   - name: Rebooking
+  - name: Accounts
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -518,6 +519,97 @@ paths:
         '503':
           $ref: '#/components/responses/ScheduleUnavailable'
 
+  /api/v1/accounts/password-links:
+    post:
+      tags: [Accounts]
+      operationId: requestPasswordLink
+      summary: Email a link to choose a password (sign up, or reset a forgotten one)
+      description: |
+        The same request signs up a new traveller and resets a forgotten password: the link lets the person who
+        receives it choose a password, which is how the address is proven to be theirs (ADR-0033). The answer is always
+        202 and never says whether an account already exists. A second request within two minutes sends nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLinkRequest'
+      responses:
+        '202':
+          description: If the address is valid, a link is on its way
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/accounts/passwords:
+    post:
+      tags: [Accounts]
+      operationId: setAccountPassword
+      summary: Choose a password using the emailed link
+      description: |
+        The token comes from the emailed link. It works once and for one hour. A wrong, used or expired token all
+        return the same 400. Choosing a password also confirms the email address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPasswordRequest'
+      responses:
+        '204':
+          description: Password set; the account can sign in
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/accounts/sessions:
+    post:
+      tags: [Accounts]
+      operationId: openAccountSession
+      summary: Traveller sign-in
+      description: |
+        Exchanges an email address and password for an account token (30 minutes). An unknown address, a wrong
+        password, an account with no password yet and a locked account all return the same 401. Five wrong passwords
+        lock the account for 15 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountLoginRequest'
+      responses:
+        '201':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Wrong email or password, or the account is locked
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/accounts/me:
+    get:
+      tags: [Accounts]
+      operationId: getMyAccount
+      summary: The signed-in traveller's account
+      security:
+        - accountToken: []
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/v1/ops/sessions:
     post:
       tags: [Staff]
@@ -653,6 +745,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Short-lived staff token from POST /api/v1/ops/sessions. Carries a role (OPS or ADMIN). Never sent by the website.
+    accountToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived token from POST /api/v1/accounts/sessions. Identifies a signed-in traveller (ADR-0033).
     manageToken:
       type: http
       scheme: bearer
@@ -1122,6 +1219,59 @@ components:
     StaffRole:
       type: string
       enum: [OPS, ADMIN]
+
+    PasswordLinkRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          maxLength: 254
+
+    SetPasswordRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          maxLength: 100
+        password:
+          type: string
+          minLength: 12
+          maxLength: 100
+
+    AccountLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          maxLength: 254
+        password:
+          type: string
+          maxLength: 100
+
+    AccountSession:
+      type: object
+      required: [accessToken, tokenType, expiresAt, email]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresAt:
+          type: string
+          format: date-time
+        email:
+          type: string
+
+    Account:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
 
     StaffSession:
       type: object

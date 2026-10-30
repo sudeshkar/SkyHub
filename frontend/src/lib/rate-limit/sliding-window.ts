@@ -26,6 +26,10 @@ export const POLICIES = {
   manage: { name: "manage", limit: 30, windowMs: 60_000 },
   /** Staff login is a password-guessing target; the service also locks an account after five misses (ADR-0017). */
   staffLogin: { name: "staff-login", limit: 10, windowMs: 15 * 60_000 },
+  /** Each request can send an email, so it is tight: a script must not be able to flood an inbox (ADR-0033). */
+  accountLink: { name: "account-link", limit: 5, windowMs: 15 * 60_000 },
+  /** Traveller sign-in is a password-guessing target; the service also locks an account after five misses. */
+  accountSignIn: { name: "account-sign-in", limit: 10, windowMs: 15 * 60_000 },
 } as const satisfies Record<string, Policy>;
 
 export function createRateLimiter(store: CounterStore, now: () => number = Date.now) {

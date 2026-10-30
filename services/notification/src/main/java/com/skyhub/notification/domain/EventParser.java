@@ -36,7 +36,7 @@ public final class EventParser {
         }
         require(event != null, "empty message");
         require(event.eventId() != null, "no eventId");
-        require(notBlank(event.locator()), "no locator");
+        require(event instanceof AccountPasswordLinkEvent || notBlank(event.locator()), "no locator");
         require(notBlank(event.contactEmail()), "no contactEmail");
         switch (event) {
             case BookingConfirmedEvent e -> {
@@ -58,6 +58,11 @@ public final class EventParser {
                 require(e.from() != null && e.to() != null, "no flights");
                 require(e.passengers() != null && !e.passengers().isEmpty()
                         && e.passengers().stream().allMatch(p -> p.seat() != null && !p.seat().isBlank()), "no seats");
+            }
+            case AccountPasswordLinkEvent e -> {
+                require(AccountPasswordLinkEvent.TYPE.equals(e.type()), "wrong type");
+                require("SIGN_UP".equals(e.purpose()) || "RESET".equals(e.purpose()), "unknown purpose");
+                require(notBlank(e.token()) && e.expiresAt() != null, "no token");
             }
             case BookingRefundCompletedEvent e -> {
                 require(BookingRefundCompletedEvent.TYPE.equals(e.type()), "wrong type");

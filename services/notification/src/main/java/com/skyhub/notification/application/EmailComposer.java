@@ -1,5 +1,6 @@
 package com.skyhub.notification.application;
 
+import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingCheckInOpenEvent;
@@ -92,6 +93,33 @@ public final class EmailComposer {
                 any passenger: you can change your seats there, or cancel the booking.
                 """.formatted(event.locator(), oldFlight, newFlight, seatList);
         return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " has moved to " + newFlight, body);
+    }
+
+    /** The link carries the token in the query string, encoded, to the page where the person chooses a password. */
+    public static EmailMessage passwordLink(AccountPasswordLinkEvent event, String siteUrl) {
+        String base = siteUrl.endsWith("/") ? siteUrl.substring(0, siteUrl.length() - 1) : siteUrl;
+        String link = base + "/account/set-password?token=" + java.net.URLEncoder.encode(event.token(), java.nio.charset.StandardCharsets.UTF_8);
+        String until = UTC_TIME.format(event.expiresAt());
+        if ("RESET".equals(event.purpose())) {
+            return new EmailMessage(event.contactEmail(), "Reset your SkyHub password", """
+                    Someone asked to reset the password of your SkyHub account. To choose a new one, open this link:
+
+                    %s
+
+                    The link works once and stops working at %s. Until you use it, your current password stays as it is.
+
+                    If you did not ask for this, ignore this email: nothing changes.
+                    """.formatted(link, until));
+        }
+        return new EmailMessage(event.contactEmail(), "Finish creating your SkyHub account", """
+                Someone asked to create a SkyHub account with this email address. To finish, choose a password by opening this link:
+
+                %s
+
+                The link works once and stops working at %s.
+
+                If you did not ask for this, ignore this email: no account will be usable.
+                """.formatted(link, until));
     }
 
     public static EmailMessage refundCompleted(BookingRefundCompletedEvent event) {

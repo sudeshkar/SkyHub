@@ -38,6 +38,8 @@ spring:
 skyhub:
   notifications:
     topic: skyhub.booking.events
+    # Where emailed links lead (the website). Set SKYHUB_SITE_URL in any environment that is not local.
+    site-url: ${SKYHUB_SITE_URL:http://localhost:3000}
     email:
       # smtp (default) sends through the mail server above; log only writes the email to the log.
       mode: ${SKYHUB_EMAIL_MODE:smtp}

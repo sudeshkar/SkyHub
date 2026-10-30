@@ -115,6 +115,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** Loki `{service="booking"} |= "Gave up refunding a charge"` (carries `refund.source`, `payment.charge`, and the provider's error). `skyhub_refund_retries_total{outcome="gave_up"}` by `source`. For `failed-booking`: `SELECT * FROM unrefunded_charge WHERE refunded_at IS NULL AND attempts >= 12;`. For `cancellation`: `SELECT locator, charge_id, amount, currency FROM payment WHERE status = 'REFUND_DUE' AND refund_attempts >= 12;`.
 **Mitigate:** find out why the provider refuses that charge (already refunded outside our system? expired? wrong id?). If it is fixable, reset the row so the job tries again: `UPDATE unrefunded_charge SET attempts = 0, next_attempt_at = now() WHERE charge_id = '...';` (or `UPDATE payment SET refund_attempts = 0, refund_next_attempt_at = NULL WHERE locator = '...';`). Otherwise refund it by hand in the provider's dashboard, then set `refunded_at = now()` (or `status = 'REFUNDED'`) so it is not found again.
 
+## AccountLoginGuessing
+
+**Means:** more than 30 traveller sign-ins failed or were refused for a locked account in 10 minutes (ADR-0033). Either someone is guessing passwords, or travellers are struggling with a broken sign-in. Five wrong passwords lock an account for 15 minutes, so a guesser is slowed to about 20 tries an hour per account. The threshold is higher than for staff because there are many more travellers.
+**Confirm:** `skyhub_account_logins_total` by `outcome` (`failed`, `locked`, `success`). If `success` is also near zero, sign-in itself may be broken: check the booking service. Loki `{service="booking"} |= "Traveller sign-in"` shows `account.id` for locked accounts (a failure for an unknown address has no id). Many different accounts locking at once is guessing across accounts; one account repeating is usually a person.
+**Mitigate:** if it is guessing, check the edge rate limit is on (ADR-0009) and block the source address there; the website already allows 10 sign-ins per client per 15 minutes. A locked account unlocks itself after 15 minutes, and its owner can also ask for a reset link (that clears the lock). Nothing was accessed unless `Traveller signed in` follows a run of failures for the same `account.id`; in that case ask the owner to reset the password, which also stops the old one working.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.

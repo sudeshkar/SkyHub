@@ -19,6 +19,7 @@ class NotificationEventsTest {
     private static final Path DISRUPTED = Path.of("../../api-specs/events/booking-disrupted.v1.example.json");
     private static final Path CHECK_IN_OPEN = Path.of("../../api-specs/events/booking-check-in-open.v1.example.json");
     private static final Path REFUND_COMPLETED = Path.of("../../api-specs/events/booking-refund-completed.v1.example.json");
+    private static final Path PASSWORD_LINK = Path.of("../../api-specs/events/account-password-link.v1.example.json");
     private static final Path WITHDRAWN = Path.of("../../api-specs/events/booking-disruption-withdrawn.v1.example.json");
 
     @Test
@@ -75,6 +76,39 @@ class NotificationEventsTest {
             assertThatExceptionOfType(InvalidEventException.class).as(broken)
                     .isThrownBy(() -> EventParser.parse(broken, BookingCheckInOpenEvent.class));
         }
+    }
+
+    @Test
+    void should_read_the_password_link_event_which_belongs_to_no_booking() throws Exception {
+        AccountPasswordLinkEvent event = EventParser.parse(Files.readString(PASSWORD_LINK), AccountPasswordLinkEvent.class);
+
+        assertThat(event.eventId()).isEqualTo(UUID.fromString("2b6d8f10-4c93-4a57-9e21-8f0a1c3d5e77"));
+        assertThat(event.contactEmail()).isEqualTo("priya@example.com");
+        assertThat(event.purpose()).isEqualTo("SIGN_UP");
+        assertThat(event.token()).startsWith("dGVzdC10b2tlbi");
+        assertThat(event.expiresAt()).isEqualTo(Instant.parse("2026-10-30T11:00:00Z"));
+        assertThat(event.locator()).isNull();
+    }
+
+    @Test
+    void should_refuse_a_password_link_event_without_a_token_a_known_purpose_or_an_address() throws Exception {
+        String link = Files.readString(PASSWORD_LINK);
+        for (String broken : new String[] {
+                link.replace("account.password-link", "booking.cancelled"),
+                link.replace("SIGN_UP", "SOMETHING_ELSE"),
+                link.replaceAll("\\s*\"token\": \"[^\"]*\",", ""),
+                link.replaceAll("\\s*\"expiresAt\": \"[^\"]*\"", "").replace("\"token\"", "\"x\""),
+                link.replace("\"contactEmail\": \"priya@example.com\",", "")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, AccountPasswordLinkEvent.class));
+        }
+    }
+
+    @Test
+    void should_never_print_the_token_or_the_address() throws Exception {
+        AccountPasswordLinkEvent event = EventParser.parse(Files.readString(PASSWORD_LINK), AccountPasswordLinkEvent.class);
+
+        assertThat(event.toString()).doesNotContain("priya@example.com").doesNotContain(event.token());
     }
 
     @Test
