@@ -32,3 +32,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0026](0026-withdrawing-a-disruption.md) | Withdrawing a disruption | Accepted |
 | [0027](0027-connections-follow-delays.md) | Connections follow delays | Accepted |
 | [0028](0028-disruption-withdrawn-email.md) | Tell travellers when a disruption is withdrawn | Accepted |
+| [0029](0029-check-in-reminders.md) | Check-in-open reminders | Accepted |

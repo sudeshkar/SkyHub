@@ -33,6 +33,7 @@ public class OutboxBookingEvents implements BookingEvents {
     static final String BOOKING_CANCELLED = "booking.cancelled";
     static final String BOOKING_DISRUPTED = "booking.disrupted";
     static final String BOOKING_DISRUPTION_WITHDRAWN = "booking.disruption-withdrawn";
+    static final String BOOKING_CHECK_IN_OPEN = "booking.check-in-open";
     static final String BOOKING_REBOOKED = "booking.rebooked";
 
     private final OutboxEventRepository outbox;
@@ -98,6 +99,16 @@ public class OutboxBookingEvents implements BookingEvents {
         event.put("flightNumber", withdrawn.getFlightNumber());
         event.put("departureDate", withdrawn.getDepartureDate().toString());
         event.put("disruption", withdrawn.getType().name());
+        enqueue(pnr, event);
+    }
+
+    @Override
+    public void checkInOpened(Pnr pnr, PnrSegment segment, java.time.Instant departure, java.time.Instant closes) {
+        Map<String, Object> event = event(BOOKING_CHECK_IN_OPEN, pnr);
+        event.put("flightNumber", segment.flightNumber());
+        event.put("departureDate", segment.departureDate().toString());
+        event.put("departure", departure.toString());
+        event.put("checkInCloses", closes.toString());
         enqueue(pnr, event);
     }
 

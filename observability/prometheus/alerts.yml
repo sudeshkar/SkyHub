@@ -147,6 +147,14 @@ groups:
           summary: "Flight search skipped a disruption message it could not read: a cancelled flight may still be offered"
           runbook: "docs/runbooks/README.md#flightdisruptioneventsunreadable"
 
+      - alert: CheckInRemindersFailing
+        expr: increase(skyhub_checkin_reminders_total{outcome="failed"}[30m]) > 2
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "The check-in reminder sweep has failed repeatedly: travellers are not being told check-in is open"
+          runbook: "docs/runbooks/README.md#checkinremindersfailing"
+
       - alert: ServiceDown
         expr: up == 0
         for: 1m
