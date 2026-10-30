@@ -17,6 +17,7 @@ class NotificationEventsTest {
     private static final Path CANCELLED = Path.of("../../api-specs/events/booking-cancelled.v1.example.json");
     private static final Path REBOOKED = Path.of("../../api-specs/events/booking-rebooked.v1.example.json");
     private static final Path DISRUPTED = Path.of("../../api-specs/events/booking-disrupted.v1.example.json");
+    private static final Path WITHDRAWN = Path.of("../../api-specs/events/booking-disruption-withdrawn.v1.example.json");
 
     @Test
     void should_read_the_cancellation_event_with_its_refund() throws Exception {
@@ -49,6 +50,29 @@ class NotificationEventsTest {
         assertThat(event.disruption()).isEqualTo("DELAYED");
         assertThat(event.revisedDeparture()).isEqualTo(Instant.parse("2026-11-02T14:30:00Z"));
         assertThat(event.reason()).isEqualTo("Late inbound aircraft");
+    }
+
+    @Test
+    void should_read_the_event_that_a_disruption_was_withdrawn() throws Exception {
+        BookingDisruptionWithdrawnEvent event = EventParser.parse(Files.readString(WITHDRAWN), BookingDisruptionWithdrawnEvent.class);
+
+        assertThat(event.eventId()).isEqualTo(UUID.fromString("d8f2a4b6-17c3-4e90-b5a1-3c6e9d0f2b44"));
+        assertThat(event.locator()).isEqualTo("ABC234");
+        assertThat(event.flightNumber()).isEqualTo("SK501");
+        assertThat(event.departureDate()).isEqualTo(LocalDate.of(2026, 11, 2));
+        assertThat(event.disruption()).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void should_refuse_a_withdrawal_event_of_the_wrong_kind_or_missing_the_flight() throws Exception {
+        String withdrawn = Files.readString(WITHDRAWN);
+        for (String broken : new String[] {
+                withdrawn.replace("booking.disruption-withdrawn", "booking.disrupted"),
+                withdrawn.replace("\"CANCELLED\"", "\"EXPLODED\""),
+                withdrawn.replace("\"flightNumber\": \"SK501\",", "")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, BookingDisruptionWithdrawnEvent.class));
+        }
     }
 
     @Test

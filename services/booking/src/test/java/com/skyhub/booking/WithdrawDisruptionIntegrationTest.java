@@ -61,6 +61,19 @@ class WithdrawDisruptionIntegrationTest {
     }
 
     @Test
+    void should_queue_one_email_event_per_active_booking_and_none_when_repeated() throws Exception {
+        record("SK501", "2027-11-07", "DELAYED");   // a cancelled flight cannot be booked
+        book("SK501", "2027-11-07", "12A");
+        book("SK501", "2027-11-07", "12B");
+        long before = jdbc.queryForObject("SELECT count(*) FROM outbox_event WHERE event_type = 'booking.disruption-withdrawn'", Long.class);
+
+        mvc.perform(withdraw("SK501", "2027-11-07")).andExpect(status().isOk());
+        mvc.perform(withdraw("SK501", "2027-11-07")).andExpect(status().isNotFound());
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_event WHERE event_type = 'booking.disruption-withdrawn'", Long.class) - before).isEqualTo(2);
+    }
+
+    @Test
     void should_say_404_the_second_time_because_there_is_nothing_left_to_withdraw() throws Exception {
         record("SK501", "2027-11-03", "CANCELLED");
         mvc.perform(withdraw("SK501", "2027-11-03")).andExpect(status().isOk());

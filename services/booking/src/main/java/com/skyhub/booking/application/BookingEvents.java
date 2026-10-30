@@ -27,4 +27,7 @@ public interface BookingEvents {
 
     /** A flight on this booking was delayed or cancelled by the airline. One call per affected booking. */
     void bookingDisrupted(Pnr pnr, Disruption disruption);
+
+    /** Staff withdrew the disruption (ADR-0028). One call per booking still active on the flight. */
+    void bookingDisruptionWithdrawn(Pnr pnr, Disruption withdrawn);
 }

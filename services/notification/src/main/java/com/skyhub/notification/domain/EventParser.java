@@ -59,6 +59,11 @@ public final class EventParser {
                 require(e.passengers() != null && !e.passengers().isEmpty()
                         && e.passengers().stream().allMatch(p -> p.seat() != null && !p.seat().isBlank()), "no seats");
             }
+            case BookingDisruptionWithdrawnEvent e -> {
+                require(BookingDisruptionWithdrawnEvent.TYPE.equals(e.type()), "wrong type");
+                require(notBlank(e.flightNumber()) && e.departureDate() != null, "no flight");
+                require("DELAYED".equals(e.disruption()) || "CANCELLED".equals(e.disruption()), "unknown disruption");
+            }
             case BookingDisruptedEvent e -> {
                 require(BookingDisruptedEvent.TYPE.equals(e.type()), "wrong type");
                 require(notBlank(e.flightNumber()) && e.departureDate() != null, "no flight");

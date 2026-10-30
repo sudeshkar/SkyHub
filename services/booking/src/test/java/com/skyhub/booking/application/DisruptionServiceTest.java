@@ -151,6 +151,7 @@ class DisruptionServiceTest {
         int onTheFlight = service.withdraw("SK501", DATE, "priya.ops");
 
         assertThat(onTheFlight).isEqualTo(42);
+        verify(events, org.mockito.Mockito.times(42)).bookingDisruptionWithdrawn(any(), org.mockito.ArgumentMatchers.eq(recorded));   // each traveller is told once
         var order = org.mockito.Mockito.inOrder(disruptions, flightEvents);
         order.verify(disruptions).delete(recorded);
         order.verify(flightEvents).flightCleared("SK501", DATE);

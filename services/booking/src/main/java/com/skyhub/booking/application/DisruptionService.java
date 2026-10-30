@@ -77,8 +77,8 @@ public class DisruptionService {
     /**
      * Takes a disruption back (ADR-0026): the flight is for sale again and search shows it as scheduled. Refused once any
      * booking was moved off the flight, because those travellers' refund right is decided by this record
-     * ({@code CancellationRefunds.wasMovedOffACancelledFlight}). Travellers are not emailed: they were told something
-     * was wrong, and the ops page tells staff that.
+     * ({@code CancellationRefunds.wasMovedOffACancelledFlight}). Every traveller still holding the flight is emailed that it was
+     * withdrawn (ADR-0028).
      *
      * @return how many active bookings are on the flight
      */
@@ -93,7 +93,11 @@ public class DisruptionService {
             }
             disruptions.delete(disruption);
             flightEvents.flightCleared(flightNumber, departureDate);
-            return pnrs.findActiveOnFlight(flightNumber, departureDate).size();
+            List<Pnr> active = pnrs.findActiveOnFlight(flightNumber, departureDate);
+            for (Pnr pnr : active) {
+                events.bookingDisruptionWithdrawn(pnr, disruption);   // told in the same transaction (ADR-0028)
+            }
+            return active.size();
         });
         metrics.withdrawn();
         log.atInfo()

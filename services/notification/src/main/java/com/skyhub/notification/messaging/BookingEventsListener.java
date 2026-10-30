@@ -4,6 +4,7 @@ import com.skyhub.notification.application.NotificationService;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
 import com.skyhub.notification.domain.EventParser;
 import org.slf4j.Logger;
@@ -39,6 +40,8 @@ public class BookingEventsListener {
                     notifications.bookingRebooked(EventParser.parse(message, BookingRebookedEvent.class));
             case BookingDisruptedEvent.TYPE ->
                     notifications.bookingDisrupted(EventParser.parse(message, BookingDisruptedEvent.class));
+            case BookingDisruptionWithdrawnEvent.TYPE ->
+                    notifications.bookingDisruptionWithdrawn(EventParser.parse(message, BookingDisruptionWithdrawnEvent.class));
             default -> log.atDebug().addKeyValue("event.type", type).log("Event type not handled here; skipped");
         }
     }

@@ -31,6 +31,7 @@ For a flight that already has rebookings:
 - **With nothing recorded it answers 404.** Every request that finds a record deletes it, so repeating a request cannot do anything the first did not.
 - **The deletion and the event are one transaction** (the outbox, ADR-0019). Either both happen or neither does, so search cannot be told about a withdrawal that did not happen, or miss one that did.
 - **The event is the same `flight.disrupted` event with `"disruption": "CLEARED"`**, on the same key `FLIGHT@DATE`. Compaction keeps it and drops the cancellation. Search stores it as "scheduled" with its timestamp, so a late older cancellation is ignored. The entry is dropped by the existing purge a day after the flight leaves, like any other. The shape is `api-specs/events/flight-cleared.v1.example.json`, read by the search tests.
+- **Emails:** added in ADR-0028.
 - **Bookkeeping:** a counter `skyhub_disruptions_withdrawn_total` and a log line naming the staff member. No alert: like recording, it is a deliberate action by a person.
 - **The operations page** has a separate "Withdraw a disruption" form with a confirmation tick. It is a separate component because it is rarer and asks for something the recording form does not.
 
@@ -39,7 +40,7 @@ For a flight that already has rebookings:
 - Positive: a mistaken cancellation can be fixed in seconds, by the person who made it, and the flight is sold and searched again.
 - Positive: nothing about the refund rule changes, and it cannot be broken by a withdrawal.
 - Positive: a search instance that restarts later learns the correct state from the compacted topic.
-- Negative: **travellers are not told.** The "your flight is disrupted" email already sent cannot be recalled, and no "the disruption was withdrawn" email is sent. Their booking page stops showing the notice. A withdrawal email is one event type and one email template (the same recipe as ADR-0020), and is the follow-up.
+- Negative: **travellers are not told by this change alone.** Their booking page stops showing the notice, and ADR-0028 adds the email.
 - Negative: **a flight with rebookings can never be un-cancelled** from the screen. That is the point of the guard, but a genuinely mistaken cancellation that was already acted on needs a person to decide what to do about the moved travellers.
 - Negative: check-in or refunds that happened *while* the flight was cancelled are not undone.
-- Follow-up: the withdrawal email; showing the history of a flight's disruptions (today only the current record exists).
+- Follow-up: showing the history of a flight's disruptions (today only the current record exists).

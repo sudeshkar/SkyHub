@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -110,6 +111,27 @@ class EmailComposerTest {
 
         assertThat(message.subject()).isEqualTo("Your SkyHub flight SK501 on 2026-11-02 is cancelled");
         assertThat(message.body()).contains("full refund").contains("Manage booking").contains("Aircraft grounded");
+    }
+
+    @Test
+    void should_tell_the_traveller_a_cancellation_was_withdrawn_and_that_a_cancelled_booking_stays_cancelled() {
+        EmailMessage message = EmailComposer.bookingDisruptionWithdrawn(withdrawn("CANCELLED"));
+
+        assertThat(message.subject()).isEqualTo("Good news: your SkyHub flight SK501 on 2026-11-02 is operating");
+        assertThat(message.body()).contains("no longer cancelled").contains("ABC234").contains("already cancelled");
+    }
+
+    @Test
+    void should_tell_the_traveller_a_delay_was_withdrawn_and_the_original_time_applies() {
+        EmailMessage message = EmailComposer.bookingDisruptionWithdrawn(withdrawn("DELAYED"));
+
+        assertThat(message.subject()).isEqualTo("Your SkyHub flight SK501 on 2026-11-02 is back on time");
+        assertThat(message.body()).contains("original departure time").contains("24 hours before");
+    }
+
+    private static BookingDisruptionWithdrawnEvent withdrawn(String disruption) {
+        return new BookingDisruptionWithdrawnEvent(UUID.randomUUID(), "booking.disruption-withdrawn", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2), disruption);
     }
 
     @Test

@@ -32,6 +32,7 @@ public class OutboxBookingEvents implements BookingEvents {
     static final String BOOKING_CONFIRMED = "booking.confirmed";
     static final String BOOKING_CANCELLED = "booking.cancelled";
     static final String BOOKING_DISRUPTED = "booking.disrupted";
+    static final String BOOKING_DISRUPTION_WITHDRAWN = "booking.disruption-withdrawn";
     static final String BOOKING_REBOOKED = "booking.rebooked";
 
     private final OutboxEventRepository outbox;
@@ -88,6 +89,15 @@ public class OutboxBookingEvents implements BookingEvents {
             event.put("revisedDeparture", disruption.getRevisedDeparture().toString());
         }
         event.put("reason", disruption.getReason());
+        enqueue(pnr, event);
+    }
+
+    @Override
+    public void bookingDisruptionWithdrawn(Pnr pnr, Disruption withdrawn) {
+        Map<String, Object> event = event(BOOKING_DISRUPTION_WITHDRAWN, pnr);
+        event.put("flightNumber", withdrawn.getFlightNumber());
+        event.put("departureDate", withdrawn.getDepartureDate().toString());
+        event.put("disruption", withdrawn.getType().name());
         enqueue(pnr, event);
     }
 

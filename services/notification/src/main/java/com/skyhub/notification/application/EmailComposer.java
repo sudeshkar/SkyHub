@@ -3,6 +3,7 @@ package com.skyhub.notification.application;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
+import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -89,6 +90,26 @@ public final class EmailComposer {
                 any passenger: you can change your seats there, or cancel the booking.
                 """.formatted(event.locator(), oldFlight, newFlight, seatList);
         return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " has moved to " + newFlight, body);
+    }
+
+    public static EmailMessage bookingDisruptionWithdrawn(BookingDisruptionWithdrawnEvent event) {
+        boolean wasDelay = "DELAYED".equals(event.disruption());
+        String flight = event.flightNumber() + " on " + event.departureDate();
+        if (wasDelay) {
+            return new EmailMessage(event.contactEmail(), "Your SkyHub flight " + flight + " is back on time", """
+                    Good news: the delay to your flight %s has been withdrawn.
+                    The flight leaves at its original departure time again.
+
+                    Your booking %s and your seats are unchanged.
+                    Online check-in opens 24 hours before the original departure time.
+                    """.formatted(flight, event.locator()));
+        }
+        return new EmailMessage(event.contactEmail(), "Good news: your SkyHub flight " + flight + " is operating", """
+                Good news: your flight %s is no longer cancelled. It is operating as scheduled.
+
+                Your booking %s and your seats are unchanged and you do not need to do anything.
+                If you have already cancelled the booking, it stays cancelled and your refund is not affected.
+                """.formatted(flight, event.locator()));
     }
 
     public static EmailMessage bookingDisrupted(BookingDisruptedEvent event) {
