@@ -24,7 +24,7 @@ How a slice goes, every time:
 | 7 | Seat holds that expire | ADR-0012 |
 | 8 | Online check-in with signed boarding passes | ADR-0013 |
 | 9 | Flight delays and cancellations | ADR-0014 |
-| 10 | Payments with a mock provider (charge, book, refund on failure) | ADR-0015, **PR #12 open: merge it** |
+| 10 | Payments with a mock provider (charge, book, refund on failure) | ADR-0015 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -50,7 +50,6 @@ Ordered by how much they add to the story, not a commitment.
 - **Monitoring gaps:** no dashboard panel or alert for `skyhub_disruptions_total`; no Next.js tracing and no JDBC spans yet.
 - **Hold abuse:** holds are limited per client at the website (6 a minute); a per-client limit at the gateway is the next step (ADR-0012).
 - **Manage-token revocation:** a token stays valid until it expires (15 minutes); there is no way to revoke one (ADR-0011).
-- **ADRs still to write by hand** (placeholders in `docs/adr/README.md`): 0003 database per service, 0004 schedules stored and dated flights derived, 0005 all times in UTC, 0007 REST for queries and events for side effects, 0008 `Idempotency-Key` on `POST /pnrs`.
 - **README screenshots** of search, seat map, manage page and Grafana.
 - **Homepage hero video:** needs a paid plan on the video-generation service; the start frame is already prepared.
 - **Dev setup:** turn off the Java extension's auto-build in VS Code; it can overwrite `target/classes` and make a slice test fail for no code reason.
