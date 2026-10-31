@@ -120,7 +120,13 @@ export interface paths {
          *     and a wrong last name both return 404, so neither can be probed.
          */
         post: operations["openManageSession"];
-        delete?: never;
+        /**
+         * Sign out of a booking everywhere
+         * @description Ends every open session of this booking (ADR-0057): the token used for this call and any copy of it are refused from the next
+         *     request on, and a new session needs the last name again. It needs no password and can only make the booking harder to
+         *     reach, never easier. Other bookings are not affected. A token for another booking is 403.
+         */
+        delete: operations["endManageSessions"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1260,6 +1266,29 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["PnrNotFound"];
+        };
+    };
+    endManageSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locator: components["parameters"]["Locator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every session of the booking has ended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["PnrNotFound"];
         };
     };
