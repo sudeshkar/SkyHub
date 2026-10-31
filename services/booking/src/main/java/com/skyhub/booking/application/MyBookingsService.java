@@ -30,17 +30,15 @@ public class MyBookingsService {
     private final TravellerAccountRepository accounts;
     private final BookingsByAddress bookings;
     private final ManageBookingService manage;
-    private final ManageTokenIssuer tokens;
     private final MyBookingsMetrics metrics;
     private final Clock clock;
 
     public MyBookingsService(TravellerAccountRepository accounts, BookingsByAddress bookings, ManageBookingService manage,
-                             ManageTokenIssuer tokens, MyBookingsMetrics metrics, Clock clock) {
+                             MyBookingsMetrics metrics, Clock clock) {
         this.clock = clock;
         this.accounts = accounts;
         this.bookings = bookings;
         this.manage = manage;
-        this.tokens = tokens;
         this.metrics = metrics;
     }
 
@@ -107,7 +105,7 @@ public class MyBookingsService {
         }
         metrics.opened();
         log.atInfo().addKeyValue("account.id", accountId).addKeyValue("pnr.locator", locator).log("Booking opened from an account");
-        return new ManageSession(tokens.issue(locator), manage.find(locator));
+        return new ManageSession(manage.tokenFor(locator), manage.find(locator));
     }
 
     /** A token for an account that no longer exists is refused like a failed sign-in. */

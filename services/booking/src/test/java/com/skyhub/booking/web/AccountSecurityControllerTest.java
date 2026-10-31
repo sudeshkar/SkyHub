@@ -64,7 +64,7 @@ class AccountSecurityControllerTest {
     @Test
     void should_serve_only_a_holder_of_an_account_token() throws Exception {
         mvc.perform(delete(URL)).andExpect(status().isUnauthorized());
-        mvc.perform(delete(URL).header("Authorization", "Bearer " + manageTokens.issue("ABC234").value())).andExpect(status().isForbidden());
+        mvc.perform(delete(URL).header("Authorization", "Bearer " + manageTokens.issue("ABC234", 0).value())).andExpect(status().isForbidden());
         mvc.perform(delete(URL).header("Authorization", "Bearer " + staffTokens.issue("priya.ops", StaffRole.ADMIN).value()))
                 .andExpect(status().isForbidden());
 

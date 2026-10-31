@@ -42,11 +42,14 @@ public class ManageBookingService {
     private final CancellationRefunds refunds;
     private final TransactionOperations transactions;
     private final BookingEvents events;
+    private final BookingSessions sessions;
 
     public ManageBookingService(PnrRepository pnrs, SeatInventoryRepository seats, CheckInRepository checkIns,
                                 SeatMapCache seatMaps, ManageTokenIssuer tokens, ManageMetrics metrics,
-                                CancellationRefunds refunds, TransactionOperations transactions, BookingEvents events) {
+                                CancellationRefunds refunds, TransactionOperations transactions, BookingEvents events,
+                                BookingSessions sessions) {
         this.events = events;
+        this.sessions = sessions;
         this.pnrs = pnrs;
         this.seats = seats;
         this.checkIns = checkIns;
@@ -67,7 +70,25 @@ public class ManageBookingService {
         }
         metrics.record(Action.SESSION_OPENED);
         log.atInfo().addKeyValue("pnr.locator", locator).log("Manage session opened");
-        return new ManageSession(tokens.issue(locator), view(pnr));
+        return new ManageSession(tokenFor(locator), view(pnr));
+    }
+
+    /** A token for this booking under the epoch it is at now (ADR-0057); the caller has already shown the right to it. */
+    public ManageToken tokenFor(String locator) {
+        return tokens.issue(locator, sessions.currentEpoch(locator));
+    }
+
+    /**
+     * Signing out (ADR-0057): every session of the booking ends, the caller's included and any copy of its token. A new session needs the
+     * last name again. Authorisation (the token must be for this booking) is the security layer's job.
+     */
+    public void endSessions(String locator) {
+        if (pnrs.findByLocator(locator).isEmpty()) {
+            throw notFound();
+        }
+        sessions.endAll(locator);
+        metrics.record(Action.SESSIONS_ENDED);
+        log.atInfo().addKeyValue("pnr.locator", locator).log("Manage sessions ended");
     }
 
     public PnrView find(String locator) {

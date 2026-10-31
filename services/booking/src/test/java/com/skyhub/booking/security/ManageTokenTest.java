@@ -34,7 +34,7 @@ class ManageTokenTest {
 
     @Test
     void should_issue_a_token_for_one_booking_that_expires_in_fifteen_minutes() {
-        ManageToken token = issuer.issue("ABC234");
+        ManageToken token = issuer.issue("ABC234", 0);
 
         Jwt jwt = decoderAt(NOW.plusSeconds(60)).decode(token.value());
 
@@ -46,14 +46,22 @@ class ManageTokenTest {
     }
 
     @Test
+    void should_carry_the_epoch_it_was_issued_under_so_ending_the_sessions_can_refuse_it_later() {
+        Jwt jwt = decoderAt(NOW).decode(issuer.issue("ABC234", 3).value());
+
+        assertThat(jwt.<Number>getClaim("epoch").intValue()).isEqualTo(3);
+        assertThat(jwt.getClaimAsString("scope")).isEqualTo("manage");
+    }
+
+    @Test
     void should_give_every_token_its_own_id() {
-        assertThat(decoderAt(NOW).decode(issuer.issue("ABC234").value()).getId())
-                .isNotEqualTo(decoderAt(NOW).decode(issuer.issue("ABC234").value()).getId());
+        assertThat(decoderAt(NOW).decode(issuer.issue("ABC234", 0).value()).getId())
+                .isNotEqualTo(decoderAt(NOW).decode(issuer.issue("ABC234", 0).value()).getId());
     }
 
     @Test
     void should_reject_an_expired_token() {
-        String token = issuer.issue("ABC234").value();
+        String token = issuer.issue("ABC234", 0).value();
 
         assertThatExceptionOfType(JwtException.class)
                 .isThrownBy(() -> decoderAt(NOW.plus(Duration.ofMinutes(16))).decode(token));
@@ -61,7 +69,7 @@ class ManageTokenTest {
 
     @Test
     void should_reject_a_token_with_a_tampered_payload() {
-        String[] parts = issuer.issue("ABC234").value().split("\\.");
+        String[] parts = issuer.issue("ABC234", 0).value().split("\\.");
         String forged = Base64.getUrlEncoder().withoutPadding().encodeToString(
                 new String(Base64.getUrlDecoder().decode(parts[1])).replace("ABC234", "ZZZZZZ").getBytes());
 
@@ -77,7 +85,7 @@ class ManageTokenTest {
         var foreign = new JwtManageTokenIssuer(ManageTokenConfig.encoder(otherKey), Clock.fixed(NOW, ZoneOffset.UTC),
                 Duration.ofMinutes(15));
 
-        assertThatExceptionOfType(JwtException.class).isThrownBy(() -> decoderAt(NOW).decode(foreign.issue("ABC234").value()));
+        assertThatExceptionOfType(JwtException.class).isThrownBy(() -> decoderAt(NOW).decode(foreign.issue("ABC234", 0).value()));
     }
 
     @Test
@@ -91,7 +99,7 @@ class ManageTokenTest {
 
     @Test
     void should_never_print_the_token() {
-        ManageToken token = issuer.issue("ABC234");
+        ManageToken token = issuer.issue("ABC234", 0);
 
         assertThat(token.toString()).doesNotContain(token.value()).doesNotContain("eyJ");
     }

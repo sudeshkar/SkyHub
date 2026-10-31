@@ -3,6 +3,8 @@ package com.skyhub.booking.security;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.skyhub.booking.application.AccountMetrics;
 import com.skyhub.booking.application.AccountSessions;
+import com.skyhub.booking.application.BookingSessions;
+import com.skyhub.booking.application.ManageMetrics;
 import com.skyhub.booking.application.AccountTokenIssuer;
 import com.skyhub.booking.application.ManageTokenIssuer;
 import com.skyhub.booking.application.StaffTokenIssuer;
@@ -80,8 +82,11 @@ public class ManageTokenConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey manageTokenKey, Clock clock, AccountSessions sessions, AccountMetrics metrics) {
-        return decoder(manageTokenKey, clock, new RevokedSessionValidator(sessions, metrics));
+    JwtDecoder jwtDecoder(SecretKey manageTokenKey, Clock clock, AccountSessions sessions, AccountMetrics metrics,
+                          BookingSessions bookingSessions, ManageMetrics manageMetrics) {
+        // Each validator looks only at its own kind of token: an ended account session (ADR-0041), an ended booking session (ADR-0057).
+        return decoder(manageTokenKey, clock, new DelegatingOAuth2TokenValidator<>(new RevokedSessionValidator(sessions, metrics),
+                new RevokedBookingSessionValidator(bookingSessions, manageMetrics)));
     }
 
     @Bean

@@ -35,10 +35,9 @@ class MyBookingsServiceTest {
     private final TravellerAccountRepository accounts = mock(TravellerAccountRepository.class);
     private final BookingsByAddress bookings = mock(BookingsByAddress.class);
     private final ManageBookingService manage = mock(ManageBookingService.class);
-    private final ManageTokenIssuer tokens = mock(ManageTokenIssuer.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final MyBookingsService service =
-            new MyBookingsService(accounts, bookings, manage, tokens, new MyBookingsMetrics(registry),
+            new MyBookingsService(accounts, bookings, manage, new MyBookingsMetrics(registry),
                     java.time.Clock.fixed(NOW, java.time.ZoneOffset.UTC));
 
     @BeforeEach
@@ -123,7 +122,7 @@ class MyBookingsServiceTest {
         var token = new ManageToken("signed", NOW.plusSeconds(900));
         var view = mock(PnrView.class);
         when(bookings.owns(INDEX, "ABC234")).thenReturn(true);
-        when(tokens.issue("ABC234")).thenReturn(token);
+        when(manage.tokenFor("ABC234")).thenReturn(token);
         when(manage.find("ABC234")).thenReturn(view);
 
         var session = service.openSession(7L, "ABC234");
@@ -141,14 +140,14 @@ class MyBookingsServiceTest {
                 .withMessage("No booking matches this reference");
         assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.openSession(7L, "ZZZZZZ"))
                 .withMessage("No booking matches this reference");
-        verify(tokens, never()).issue(anyString());
+        verify(manage, never()).tokenFor(anyString());
         assertThat(count("denied")).isEqualTo(2);
     }
 
     @Test
     void should_issue_no_token_for_an_account_that_no_longer_exists() {
         assertThatExceptionOfType(AccountLoginFailedException.class).isThrownBy(() -> service.openSession(99L, "ABC234"));
-        verify(tokens, never()).issue(anyString());
+        verify(manage, never()).tokenFor(anyString());
     }
 
     @Test

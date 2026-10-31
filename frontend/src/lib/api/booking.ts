@@ -228,6 +228,24 @@ export async function checkIn(locator: string, token: string, segmentIndex: numb
   return passesOutcome(response, [200, 201]);
 }
 
+export type EndManageSessionsOutcome =
+  | { kind: "ended" } // every session of the booking, this one included and any copy of its token, is now refused
+  | { kind: "unauthorized" } // this session was already not accepted: there is nothing left to end
+  | { kind: "unavailable" };
+
+/** Signs out of the booking everywhere (ADR-0057). It asks for nothing more than the session: it can only make the booking harder to reach. */
+export async function endManageSessions(locator: string, token: string): Promise<EndManageSessionsOutcome> {
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/sessions`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 204) return { kind: "ended" };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
 export type CheckOutOutcome =
   | { kind: "ok" } // the flight is not checked in now (it also was not, if it never was)
   | { kind: "closed"; detail: string } // check-in has closed: the passes are what the gate works from

@@ -32,6 +32,6 @@ Option 3.
 
 - Positive: the last name is sent once per session, not on every request; a stolen token opens one booking for at most 15 minutes.
 - Positive: stateless — any instance can verify any token.
-- Negative: a token cannot be revoked before it expires (for example after "close this booking"); the cookie is dropped but a copied token stays valid until expiry. A revocation list would fix this if needed.
+- Negative: a token cannot be revoked before it expires (for example after "close this booking"); the cookie is dropped but a copied token stays valid until expiry. A revocation list would fix this if needed. (Done differently, with a session epoch: ADR-0057.)
 - Negative: rotating the signing key signs everyone out. Acceptable with a 15-minute lifetime.
 - Follow-up: alert on `skyhub_manage_actions_total{action="session_denied"}` (done); an optional second factor, such as a code sent to the contact email, for high-value changes.

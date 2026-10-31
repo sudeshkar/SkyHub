@@ -182,7 +182,7 @@ class StaffLoginIntegrationTest {
     private String tokenForSomeBooking() throws Exception {
         String locator = "ZZ" + UUID.randomUUID().toString().replace("-", "").substring(0, 4).toUpperCase();
         // issue directly: no booking is needed to prove the staff rules reject a manage-scope token
-        return "Bearer " + manageTokens.issue(locator).value();
+        return "Bearer " + manageTokens.issue(locator, 0).value();
     }
 
     @Autowired

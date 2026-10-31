@@ -23,6 +23,31 @@ class WebSliceSecurity {
         return new com.skyhub.booking.application.AccountMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
+    /** Likewise for booking sessions (ADR-0057): revocation is tested against the database in BookingSessionRevocationIntegrationTest. */
+    @Bean
+    com.skyhub.booking.application.BookingSessions bookingSessions() {
+        return new com.skyhub.booking.application.BookingSessions() {
+            @Override
+            public int currentEpoch(String locator) {
+                return 0;
+            }
+
+            @Override
+            public boolean accepts(String locator, int epoch) {
+                return true;
+            }
+
+            @Override
+            public void endAll(String locator) {
+            }
+        };
+    }
+
+    @Bean
+    com.skyhub.booking.application.ManageMetrics manageMetrics() {
+        return new com.skyhub.booking.application.ManageMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+    }
+
     @Bean
     Clock clock() {
         return Clock.systemUTC();

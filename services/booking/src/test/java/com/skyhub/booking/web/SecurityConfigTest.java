@@ -68,7 +68,7 @@ class SecurityConfigTest {
     private ManageBookingService manageBooking;
 
     private String bearer(String locator) {
-        return "Bearer " + tokens.issue(locator).value();
+        return "Bearer " + tokens.issue(locator, 0).value();
     }
 
     @Test
@@ -117,7 +117,7 @@ class SecurityConfigTest {
 
         mvc.perform(get("/api/v1/pnrs/ABC234").header("Authorization", "Bearer not.a.token"))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/pnrs/ABC234").header("Authorization", "Bearer " + past.issue("ABC234").value()))
+        mvc.perform(get("/api/v1/pnrs/ABC234").header("Authorization", "Bearer " + past.issue("ABC234", 0).value()))
                 .andExpect(status().isUnauthorized());
     }
 

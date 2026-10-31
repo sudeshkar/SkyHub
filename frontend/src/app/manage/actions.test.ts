@@ -4,6 +4,7 @@ import {
   changeSeat as changeSeatCall,
   checkIn as checkInCall,
   checkOut as checkOutCall,
+  endManageSessions,
   openManageSession,
   type Pnr,
 } from "@/lib/api/booking";
@@ -19,6 +20,7 @@ vi.mock("@/lib/api/booking", () => ({
   changeSeat: vi.fn(),
   checkIn: vi.fn(),
   checkOut: vi.fn(),
+  endManageSessions: vi.fn(),
   getSeatMap: vi.fn(),
 }));
 // redirect() works by throwing; the real one is not available outside a request.
@@ -85,10 +87,32 @@ describe("lookupBooking", () => {
   });
 });
 
-describe("closeSession", () => {
-  it("drops the token and returns to the lookup form", async () => {
+describe("closeSession (ADR-0057)", () => {
+  it("ends every session of the booking on the server, drops the token and returns to the lookup form", async () => {
+    vi.mocked(readSession).mockResolvedValue(SESSION);
+    vi.mocked(endManageSessions).mockResolvedValue({ kind: "ended" });
+
     await expect(closeSession()).rejects.toThrow("NEXT_REDIRECT:/manage");
 
+    expect(endManageSessions).toHaveBeenCalledWith("YUFHBD", SESSION.token);
+    expect(clearSession).toHaveBeenCalled();
+  });
+
+  it("still drops the token when the server could not be reached, so this browser is signed out either way", async () => {
+    vi.mocked(readSession).mockResolvedValue(SESSION);
+    vi.mocked(endManageSessions).mockResolvedValue({ kind: "unavailable" });
+
+    await expect(closeSession()).rejects.toThrow("NEXT_REDIRECT:/manage");
+
+    expect(clearSession).toHaveBeenCalled();
+  });
+
+  it("only drops the token when there is no session to end", async () => {
+    vi.mocked(readSession).mockResolvedValue(null);
+
+    await expect(closeSession()).rejects.toThrow("NEXT_REDIRECT:/manage");
+
+    expect(endManageSessions).not.toHaveBeenCalled();
     expect(clearSession).toHaveBeenCalled();
   });
 });

@@ -92,7 +92,7 @@ class BulkRebookingControllerTest {
     @Test
     void should_keep_it_from_anonymous_callers_travellers_and_booking_holders() throws Exception {
         mvc.perform(request(BODY, null)).andExpect(status().isUnauthorized());
-        mvc.perform(request(BODY, "Bearer " + manageTokens.issue("AAAAAA").value())).andExpect(status().isForbidden());
+        mvc.perform(request(BODY, "Bearer " + manageTokens.issue("AAAAAA", 0).value())).andExpect(status().isForbidden());
         mvc.perform(request(BODY, "Bearer " + accountTokens.issue(7L).value())).andExpect(status().isForbidden());
 
         verifyNoInteractions(bulk);
