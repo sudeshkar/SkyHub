@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -131,7 +132,8 @@ public class RebookingService {
         RebookingContext context = new RebookingContext(pnr, index, from, target, fromInfo, targetInfo,
                 disruptions.findByFlightNumberAndDepartureDate(from.flightNumber(), from.departureDate()),
                 disruptions.findByFlightNumberAndDepartureDate(target.flightNumber(), target.departureDate()),
-                checkIns.existsByLocatorAndSegmentIndex(command.locator(), index));
+                checkIns.existsByLocatorAndSegmentIndex(command.locator(), index),
+                neighbour(pnr, index - 1), neighbour(pnr, index + 1));
         for (RebookingRule rule : rules) {
             rule.refusal(context).ifPresent(reason -> {
                 throw new RebookingRefusedException(reason);
@@ -151,6 +153,19 @@ public class RebookingService {
         audit.save(Rebooking.of(command.locator(), index, from, target, command.rebookedBy(), clock.instant()));
         events.bookingRebooked(pnr, from, target);   // same transaction: the email exists exactly when the move does
         return new RebookingResult(command.locator(), index, from, target, newSeats, true);
+    }
+
+    /**
+     * The flight of this booking at {@code position}, if there is one and the timetable still has it (ADR-0036). A flight that is no
+     * longer in the timetable cannot be judged and is skipped. At most two of these per move, both answered from the cache.
+     */
+    private Optional<RebookingContext.Neighbour> neighbour(Pnr pnr, int position) {
+        if (position < 0 || position >= pnr.getSegments().size()) {
+            return Optional.empty();
+        }
+        PnrSegment flight = pnr.getSegments().get(position);
+        return catalog.find(flight.flightNumber(), flight.departureDate()).map(info -> new RebookingContext.Neighbour(flight, info,
+                disruptions.findByFlightNumberAndDepartureDate(flight.flightNumber(), flight.departureDate())));
     }
 
     /** One seat per passenger, each in the cabin they were sitting in, with each cabin's group kept together. */

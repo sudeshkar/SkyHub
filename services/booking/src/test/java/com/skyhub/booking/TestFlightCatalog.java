@@ -28,6 +28,9 @@ public class TestFlightCatalog {
     /** Every flight costs 100.00 USD per passenger, so the price of a test booking is easy to predict. */
     public static final Money FARE = Money.of("100.00", "USD");
 
+    /** Every flight takes seven hours, so a replacement lands seven hours after it leaves. */
+    public static final Duration FLIGHT_TIME = Duration.ofHours(7);
+
     /** Fixed when the tests start, so asking about the same flight twice gives the same time. */
     private static final Instant START = Instant.now();
 
@@ -39,6 +42,7 @@ public class TestFlightCatalog {
             case NOT_YET_OPEN_FLIGHT -> Optional.of(START.plus(Duration.ofHours(30)));
             case CLOSED_FLIGHT -> Optional.of(START.plus(Duration.ofMinutes(30)));
             default -> Optional.of(START.plus(Duration.ofHours(5)));
-        }).map(departure -> new FlightInfo(departure, FARE, "DXB", flightNumber.equals(OTHER_ROUTE_FLIGHT) ? "JFK" : "LHR"));
+        }).map(departure -> new FlightInfo(departure, FARE, "DXB", flightNumber.equals(OTHER_ROUTE_FLIGHT) ? "JFK" : "LHR",
+                departure.plus(FLIGHT_TIME)));
     }
 }
