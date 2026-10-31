@@ -60,6 +60,7 @@ How a slice goes, every time:
 | 41 | One-time link tokens sealed in the events that carry them (AES-GCM, bound to the event type and address), so the topic no longer holds a usable secret | ADR-0046 |
 | 42 | "Sign out everywhere": one action that ends every session of the account, without changing the password | ADR-0047 |
 | 43 | One password rule for staff and travellers (12 characters at least, 72 bytes at most), fixing a 500 for passwords BCrypt cannot store | ADR-0048 |
+| 44 | A repeatable live check of the account journey through the real chain (booking, Kafka, notification, Mailpit), and the fix for the one defect its first run found | ADR-0049 |
 
 ## Next slices (pick one at a time; each is independent)
 

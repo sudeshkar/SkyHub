@@ -37,6 +37,12 @@ public class MyBookingsMetrics {
                 .description("Old bookings given an address index by the start-up backfill").register(registry)).increment(bookings);
     }
 
+    /** Old bookings whose address could not be read in a start-up backfill, once per run (ADR-0034). */
+    public void unreadable(int bookings) {
+        counters.computeIfAbsent("unreadable", key -> Counter.builder("skyhub.contact.index.unreadable")
+                .description("Bookings whose address could not be read during a start-up backfill").register(registry)).increment(bookings);
+    }
+
     private void outcome(String outcome) {
         counters.computeIfAbsent(outcome, key -> Counter.builder("skyhub.my.bookings")
                 .description("A signed-in traveller's bookings: listed, opened, or denied (not theirs or unknown)")

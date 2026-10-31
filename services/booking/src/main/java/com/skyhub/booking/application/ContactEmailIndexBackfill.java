@@ -1,6 +1,7 @@
 package com.skyhub.booking.application;
 
 import com.skyhub.booking.application.UnindexedContacts.Contact;
+import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component;
 public class ContactEmailIndexBackfill implements ApplicationRunner {
 
     static final int BATCH_SIZE = 500;
+    private static final int SAMPLE_IDS = 5;
 
     private static final Logger log = LoggerFactory.getLogger(ContactEmailIndexBackfill.class);
 
@@ -51,11 +53,18 @@ public class ContactEmailIndexBackfill implements ApplicationRunner {
     /** @return how many bookings were given an index. O(unindexed bookings), in batches. */
     public int run() {
         int indexed = 0;
+        int unreadable = 0;
+        List<Long> sample = new ArrayList<>();   // a few ids to start looking from, never all of them
         long after = 0;
         while (true) {
             List<Contact> batch = contacts.after(after, batchSize);
             for (Contact contact : batch) {
-                if (contact.email() != null && contacts.setIndex(contact.id(), emailIndex.of(contact.email().value()))) {
+                if (contact.email() == null) {
+                    unreadable++;
+                    if (sample.size() < SAMPLE_IDS) {
+                        sample.add(contact.id());
+                    }
+                } else if (contacts.setIndex(contact.id(), emailIndex.of(contact.email().value()))) {
                     indexed++;
                 }
                 after = contact.id();
@@ -65,6 +74,12 @@ public class ContactEmailIndexBackfill implements ApplicationRunner {
             }
         }
         metrics.backfilled(indexed);
+        if (unreadable > 0) {
+            // One line for the run, not one per booking: after a wrong or changed key this can be every old booking, at every start.
+            metrics.unreadable(unreadable);
+            log.atError().addKeyValue("backfill.unreadable", unreadable).addKeyValue("pnr.ids", sample)
+                    .log("Some bookings' addresses could not be read, so they were not indexed (a changed SKYHUB_PII_KEY?); tried again at every start");
+        }
         return indexed;
     }
 }

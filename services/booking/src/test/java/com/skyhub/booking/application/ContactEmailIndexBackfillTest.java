@@ -124,4 +124,32 @@ class ContactEmailIndexBackfillTest {
 
         assertThat(registry.find("skyhub.contact.index.backfilled").counter().count()).isEqualTo(4);
     }
+
+    @Test
+    void should_count_the_bookings_it_could_not_read_once_per_run_not_once_per_row() {
+        addRows(1);
+        var withUnreadable = new FakeStore() {
+            @Override
+            public List<Contact> after(long id, int limit) {
+                return super.after(id, limit).stream().map(c -> new Contact(c.id(), null)).toList();
+            }
+        };
+        withUnreadable.unindexed.put(1L, new ContactEmail("p1@example.com"));
+        withUnreadable.unindexed.put(2L, new ContactEmail("p2@example.com"));
+        withUnreadable.unindexed.put(3L, new ContactEmail("p3@example.com"));
+
+        int done = new ContactEmailIndexBackfill(withUnreadable, index, new MyBookingsMetrics(registry), 500).run();
+
+        assertThat(done).isZero();
+        assertThat(registry.find("skyhub.contact.index.unreadable").counter().count()).isEqualTo(3);   // one number for the run, not a line per row
+    }
+
+    @Test
+    void should_report_nothing_unreadable_when_every_address_could_be_read() {
+        addRows(3);
+
+        backfill(500).run();
+
+        assertThat(registry.find("skyhub.contact.index.unreadable").counter()).isNull();
+    }
 }

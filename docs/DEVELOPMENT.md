@@ -67,7 +67,7 @@ Ask of every slice: *what will the next feature make me edit?* and *what happens
 - Run the whole build of every service touched: `JAVA_HOME="C:\Program Files\Java\jdk-26.0.2" ./mvnw -B -q -f services/<service>/pom.xml verify`, then read the Surefire reports (the console is full of expected log noise).
 - Frontend: `npx vitest run`, `npx tsc --noEmit`, `npx eslint src`, and `npx next build` when pages or server actions changed. After changing the booking contract, run `npm run api:types` (CI checks the generated types match).
 - Alert rules: `promtool check rules` (run it in Docker, see below).
-- Where it matters, **prove the real chain live** (booking, Kafka, notification, Mailpit) and report it. Where something was not clicked through in a browser, or not run against a real provider, **say so**.
+- Where it matters, **prove the real chain live** (booking, Kafka, notification, Mailpit) and report it. For the account journey, `tools/live-check/` does it in two commands (ADR-0049); say in the pull request if you ran it. Where something was not clicked through in a browser, or not run against a real provider, **say so**.
 - Report outcomes faithfully: a failing test is reported with its output, never hidden.
 
 ## 7. Machine notes
