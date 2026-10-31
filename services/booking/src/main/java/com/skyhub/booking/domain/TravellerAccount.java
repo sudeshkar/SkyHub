@@ -1,6 +1,7 @@
 package com.skyhub.booking.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -16,12 +17,12 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "traveller_account")
-public class TravellerAccount {
+public class TravellerAccount implements PasswordProtected {
 
     public static final Duration LINK_LIFETIME = Duration.ofHours(1);
     public static final Duration LINK_RESEND_AFTER = Duration.ofMinutes(2);
-    public static final int MAX_FAILED_ATTEMPTS = 5;
-    public static final Duration LOCK_DURATION = Duration.ofMinutes(15);
+    public static final int MAX_FAILED_ATTEMPTS = LoginLock.MAX_FAILED_ATTEMPTS;
+    public static final Duration LOCK_DURATION = LoginLock.LOCK_DURATION;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -68,10 +69,9 @@ public class TravellerAccount {
     @Column(nullable = false)
     private int sessionEpoch;
 
-    @Column(nullable = false)
-    private int failedAttempts;
-
-    private Instant lockedUntil;
+    /** The one rule for locking after wrong passwords, shared with staff accounts (ADR-0045). */
+    @Embedded
+    private LoginLock lock = new LoginLock();
 
     @Column(nullable = false)
     private Instant createdAt;
@@ -116,30 +116,23 @@ public class TravellerAccount {
         }
         linkTokenHash = null;
         linkExpiresAt = null;
-        failedAttempts = 0;
-        lockedUntil = null;
+        lock.clear();
         sessionEpoch++;   // choosing a password is a change of credentials: every open session ends
     }
 
+    @Override
     public boolean isLockedAt(Instant now) {
-        return lockedUntil != null && now.isBefore(lockedUntil);
+        return lock.isLockedAt(now);
     }
 
+    @Override
     public void recordFailedLogin(Instant now) {
-        if (lockedUntil != null && !now.isBefore(lockedUntil)) {
-            lockedUntil = null;
-            failedAttempts = 0;
-        }
-        failedAttempts++;
-        if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-            lockedUntil = now.plus(LOCK_DURATION);
-            failedAttempts = 0;
-        }
+        lock.recordFailure(now);
     }
 
+    @Override
     public void recordSuccessfulLogin() {
-        failedAttempts = 0;
-        lockedUntil = null;
+        lock.recordSuccess();
     }
 
     /** Asking again straight away would only be used to flood someone's inbox. */
@@ -202,6 +195,7 @@ public class TravellerAccount {
         return emailIndex;
     }
 
+    @Override
     public String getPasswordHash() {
         return passwordHash;
     }

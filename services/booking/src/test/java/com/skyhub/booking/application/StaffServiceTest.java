@@ -49,7 +49,7 @@ class StaffServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StaffService(accounts, encoder, tokens, Clock.fixed(NOW, ZoneOffset.UTC),
+        service = new StaffService(accounts, encoder, new PasswordGate(encoder), tokens, Clock.fixed(NOW, ZoneOffset.UTC),
                 new StaffMetrics(registry), TransactionOperations.withoutTransaction());
         priya = StaffAccount.create("priya.ops", encoder.hash(PASSWORD), StaffRole.OPS, NOW);
         when(accounts.findForUpdateByUsername("priya.ops")).thenReturn(Optional.of(priya));
@@ -92,7 +92,7 @@ class StaffServiceTest {
     @Test
     void should_still_check_a_password_for_an_unknown_user_so_timing_does_not_give_the_name_away() {
         PasswordHasher watched = spy(encoder);
-        StaffService timed = new StaffService(accounts, watched, tokens, Clock.fixed(NOW, ZoneOffset.UTC),
+        StaffService timed = new StaffService(accounts, watched, new PasswordGate(watched), tokens, Clock.fixed(NOW, ZoneOffset.UTC),
                 new StaffMetrics(new SimpleMeterRegistry()), TransactionOperations.withoutTransaction());
         when(accounts.findForUpdateByUsername("nobody")).thenReturn(Optional.empty());
 

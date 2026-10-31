@@ -29,43 +29,40 @@ public class AccountService {
     private static final int MIN_PASSWORD_LENGTH = 12;
     private static final int MAX_PASSWORD_LENGTH = 100;
 
-    private enum Outcome { SUCCESS, FAILED, LOCKED }
-
-    private record Attempt(Outcome outcome, TravellerAccount account) {
+    private record Attempt(PasswordGate.Outcome outcome, TravellerAccount account) {
     }
 
     private final TravellerAccountRepository accounts;
     private final EmailIndex emailIndex;
     private final PasswordHasher passwords;
+    private final PasswordGate gate;
     private final AccountTokenIssuer tokens;
     private final AccountEvents events;
     private final Clock clock;
     private final AccountMetrics metrics;
     private final TransactionOperations tx;
     private final Supplier<String> newToken;
-    /** What an unknown address is checked against, so it costs the same time as a real one. */
-    private final String decoyHash;
 
     @Autowired
-    public AccountService(TravellerAccountRepository accounts, EmailIndex emailIndex, PasswordHasher passwords,
+    public AccountService(TravellerAccountRepository accounts, EmailIndex emailIndex, PasswordHasher passwords, PasswordGate gate,
                           AccountTokenIssuer tokens, AccountEvents events, Clock clock, AccountMetrics metrics,
                           TransactionOperations tx) {
-        this(accounts, emailIndex, passwords, tokens, events, clock, metrics, tx, AccountService::randomToken);
+        this(accounts, emailIndex, passwords, gate, tokens, events, clock, metrics, tx, AccountService::randomToken);
     }
 
-    AccountService(TravellerAccountRepository accounts, EmailIndex emailIndex, PasswordHasher passwords,
+    AccountService(TravellerAccountRepository accounts, EmailIndex emailIndex, PasswordHasher passwords, PasswordGate gate,
                    AccountTokenIssuer tokens, AccountEvents events, Clock clock, AccountMetrics metrics,
                    TransactionOperations tx, Supplier<String> newToken) {
         this.accounts = accounts;
         this.emailIndex = emailIndex;
         this.passwords = passwords;
+        this.gate = gate;
         this.tokens = tokens;
         this.events = events;
         this.clock = clock;
         this.metrics = metrics;
         this.tx = tx;
         this.newToken = newToken;
-        this.decoyHash = passwords.hash("a password nobody has");
     }
 
     private static String randomToken() {
@@ -144,31 +141,10 @@ public class AccountService {
         throw new AccountLoginFailedException();
     }
 
+    /** The gate decides (ADR-0045), the same way for sign-in and for changing the address (ADR-0039), so neither is a way round the lock. */
     private Attempt attempt(String index, String password) {
         TravellerAccount account = accounts.findForUpdateByEmailIndex(index).orElse(null);
-        return new Attempt(account == null ? verify(null, password, clock.instant()) : verify(account, password, clock.instant()), account);
-    }
-
-    /**
-     * Checks a password against an account the way sign-in does, and records the result on it (the caller saves): the same cost
-     * for an unknown account or one with no password, a locked account refused even with the right password, and five wrong
-     * passwords locking it. Shared by sign-in and by changing the address (ADR-0039), so neither can be a way round the lock.
-     */
-    private Outcome verify(TravellerAccount account, String password, Instant now) {
-        if (account == null || !account.hasPassword()) {
-            passwords.matches(password, decoyHash);
-            return Outcome.FAILED;
-        }
-        boolean correct = passwords.matches(password, account.getPasswordHash());   // checked even if locked: same cost
-        if (account.isLockedAt(now)) {
-            return Outcome.LOCKED;
-        }
-        if (correct) {
-            account.recordSuccessfulLogin();
-            return Outcome.SUCCESS;
-        }
-        account.recordFailedLogin(now);
-        return Outcome.FAILED;
+        return new Attempt(gate.check(account, password, clock.instant()), account);
     }
 
     /**
@@ -205,7 +181,7 @@ public class AccountService {
     private EmailChange startEmailChange(long accountId, ContactEmail newEmail, String newIndex, String password) {
         Instant now = clock.instant();
         TravellerAccount account = accounts.findForUpdateById(accountId).orElseThrow(AccountLoginFailedException::new);
-        if (verify(account, password, now) != Outcome.SUCCESS) {
+        if (gate.check(account, password, now) != PasswordGate.Outcome.SUCCESS) {
             accounts.saveAndFlush(account);   // keeps the failed attempt, so asking here cannot be used to guess the password
             return EmailChange.PASSWORD_REFUSED;
         }
