@@ -79,7 +79,8 @@ class BookingServiceTest {
                     new DistinctFlightsRule(), new OneSeatPerFlightRule(), new NoSharedSeatsRule())), () -> "ABC234",
             Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
             new BookingMetrics(new SimpleMeterRegistry()), new HoldMetrics(holdMetrics),
-            pricing, gateway, payments, new PaymentMetrics(paymentRegistry), events, unrefunded);
+            pricing, gateway, payments, new PaymentMetrics(paymentRegistry), events, unrefunded,
+            email -> "index:" + email);
 
     @BeforeEach
     void setUp() {
@@ -121,6 +122,15 @@ class BookingServiceTest {
         assertThat(saved.getValue().getChargeId()).isEqualTo("ch_1");
         assertThat(saved.getValue().getAmount()).isEqualTo(Money.of("200.00", "USD"));
         assertThat(payment("captured")).isEqualTo(1);
+    }
+
+    @Test
+    void should_index_the_contact_address_of_a_new_booking_so_it_can_be_found_by_address() {
+        service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY);
+
+        var saved = org.mockito.ArgumentCaptor.forClass(Pnr.class);
+        verify(pnrs).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getContactEmailIndex()).isEqualTo("index:priya@example.com");
     }
 
     @Test

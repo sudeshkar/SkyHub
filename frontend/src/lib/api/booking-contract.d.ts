@@ -380,6 +380,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/me/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bookings made with the signed-in traveller's address
+         * @description The newest 50 bookings whose contact address is the account's address (ADR-0034), newest first. Summaries hold
+         *     no names, seats or addresses. `truncated` is true when there are more than 50.
+         */
+        get: operations["listMyBookings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/me/bookings/{locator}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open one of my bookings without its last name
+         * @description Returns the same session as the guest flow: a short-lived manage token for this one booking, and the booking.
+         *     Only for a booking whose contact address is the account's. Any other reference, existing or not, returns the
+         *     same 404.
+         */
+        post: operations["openMyBookingSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/sessions": {
         parameters: {
             query?: never;
@@ -686,6 +729,19 @@ export interface components {
         };
         Account: {
             email: string;
+        };
+        MyBookings: {
+            bookings: components["schemas"]["BookingSummary"][];
+            truncated: boolean;
+        };
+        BookingSummary: {
+            /** @example ABC234 */
+            locator: string;
+            status: components["schemas"]["PnrStatus"];
+            segments: components["schemas"]["Segment"][];
+            passengerCount: number;
+            /** Format: date-time */
+            createdAt: string;
         };
         StaffSession: {
             accessToken: string;
@@ -1370,6 +1426,53 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listMyBookings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bookings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyBookings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    openMyBookingSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locator: components["parameters"]["Locator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session opened */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManageSession"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["PnrNotFound"];
         };
     };
     openStaffSession: {

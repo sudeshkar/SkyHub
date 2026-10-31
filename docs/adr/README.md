@@ -37,3 +37,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0031](0031-refund-completed-email.md) | Tell travellers when a delayed refund is paid | Accepted |
 | [0032](0032-dead-letter-replay.md) | Putting parked notifications back | Accepted |
 | [0033](0033-traveller-accounts.md) | Traveller accounts: sign up and sign in with an emailed link | Accepted |
+| [0034](0034-my-bookings.md) | My bookings: a signed-in traveller sees the bookings made with their address | Accepted |

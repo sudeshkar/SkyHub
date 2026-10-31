@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { readAccountSession } from "@/lib/account-session";
-import { getMyAccount } from "@/lib/api/booking";
+import { MyBookings } from "@/components/account/my-bookings";
+import { getMyAccount, listMyBookings } from "@/lib/api/booking";
 import { signOut } from "./actions";
 import { SignInForm } from "./sign-in-form";
 
@@ -11,19 +12,24 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function AccountPage() {
+const PROBLEMS: Record<string, string> = {
+  open: "That booking could not be opened. Please try again.",
+  wait: "Too many attempts. Please wait a minute and try again.",
+};
+
+export default function AccountPage({ searchParams }: { searchParams: Promise<{ problem?: string }> }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="font-display text-3xl">Your account</h1>
       <Suspense fallback={<p aria-busy="true" className="mt-8 text-muted">Loading…</p>}>
-        <AccountContent />
+        <AccountContent searchParams={searchParams} />
       </Suspense>
     </div>
   );
 }
 
 /** Reads the session cookie, so it must render per request (hence the Suspense boundary above). */
-async function AccountContent() {
+async function AccountContent({ searchParams }: { searchParams: Promise<{ problem?: string }> }) {
   const session = await readAccountSession();
   if (!session) {
     return (
@@ -55,9 +61,27 @@ async function AccountContent() {
           </button>
         </form>
       </div>
-      <p className="text-sm text-muted">
-        To look after a booking, use <Link href="/manage" className="underline">Manage booking</Link> with its reference and your last name.
+      <MyBookingsSection token={session.token} problem={(await searchParams).problem} />
+      <p className="mt-8 text-sm text-muted">
+        Booked with a different address? Use <Link href="/manage" className="underline">Manage booking</Link> with its reference and your last name.
       </p>
     </>
+  );
+}
+
+async function MyBookingsSection({ token, problem }: { token: string; problem: string | undefined }) {
+  const result = await listMyBookings(token);
+  return (
+    <section aria-labelledby="my-bookings">
+      <h2 id="my-bookings" className="font-display text-xl">Your bookings</h2>
+      {problem && PROBLEMS[problem] ? <p role="alert" className="mt-2 text-sm text-danger">{PROBLEMS[problem]}</p> : null}
+      {result.kind === "bookings" ? (
+        <MyBookings bookings={result.bookings} truncated={result.truncated} />
+      ) : (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {result.kind === "unauthorized" ? "Your session has ended. Please sign in again." : "Your bookings could not be loaded right now. Please try again."}
+        </p>
+      )}
+    </section>
   );
 }
