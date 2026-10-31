@@ -59,7 +59,7 @@ class MyBookingsControllerTest {
 
     @Test
     void should_list_the_accounts_bookings_without_names_seats_or_addresses_and_never_cache_them() throws Exception {
-        when(myBookings.list(7L, null)).thenReturn(new BookingList(List.of(new BookingSummary("ABC234", PnrStatus.CONFIRMED,
+        when(myBookings.list(7L, null, null)).thenReturn(new BookingList(List.of(new BookingSummary("ABC234", PnrStatus.CONFIRMED,
                 List.of(new PnrView.SegmentView("SK001", LocalDate.parse("2026-12-01"))), 2, CREATED)), "next-page-cursor"));
 
         mvc.perform(get("/api/v1/accounts/me/bookings").header("Authorization", account()))
@@ -77,7 +77,7 @@ class MyBookingsControllerTest {
 
     @Test
     void should_pass_the_cursor_on_and_say_there_is_no_next_page_on_the_last_one() throws Exception {
-        when(myBookings.list(7L, "the-cursor")).thenReturn(new BookingList(List.of(), null));
+        when(myBookings.list(7L, "the-cursor", null)).thenReturn(new BookingList(List.of(), null));
 
         mvc.perform(get("/api/v1/accounts/me/bookings").param("cursor", "the-cursor").header("Authorization", account()))
                 .andExpect(status().isOk())
@@ -87,7 +87,7 @@ class MyBookingsControllerTest {
 
     @Test
     void should_answer_400_for_a_cursor_the_service_did_not_make() throws Exception {
-        when(myBookings.list(7L, "forged")).thenThrow(new com.skyhub.booking.domain.InvalidBookingException("That page of bookings is not valid"));
+        when(myBookings.list(7L, "forged", null)).thenThrow(new com.skyhub.booking.domain.InvalidBookingException("That page of bookings is not valid"));
 
         mvc.perform(get("/api/v1/accounts/me/bookings").param("cursor", "forged").header("Authorization", account()))
                 .andExpect(status().isBadRequest())
@@ -126,7 +126,7 @@ class MyBookingsControllerTest {
 
     @Test
     void should_refuse_a_token_for_an_account_that_no_longer_exists() throws Exception {
-        when(myBookings.list(7L, null)).thenThrow(new AccountLoginFailedException());
+        when(myBookings.list(7L, null, null)).thenThrow(new AccountLoginFailedException());
 
         mvc.perform(get("/api/v1/accounts/me/bookings").header("Authorization", account())).andExpect(status().isUnauthorized());
     }
@@ -145,5 +145,16 @@ class MyBookingsControllerTest {
         mvc.perform(post(open).header("Authorization", manage)).andExpect(status().isForbidden());
         mvc.perform(post(open).header("Authorization", staff)).andExpect(status().isForbidden());
         verifyNoInteractions(myBookings);
+    }
+
+    @Test
+    void should_pass_the_filter_on_and_say_so_when_it_is_not_one_the_service_knows() throws Exception {
+        when(myBookings.list(7L, null, "upcoming")).thenReturn(new BookingList(List.of(), null));
+        when(myBookings.list(7L, null, "soon")).thenThrow(new com.skyhub.booking.domain.InvalidBookingException("Choose all, upcoming or past"));
+
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("when", "upcoming").header("Authorization", account()))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("when", "soon").header("Authorization", account()))
+                .andExpect(status().isBadRequest());
     }
 }

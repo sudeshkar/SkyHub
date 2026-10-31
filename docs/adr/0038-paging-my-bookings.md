@@ -29,4 +29,4 @@
 - Negative: **there is no "page 5" or total count.** Keyset paging only goes forward from where you are (the website can go back to the newest, not one page back). That is the price of constant cost.
 - Negative: a booking's creation time is the only sort; there is no sorting by flight date or filtering by status or flight.
 - Negative: a cursor is only meaningful against the data it was made from; a booking made later, with an earlier timestamp than the one that was shown last, cannot happen (time moves forward), but deleting bookings is not a feature, so no cursor can point at a removed row.
-- Follow-up: filtering the list (upcoming and past), and changing the account's email address.
+- Follow-up: filtering the list (upcoming and past, since ADR-0042), and changing the account's email address (since ADR-0039).

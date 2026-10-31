@@ -29,6 +29,8 @@ class MyBookingsServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-31T10:00:00Z");
     private static final String INDEX = "index-of-priya";
+    /** The UTC date of NOW: what "upcoming" is measured from (ADR-0042). */
+    private static final LocalDate TODAY = LocalDate.of(2026, 10, 31);
 
     private final TravellerAccountRepository accounts = mock(TravellerAccountRepository.class);
     private final BookingsByAddress bookings = mock(BookingsByAddress.class);
@@ -36,7 +38,8 @@ class MyBookingsServiceTest {
     private final ManageTokenIssuer tokens = mock(ManageTokenIssuer.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final MyBookingsService service =
-            new MyBookingsService(accounts, bookings, manage, tokens, new MyBookingsMetrics(registry));
+            new MyBookingsService(accounts, bookings, manage, tokens, new MyBookingsMetrics(registry),
+                    java.time.Clock.fixed(NOW, java.time.ZoneOffset.UTC));
 
     @BeforeEach
     void setUp() {
@@ -56,9 +59,9 @@ class MyBookingsServiceTest {
 
     @Test
     void should_list_the_bookings_made_with_the_accounts_address() {
-        when(bookings.newestAfter(INDEX, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("ABC234"), summary("DEF345")));
+        when(bookings.newestAfter(INDEX, BookingFilter.ALL, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("ABC234"), summary("DEF345")));
 
-        var list = service.list(7L, null);
+        var list = service.list(7L, null, null);
 
         assertThat(list.bookings()).extracting(BookingSummary::locator).containsExactly("ABC234", "DEF345");
         assertThat(list.truncated()).isFalse();
@@ -70,9 +73,9 @@ class MyBookingsServiceTest {
     void should_ask_for_one_more_than_the_limit_to_know_whether_there_are_more() {
         List<BookingSummary> found = new ArrayList<>(IntStream.rangeClosed(1, MyBookingsService.LIMIT + 1)
                 .mapToObj(i -> summary("L%05d".formatted(i))).toList());
-        when(bookings.newestAfter(INDEX, null, MyBookingsService.LIMIT + 1)).thenReturn(found);
+        when(bookings.newestAfter(INDEX, BookingFilter.ALL, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(found);
 
-        var list = service.list(7L, null);
+        var list = service.list(7L, null, null);
 
         assertThat(list.bookings()).hasSize(MyBookingsService.LIMIT);
         assertThat(list.truncated()).isTrue();
@@ -85,9 +88,9 @@ class MyBookingsServiceTest {
     @Test
     void should_start_the_next_page_after_the_position_it_was_given() {
         BookingCursor after = new BookingCursor(NOW.minusSeconds(60), "ABC234");
-        when(bookings.newestAfter(INDEX, after, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("DEF345")));
+        when(bookings.newestAfter(INDEX, BookingFilter.ALL, TODAY, after, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("DEF345")));
 
-        var list = service.list(7L, after.encode());
+        var list = service.list(7L, after.encode(), null);
 
         assertThat(list.bookings()).extracting(BookingSummary::locator).containsExactly("DEF345");
         assertThat(list.nextCursor()).isNull();
@@ -96,15 +99,15 @@ class MyBookingsServiceTest {
     @Test
     void should_refuse_a_cursor_it_did_not_make_before_reading_anything() {
         assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class)
-                .isThrownBy(() -> service.list(7L, "forged"));
+                .isThrownBy(() -> service.list(7L, "forged", null));
         org.mockito.Mockito.verifyNoInteractions(bookings);
     }
 
     @Test
     void should_list_nothing_for_an_address_with_no_bookings() {
-        when(bookings.newestAfter(INDEX, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of());
+        when(bookings.newestAfter(INDEX, BookingFilter.ALL, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of());
 
-        var list = service.list(7L, null);
+        var list = service.list(7L, null, null);
 
         assertThat(list.bookings()).isEmpty();
         assertThat(list.truncated()).isFalse();
@@ -112,7 +115,7 @@ class MyBookingsServiceTest {
 
     @Test
     void should_refuse_a_token_for_an_account_that_no_longer_exists() {
-        assertThatExceptionOfType(AccountLoginFailedException.class).isThrownBy(() -> service.list(99L, null));
+        assertThatExceptionOfType(AccountLoginFailedException.class).isThrownBy(() -> service.list(99L, null, null));
     }
 
     @Test
@@ -146,5 +149,28 @@ class MyBookingsServiceTest {
     void should_issue_no_token_for_an_account_that_no_longer_exists() {
         assertThatExceptionOfType(AccountLoginFailedException.class).isThrownBy(() -> service.openSession(99L, "ABC234"));
         verify(tokens, never()).issue(anyString());
+    }
+
+    @Test
+    void should_ask_for_the_filter_it_was_given_measured_from_todays_utc_date() {
+        when(bookings.newestAfter(INDEX, BookingFilter.UPCOMING, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("ABC234")));
+        when(bookings.newestAfter(INDEX, BookingFilter.PAST, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("DEF345")));
+
+        assertThat(service.list(7L, null, "upcoming").bookings()).extracting(BookingSummary::locator).containsExactly("ABC234");
+        assertThat(service.list(7L, null, "PAST").bookings()).extracting(BookingSummary::locator).containsExactly("DEF345");
+    }
+
+    @Test
+    void should_page_within_a_filter() {
+        BookingCursor after = new BookingCursor(NOW.minusSeconds(60), "ABC234");
+        when(bookings.newestAfter(INDEX, BookingFilter.UPCOMING, TODAY, after, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("DEF345")));
+
+        assertThat(service.list(7L, after.encode(), "upcoming").bookings()).extracting(BookingSummary::locator).containsExactly("DEF345");
+    }
+
+    @Test
+    void should_refuse_a_filter_it_does_not_know_before_reading_anything() {
+        assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class).isThrownBy(() -> service.list(7L, null, "soon"));
+        org.mockito.Mockito.verifyNoInteractions(bookings);
     }
 }

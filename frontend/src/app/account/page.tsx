@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { readAccountSession } from "@/lib/account-session";
-import { MyBookings } from "@/components/account/my-bookings";
+import { MyBookings, parseBookingsFilter } from "@/components/account/my-bookings";
 import { getMyAccount, listMyBookings } from "@/lib/api/booking";
 import { signOut } from "./actions";
 import { SignInForm } from "./sign-in-form";
@@ -17,7 +17,7 @@ const PROBLEMS: Record<string, string> = {
   wait: "Too many attempts. Please wait a minute and try again.",
 };
 
-type AccountSearchParams = Promise<{ problem?: string; cursor?: string }>;
+type AccountSearchParams = Promise<{ problem?: string; cursor?: string; when?: string | string[] }>;
 
 export default function AccountPage({ searchParams }: { searchParams: AccountSearchParams }) {
   return (
@@ -74,14 +74,15 @@ async function AccountContent({ searchParams }: { searchParams: AccountSearchPar
   );
 }
 
-async function MyBookingsSection({ token, problem, cursor }: { token: string; problem?: string; cursor?: string }) {
-  const result = await listMyBookings(token, cursor);
+async function MyBookingsSection({ token, problem, cursor, when }: { token: string; problem?: string; cursor?: string; when?: string | string[] }) {
+  const filter = parseBookingsFilter(when);
+  const result = await listMyBookings(token, cursor, filter === "all" ? undefined : filter);
   return (
     <section aria-labelledby="my-bookings">
       <h2 id="my-bookings" className="font-display text-xl">Your bookings</h2>
       {problem && PROBLEMS[problem] ? <p role="alert" className="mt-2 text-sm text-danger">{PROBLEMS[problem]}</p> : null}
       {result.kind === "bookings" ? (
-        <MyBookings bookings={result.bookings} nextCursor={result.nextCursor} firstPage={!cursor} />
+        <MyBookings bookings={result.bookings} nextCursor={result.nextCursor} firstPage={!cursor} when={filter} />
       ) : result.kind === "bad-cursor" ? (
         <p role="alert" className="mt-2 text-sm text-danger">
           That page of bookings could not be found. <Link href="/account" className="underline">Newest bookings</Link>

@@ -1,12 +1,14 @@
 package com.skyhub.booking.persistence;
 
 import com.skyhub.booking.application.BookingCursor;
+import com.skyhub.booking.application.BookingFilter;
 import com.skyhub.booking.application.BookingsByAddress;
 import com.skyhub.booking.application.view.BookingSummary;
 import com.skyhub.booking.application.view.PnrView.SegmentView;
 import com.skyhub.booking.domain.PnrStatus;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,17 +33,40 @@ class JdbcBookingsByAddress implements BookingsByAddress {
     private record Row(long id, String locator, PnrStatus status, Instant createdAt) {
     }
 
+    /** A confirmed booking with a flight today or later (ADR-0042). */
+    private static final String UPCOMING = "(status = 'CONFIRMED' AND EXISTS (SELECT 1 FROM pnr_segment s WHERE s.pnr_id = pnr.id "
+            + "AND s.departure_date >= ?))";
+
     @Override
-    public List<BookingSummary> newestAfter(String emailIndex, BookingCursor after, int limit) {
+    public List<BookingSummary> newestAfter(String emailIndex, BookingFilter filter, LocalDate today, BookingCursor after, int limit) {
         // Keyset paging (ADR-0038): the page starts at a position in the index, so a page far back costs the same as the first.
-        // The reference breaks ties between bookings made in the same instant, so none is skipped or shown twice.
-        String start = after == null ? "" : "AND (created_at, locator) < (?, ?) ";
-        Object[] arguments = after == null ? new Object[] {emailIndex, limit}
-                : new Object[] {emailIndex, Timestamp.from(after.createdAt()), after.locator(), limit};
-        List<Row> rows = jdbc.query("SELECT id, locator, status, created_at FROM pnr WHERE contact_email_index = ? " + start
+        // The reference breaks ties between bookings made in the same instant, so none is skipped or shown twice. The filter is a
+        // condition on the same walk (ADR-0042): the query reads this traveller's bookings in order until the page is full.
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(emailIndex);
+        StringBuilder where = new StringBuilder("contact_email_index = ? ");
+        switch (filter) {
+            case UPCOMING -> {
+                where.append("AND ").append(UPCOMING).append(' ');
+                arguments.add(java.sql.Date.valueOf(today));
+            }
+            case PAST -> {
+                where.append("AND NOT ").append(UPCOMING).append(' ');
+                arguments.add(java.sql.Date.valueOf(today));
+            }
+            case ALL -> {
+            }
+        }
+        if (after != null) {
+            where.append("AND (created_at, locator) < (?, ?) ");
+            arguments.add(Timestamp.from(after.createdAt()));
+            arguments.add(after.locator());
+        }
+        arguments.add(limit);
+        List<Row> rows = jdbc.query("SELECT id, locator, status, created_at FROM pnr WHERE " + where
                         + "ORDER BY created_at DESC, locator DESC LIMIT ?",
                 (rs, n) -> new Row(rs.getLong(1), rs.getString(2), PnrStatus.valueOf(rs.getString(3)),
-                        rs.getTimestamp(4).toInstant()), arguments);
+                        rs.getTimestamp(4).toInstant()), arguments.toArray());
         if (rows.isEmpty()) {
             return List.of();
         }
