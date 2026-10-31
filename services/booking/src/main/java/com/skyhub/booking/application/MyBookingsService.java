@@ -1,12 +1,14 @@
 package com.skyhub.booking.application;
 
 import com.skyhub.booking.application.view.BookingSummary;
+import com.skyhub.booking.application.view.PnrView;
 import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.TravellerAccount;
 import com.skyhub.booking.persistence.TravellerAccountRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Comparator;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,10 +49,14 @@ public class MyBookingsService {
      * @param when   {@code all} (or none), {@code upcoming} or {@code past} (ADR-0042); anything else is refused
      */
     public BookingList list(long accountId, String cursor, String when) {
-        BookingCursor after = BookingCursor.decodeOrNull(cursor);   // refused before anything is read
         BookingFilter filter = BookingFilter.fromWire(when);
+        LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
+        if (filter == BookingFilter.UPCOMING) {
+            return listUpcoming(accountId, UpcomingCursor.decodeOrNull(cursor), today);   // a cursor of the other order is refused here
+        }
+        BookingCursor after = BookingCursor.decodeOrNull(cursor);   // refused before anything is read
         // One more than the limit is how we know there are more, without counting them all.
-        List<BookingSummary> found = bookings.newestAfter(indexOf(accountId), filter, LocalDate.now(clock.withZone(ZoneOffset.UTC)), after, LIMIT + 1);
+        List<BookingSummary> found = bookings.newestAfter(indexOf(accountId), filter, today, after, LIMIT + 1);
         metrics.listed();
         if (found.size() <= LIMIT) {
             return new BookingList(found, null);
@@ -58,6 +64,21 @@ public class MyBookingsService {
         List<BookingSummary> page = found.subList(0, LIMIT);
         BookingSummary last = page.getLast();
         return new BookingList(page, new BookingCursor(last.createdAt(), last.locator()).encode());
+    }
+
+    /** Upcoming trips, soonest flight first (ADR-0044): its own order and its own kind of cursor. */
+    private BookingList listUpcoming(long accountId, UpcomingCursor after, LocalDate today) {
+        List<BookingSummary> found = bookings.upcomingSoonest(indexOf(accountId), today, after, LIMIT + 1);
+        metrics.listed();
+        if (found.size() <= LIMIT) {
+            return new BookingList(found, null);
+        }
+        List<BookingSummary> page = found.subList(0, LIMIT);
+        BookingSummary last = page.getLast();
+        // Positioned by the flight still to come, not one that has gone: the same value the query ordered by.
+        LocalDate nextFlight = last.segments().stream().map(PnrView.SegmentView::departureDate).filter(d -> !d.isBefore(today))
+                .min(Comparator.naturalOrder()).orElseThrow();
+        return new BookingList(page, new UpcomingCursor(nextFlight, last.locator()).encode());
     }
 
     /** Someone else's booking and a reference that does not exist are indistinguishable to the caller. */

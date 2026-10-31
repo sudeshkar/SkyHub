@@ -720,7 +720,9 @@ paths:
         `nextCursor` back as `cursor` for the next page (ADR-0038). Every page costs the same however far back it is. A
         cursor that this service did not make is a 400. `when` narrows the list (ADR-0042) without changing its order or its
         cursor: `upcoming` is a confirmed booking with a flight today or later (UTC), `past` is every other booking,
-        including cancelled ones, and `all` (the default) is both.
+        including cancelled ones, and `all` (the default) is both. **`upcoming` is listed soonest flight first** (ADR-0044), by
+        the date of each booking's next flight; `all` and `past` are newest booked first. The two orders use different kinds of
+        cursor, so a cursor from one is a 400 for the other.
       security:
         - accountToken: []
       parameters:

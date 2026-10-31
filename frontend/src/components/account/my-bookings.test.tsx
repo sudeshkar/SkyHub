@@ -96,8 +96,8 @@ describe("MyBookings filter (ADR-0042)", () => {
   });
 
   it("keeps the filter when going to older bookings and back to the newest", () => {
-    const { unmount } = render(<MyBookings bookings={[ONE]} nextCursor="a-b_c" firstPage when="upcoming" />);
-    expect(screen.getByRole("link", { name: /older bookings/i })).toHaveAttribute("href", "/account?cursor=a-b_c&when=upcoming");
+    const { unmount } = render(<MyBookings bookings={[ONE]} nextCursor="a-b_c" firstPage when="past" />);
+    expect(screen.getByRole("link", { name: /older bookings/i })).toHaveAttribute("href", "/account?cursor=a-b_c&when=past");
     unmount();
 
     render(<MyBookings bookings={[ONE]} nextCursor={null} firstPage={false} when="past" />);
@@ -122,5 +122,43 @@ describe("MyBookings filter (ADR-0042)", () => {
     for (const odd of [undefined, "", "soon", "UPCOMING", ["upcoming", "past"]]) {
       expect(parseBookingsFilter(odd as string | string[] | undefined)).toBe("all");
     }
+  });
+});
+
+describe("MyBookings upcoming, soonest first (ADR-0044)", () => {
+  it("says the upcoming list is soonest flight first, and the other lists are not", () => {
+    const { unmount } = render(<MyBookings bookings={[ONE]} nextCursor={null} firstPage when="upcoming" />);
+    expect(screen.getByText(/soonest flight first/i)).toBeInTheDocument();
+    unmount();
+
+    render(<MyBookings bookings={[ONE]} nextCursor={null} firstPage when="all" />);
+    expect(screen.queryByText(/soonest flight first/i)).not.toBeInTheDocument();
+  });
+
+  it("calls the paging links later trips and soonest trips there, keeping the cursor and the filter", () => {
+    const { unmount } = render(<MyBookings bookings={[ONE]} nextCursor="a-b_c" firstPage when="upcoming" />);
+    expect(screen.getByRole("link", { name: /later trips/i })).toHaveAttribute("href", "/account?cursor=a-b_c&when=upcoming");
+    expect(screen.queryByRole("link", { name: /older bookings/i })).not.toBeInTheDocument();
+    unmount();
+
+    render(<MyBookings bookings={[ONE]} nextCursor={null} firstPage={false} when="upcoming" />);
+    expect(screen.getByRole("link", { name: /soonest trips/i })).toHaveAttribute("href", "/account?when=upcoming");
+    expect(screen.queryByRole("link", { name: /newest bookings/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the older and newest wording for the lists that are in the order they were booked", () => {
+    const { unmount } = render(<MyBookings bookings={[ONE]} nextCursor="c" firstPage when="past" />);
+    expect(screen.getByRole("link", { name: /older bookings/i })).toBeInTheDocument();
+    unmount();
+
+    render(<MyBookings bookings={[ONE]} nextCursor={null} firstPage={false} when="all" />);
+    expect(screen.getByRole("link", { name: /newest bookings/i })).toBeInTheDocument();
+  });
+
+  it("explains an empty later page of upcoming trips in its own words", () => {
+    render(<MyBookings bookings={[]} nextCursor={null} firstPage={false} when="upcoming" />);
+
+    expect(screen.getByText(/no later trips/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /soonest trips/i })).toHaveAttribute("href", "/account?when=upcoming");
   });
 });
