@@ -5,7 +5,6 @@ import com.skyhub.booking.domain.StaffAccount;
 import com.skyhub.booking.domain.StaffRole;
 import com.skyhub.booking.persistence.StaffAccountRepository;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,9 +21,7 @@ public class StaffService {
     private static final Logger log = LoggerFactory.getLogger(StaffService.class);
     private static final int MIN_PASSWORD_LENGTH = 12;
 
-    private enum Outcome { SUCCESS, FAILED, LOCKED }
-
-    private record Attempt(Outcome outcome, StaffAccount account) {
+    private record Attempt(PasswordGate.Outcome outcome, StaffAccount account) {
     }
 
     private final StaffAccountRepository accounts;
@@ -33,18 +30,17 @@ public class StaffService {
     private final Clock clock;
     private final StaffMetrics metrics;
     private final TransactionOperations tx;
-    /** What an unknown username is checked against, so it costs the same time as a real one. */
-    private final String decoyHash;
+    private final PasswordGate gate;
 
-    public StaffService(StaffAccountRepository accounts, PasswordHasher passwords, StaffTokenIssuer tokens, Clock clock,
-                        StaffMetrics metrics, TransactionOperations tx) {
+    public StaffService(StaffAccountRepository accounts, PasswordHasher passwords, PasswordGate gate, StaffTokenIssuer tokens,
+                        Clock clock, StaffMetrics metrics, TransactionOperations tx) {
         this.accounts = accounts;
         this.passwords = passwords;
+        this.gate = gate;
         this.tokens = tokens;
         this.clock = clock;
         this.metrics = metrics;
         this.tx = tx;
-        this.decoyHash = passwords.hash("a password nobody has");
     }
 
     public StaffSession login(String username, String password) {
@@ -72,24 +68,12 @@ public class StaffService {
 
     /** One decision per attempt, in one transaction holding the account row, so parallel guesses queue up. */
     private Attempt attempt(String name, String password) {
-        Instant now = clock.instant();
         StaffAccount account = accounts.findForUpdateByUsername(name).orElse(null);
-        if (account == null) {
-            passwords.matches(password, decoyHash);
-            return new Attempt(Outcome.FAILED, null);
+        PasswordGate.Outcome outcome = gate.check(account, password, clock.instant());
+        if (account != null && outcome != PasswordGate.Outcome.LOCKED) {
+            accounts.save(account);   // a success clears the count, a failure adds to it; a refusal while locked changes nothing
         }
-        boolean correct = passwords.matches(password, account.getPasswordHash()); // checked even if locked: same cost
-        if (account.isLockedAt(now)) {
-            return new Attempt(Outcome.LOCKED, account);
-        }
-        if (correct) {
-            account.recordSuccessfulLogin();
-            accounts.save(account);
-            return new Attempt(Outcome.SUCCESS, account);
-        }
-        account.recordFailedLogin(now);
-        accounts.save(account);
-        return new Attempt(Outcome.FAILED, account);
+        return new Attempt(outcome, account);
     }
 
     public StaffAccountView create(String createdBy, CreateStaffCommand command) {

@@ -60,7 +60,7 @@ class AccountEmailChangeTest {
     }
 
     private AccountService at(Instant now) {
-        return new AccountService(accounts, email -> "idx:" + email.strip().toLowerCase(), passwords,
+        return new AccountService(accounts, email -> "idx:" + email.strip().toLowerCase(), passwords, new PasswordGate(passwords),
                 (id, epoch) -> new AccountToken("token-" + id, now.plus(Duration.ofMinutes(30))), events, Clock.fixed(now, ZoneOffset.UTC),
                 new AccountMetrics(registry), TransactionOperations.withoutTransaction(), () -> "raw-token");
     }

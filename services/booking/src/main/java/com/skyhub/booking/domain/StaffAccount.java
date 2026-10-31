@@ -1,6 +1,7 @@
 package com.skyhub.booking.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -19,10 +20,10 @@ import java.util.regex.Pattern;
  */
 @Entity
 @Table(name = "staff_account")
-public class StaffAccount {
+public class StaffAccount implements PasswordProtected {
 
-    public static final int MAX_FAILED_ATTEMPTS = 5;
-    public static final Duration LOCK_DURATION = Duration.ofMinutes(15);
+    public static final int MAX_FAILED_ATTEMPTS = LoginLock.MAX_FAILED_ATTEMPTS;
+    public static final Duration LOCK_DURATION = LoginLock.LOCK_DURATION;
     private static final Pattern USERNAME = Pattern.compile("[a-z][a-z0-9._-]{2,39}");
 
     @Id
@@ -39,10 +40,9 @@ public class StaffAccount {
     @Column(nullable = false, length = 10)
     private StaffRole role;
 
-    @Column(nullable = false)
-    private int failedAttempts;
-
-    private Instant lockedUntil;
+    /** The one rule for locking after wrong passwords, shared with traveller accounts (ADR-0045). */
+    @Embedded
+    private LoginLock lock = new LoginLock();
 
     @Column(nullable = false)
     private Instant createdAt;
@@ -64,31 +64,26 @@ public class StaffAccount {
         return account;
     }
 
+    @Override
     public boolean isLockedAt(Instant now) {
-        return lockedUntil != null && now.isBefore(lockedUntil);
+        return lock.isLockedAt(now);
     }
 
+    @Override
     public void recordFailedLogin(Instant now) {
-        if (lockedUntil != null && !now.isBefore(lockedUntil)) { // an old lock has run out: start counting afresh
-            lockedUntil = null;
-            failedAttempts = 0;
-        }
-        failedAttempts++;
-        if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-            lockedUntil = now.plus(LOCK_DURATION);
-            failedAttempts = 0;
-        }
+        lock.recordFailure(now);
     }
 
+    @Override
     public void recordSuccessfulLogin() {
-        failedAttempts = 0;
-        lockedUntil = null;
+        lock.recordSuccess();
     }
 
     public String getUsername() {
         return username;
     }
 
+    @Override
     public String getPasswordHash() {
         return passwordHash;
     }

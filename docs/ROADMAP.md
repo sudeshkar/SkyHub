@@ -56,6 +56,7 @@ How a slice goes, every time:
 | 37 | Filtering "Your bookings" into upcoming and past, in the query, with the same order and cursor | ADR-0042 |
 | 38 | Grouping and finding proposals on the operations page: by destination flight, select all or none per group, find a booking by reference | ADR-0043 |
 | 39 | Upcoming bookings listed soonest flight first, by each booking's next flight date, with its own kind of cursor | ADR-0044 |
+| 40 | One login lock and one password gate shared by staff and traveller accounts (a refactor: same behaviour, same tables, one copy of the rule) | ADR-0045 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -66,7 +67,7 @@ Ordered by how much they add to the story, not a commitment.
 | **Fuller rebooking** | Windowing very large proposal lists, and filtering by moved or refused; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline (needs a Groq key; `python -m evals --live`) | Approval and rebooking exist (ADR-0022, 0023, 0024). Run `python -m evals --live` with a Groq key first: the live model has not been run yet. |
 | **More notifications** | HTML email and a boarding-pass attachment; SMS; non-blocking retry topics; a person's identity on management-port actions (replay, skip) | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
-| **Account follow-ups** | A "sign out everywhere" action; a way for the owner to recover an account that was moved without them; saved passengers; order past bookings by the date last flown; share the lock logic between staff and traveller accounts | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
+| **Account follow-ups** | A "sign out everywhere" action; a way for the owner to recover an account that was moved without them; saved passengers; order past bookings by the date last flown | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
 | **Check-in extras** | Per-passenger check-in, check-out (to allow seat changes), QR/PDF417 boarding pass image | |
 | **Gateway and deployment** | Kong gateway, containers for every service, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
 

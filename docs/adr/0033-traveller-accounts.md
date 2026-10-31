@@ -35,6 +35,6 @@ A booking is found by its reference and last name (ADR-0011). That is right for 
 - Negative: **signing up takes an email round trip before the first sign-in.** That is the price of option 3.
 - Negative: **the one-time token passes through Kafka** in the event, and sits in the topic for its retention period (the payload is encrypted in the database, not on the topic). The token stops working after an hour or on first use, and the topic is not public, but anyone who can read it can take over an account that is still waiting for its first password. Putting only a reference in the event and fetching the token from the booking service would remove this.
 - Negative: an account does not show bookings yet, and a traveller cannot change their email address. Both are next.
-- Negative: the lock logic is copied from staff accounts; a shared class would remove the copy.
+- Negative: the lock logic is copied from staff accounts; a shared class would remove the copy. (Removed since ADR-0045.)
 - Negative: there is no "sign out everywhere" or token revocation: a token lasts 30 minutes (like the others, ADR-0011).
 - Negative: the address is matched ignoring case, but not ignoring dots or `+tags` (so `a.b@x.com` and `ab@x.com` are different accounts).
