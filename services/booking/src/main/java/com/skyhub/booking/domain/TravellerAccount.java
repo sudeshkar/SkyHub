@@ -117,7 +117,7 @@ public class TravellerAccount implements PasswordProtected {
         linkTokenHash = null;
         linkExpiresAt = null;
         lock.clear();
-        sessionEpoch++;   // choosing a password is a change of credentials: every open session ends
+        endAllSessions();   // choosing a password is a change of credentials: every open session ends
     }
 
     @Override
@@ -163,7 +163,7 @@ public class TravellerAccount implements PasswordProtected {
         if (pendingEmail == null || pendingEmailIndex == null) {
             throw new IllegalStateException("No address change is pending");
         }
-        sessionEpoch++;   // moving the account is a change of credentials: every open session ends
+        endAllSessions();   // moving the account is a change of credentials: every open session ends
         email = pendingEmail;
         emailIndex = pendingEmailIndex;
         pendingEmail = null;
@@ -185,6 +185,14 @@ public class TravellerAccount implements PasswordProtected {
 
     public ContactEmail getEmail() {
         return email;
+    }
+
+    /**
+     * Every token issued before this is refused from now on (ADR-0041). Changing the password or the address does it, and the person
+     * can ask for it directly (ADR-0047). It touches nothing else about the account, a lock included.
+     */
+    public void endAllSessions() {
+        sessionEpoch++;
     }
 
     public int getSessionEpoch() {

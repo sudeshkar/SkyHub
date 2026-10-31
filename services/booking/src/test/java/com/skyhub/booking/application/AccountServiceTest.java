@@ -247,4 +247,26 @@ class AccountServiceTest {
 
         assertThat(account.getSessionEpoch()).isEqualTo(before + 1);
     }
+
+    // ---- signing out everywhere (ADR-0047) -------------------------------------------------------------------------------
+
+    @Test
+    void should_end_every_session_of_the_account_and_count_it() {
+        TravellerAccount account = active("correct horse battery");
+        when(accounts.findForUpdateById(7L)).thenReturn(Optional.of(account));
+        int before = account.getSessionEpoch();
+
+        service.signOutEverywhere(7L);
+
+        assertThat(account.getSessionEpoch()).isEqualTo(before + 1);
+        verify(accounts).saveAndFlush(account);
+        assertThat(count("skyhub.account.sessions", "signed_out_everywhere")).isEqualTo(1);
+    }
+
+    @Test
+    void should_refuse_a_token_for_an_account_that_no_longer_exists_when_signing_out_everywhere() {
+        when(accounts.findForUpdateById(99L)).thenReturn(Optional.empty());
+
+        assertThatExceptionOfType(AccountLoginFailedException.class).isThrownBy(() -> service.signOutEverywhere(99L));
+    }
 }

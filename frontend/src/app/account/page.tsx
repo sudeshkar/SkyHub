@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { readAccountSession } from "@/lib/account-session";
 import { MyBookings, parseBookingsFilter } from "@/components/account/my-bookings";
+import { SignOutEverywhere } from "@/components/account/sign-out-everywhere";
 import { getMyAccount, listMyBookings } from "@/lib/api/booking";
 import { signOut } from "./actions";
 import { SignInForm } from "./sign-in-form";
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
 const PROBLEMS: Record<string, string> = {
   open: "That booking could not be opened. Please try again.",
   wait: "Too many attempts. Please wait a minute and try again.",
+  signout: "We could not sign you out everywhere just now, so you are still signed in. Please try again.",
 };
 
 type AccountSearchParams = Promise<{ problem?: string; cursor?: string; when?: string | string[] }>;
@@ -70,6 +72,7 @@ async function AccountContent({ searchParams }: { searchParams: AccountSearchPar
       <p className="mt-8 text-sm text-muted">
         Booked with a different address? Use <Link href="/manage" className="underline">Manage booking</Link> with its reference and your last name.
       </p>
+      <SignOutEverywhere />
     </>
   );
 }

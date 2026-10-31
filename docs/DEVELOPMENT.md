@@ -91,7 +91,7 @@ The full table is [`ROADMAP.md`](ROADMAP.md). The order we plan to work in (each
 4. **Check-in extras.** Per-passenger check-in, check-out (to allow seat changes), a QR/PDF417 boarding-pass image.
 5. **Gateway and deployment.** Kong gateway, containers for every service, Kubernetes with Helm, a SonarQube quality gate, a per-client hold limit at the gateway.
 
-**Account follow-ups (small slices, any time):** a "sign out everywhere" action, a way for the owner to recover an account that was moved without them (the old address is now told, ADR-0040, and sessions end on a change, ADR-0041), saved passengers, order past bookings by the date last flown. (Paging past the newest 50 is done, ADR-0038, as are filtering into upcoming and past, ADR-0042, and listing upcoming soonest first, ADR-0044.)
+**Account follow-ups (small slices, any time):** a way for the owner to recover an account that was moved without them (the old address is now told, ADR-0040, sessions end on a change, ADR-0041, and on request, ADR-0047), saved passengers, order past bookings by the date last flown. (Paging past the newest 50 is done, ADR-0038, as are filtering into upcoming and past, ADR-0042, and listing upcoming soonest first, ADR-0044.)
 
 **Loose ends to fold in when a slice touches them:** browser tests (Playwright) for check-in and boarding passes, disruption notices, the refund retry, the withdraw form and the account pages; Next.js tracing; manage-token revocation (account tokens are done, ADR-0041); a rotation procedure for the link-token key (the token is sealed on Kafka since ADR-0046); share the lock-out logic between staff and traveller accounts; homepage hero video (needs a paid plan); the graphify hook.
 
