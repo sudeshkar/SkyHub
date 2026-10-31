@@ -35,11 +35,13 @@ test("staff sign in, record a cancellation, and sign out", async ({ page, contex
   expect(cookie.sameSite).toBe("Strict");
   expect(cookie.path).toBe("/ops");
 
-  await page.getByLabel("Flight number").fill("SK501");
-  await page.getByLabel(/Scheduled departure date/).first().fill(date);
-  await page.getByLabel("Cancelled").check();
-  await page.getByLabel(/Reason shown to travellers/).fill("End-to-end test");
-  await page.getByRole("button", { name: "Record" }).click();
+  // The page has a second form that also asks for a flight (withdrawing a disruption), so work inside the one that records.
+  const record = page.locator("form").filter({ hasText: "Record a delay or" });
+  await record.getByLabel("Flight number").fill("SK501");
+  await record.getByLabel(/Scheduled departure date/).first().fill(date);
+  await record.getByLabel("Cancelled").check();
+  await record.getByLabel(/Reason shown to travellers/).fill("End-to-end test");
+  await record.getByRole("button", { name: "Record" }).click();
 
   await expect(page.getByRole("status")).toContainText(`SK501 on ${date} is recorded as cancelled.`);
   await expect(page.getByRole("status")).toContainText("No active bookings are on this flight.");
