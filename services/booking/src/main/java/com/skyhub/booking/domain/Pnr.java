@@ -37,6 +37,10 @@ public class Pnr {
     @Column(name = "contact_email", nullable = false, length = 512)
     private ContactEmail contactEmail;
 
+    /** Keyed hash of the contact address, so a traveller's bookings can be found without decrypting any (ADR-0034). */
+    @Column(name = "contact_email_index", length = 64)
+    private String contactEmailIndex;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     private PnrStatus status;
@@ -82,6 +86,11 @@ public class Pnr {
         pnr.idempotencyKeyHash = idempotencyKeyHash;
         pnr.requestFingerprint = requestFingerprint;
         return pnr;
+    }
+
+    /** Set when the booking is made, or later for a booking that is older than the index (ADR-0034). */
+    public void indexContactEmail(String index) {
+        this.contactEmailIndex = index;
     }
 
     public boolean wasCreatedBy(String fingerprint) {
@@ -178,6 +187,10 @@ public class Pnr {
 
     public ContactEmail getContactEmail() {
         return contactEmail;
+    }
+
+    public String getContactEmailIndex() {
+        return contactEmailIndex;
     }
 
     public PnrStatus getStatus() {

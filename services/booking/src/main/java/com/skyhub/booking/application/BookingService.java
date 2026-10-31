@@ -53,12 +53,15 @@ public class BookingService {
     private final PaymentMetrics paymentMetrics;
     private final BookingEvents events;
     private final UnrefundedCharges unrefunded;
+    private final EmailIndex emailIndex;
 
     public BookingService(SeatInventoryRepository seats, PnrRepository pnrs, SeatInventoryInitializer inventory,
                           SeatMapCache seatMaps, CreatePnrValidator validator, LocatorGenerator locators, Clock clock,
                           TransactionOperations transactions, BookingMetrics metrics, HoldMetrics holdMetrics,
                           PricingService pricing, PaymentGateway gateway, PaymentRepository payments,
-                          PaymentMetrics paymentMetrics, BookingEvents events, UnrefundedCharges unrefunded) {
+                          PaymentMetrics paymentMetrics, BookingEvents events, UnrefundedCharges unrefunded,
+                          EmailIndex emailIndex) {
+        this.emailIndex = emailIndex;
         this.events = events;
         this.unrefunded = unrefunded;
         this.pricing = pricing;
@@ -209,6 +212,7 @@ public class BookingService {
                 .map(p -> new PnrPassenger(p.firstName().strip(), p.lastName().strip(), p.seats()))
                 .toList();
         Pnr pnr = Pnr.confirmed(locator, contactEmail, segments, passengers, clock.instant(), keyHash, fingerprint);
+        pnr.indexContactEmail(emailIndex.of(contactEmail.value()));
         Pnr saved = pnrs.saveAndFlush(pnr);
         payments.saveAndFlush(Payment.captured(locator, charge.id(), charge.amount(), clock.instant()));
         // Same transaction as the booking: the event exists exactly when the booking does (ADR-0019).

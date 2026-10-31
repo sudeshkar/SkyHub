@@ -17,6 +17,7 @@ tags:
   - name: Staff
   - name: Rebooking
   - name: Accounts
+  - name: MyBookings
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -609,6 +610,55 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /api/v1/accounts/me/bookings:
+    get:
+      tags: [MyBookings]
+      operationId: listMyBookings
+      summary: Bookings made with the signed-in traveller's address
+      description: |
+        The newest 50 bookings whose contact address is the account's address (ADR-0034), newest first. Summaries hold
+        no names, seats or addresses. `truncated` is true when there are more than 50.
+      security:
+        - accountToken: []
+      responses:
+        '200':
+          description: The bookings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyBookings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/accounts/me/bookings/{locator}/sessions:
+    post:
+      tags: [MyBookings]
+      operationId: openMyBookingSession
+      summary: Open one of my bookings without its last name
+      description: |
+        Returns the same session as the guest flow: a short-lived manage token for this one booking, and the booking.
+        Only for a booking whose contact address is the account's. Any other reference, existing or not, returns the
+        same 404.
+      security:
+        - accountToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      responses:
+        '201':
+          description: Session opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManageSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
 
   /api/v1/ops/sessions:
     post:
@@ -1272,6 +1322,36 @@ components:
       properties:
         email:
           type: string
+
+    MyBookings:
+      type: object
+      required: [bookings, truncated]
+      properties:
+        bookings:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingSummary'
+        truncated:
+          type: boolean
+
+    BookingSummary:
+      type: object
+      required: [locator, status, segments, passengerCount, createdAt]
+      properties:
+        locator:
+          type: string
+          example: ABC234
+        status:
+          $ref: '#/components/schemas/PnrStatus'
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Segment'
+        passengerCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
 
     StaffSession:
       type: object

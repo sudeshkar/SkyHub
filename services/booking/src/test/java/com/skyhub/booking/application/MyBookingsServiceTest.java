@@ -1,0 +1,128 @@
+package com.skyhub.booking.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.skyhub.booking.application.view.BookingSummary;
+import com.skyhub.booking.application.view.PnrView;
+import com.skyhub.booking.domain.ContactEmail;
+import com.skyhub.booking.domain.PnrNotFoundException;
+import com.skyhub.booking.domain.PnrStatus;
+import com.skyhub.booking.domain.TravellerAccount;
+import com.skyhub.booking.persistence.TravellerAccountRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.IntStream;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class MyBookingsServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-10-31T10:00:00Z");
+    private static final String INDEX = "index-of-priya";
+
+    private final TravellerAccountRepository accounts = mock(TravellerAccountRepository.class);
+    private final BookingsByAddress bookings = mock(BookingsByAddress.class);
+    private final ManageBookingService manage = mock(ManageBookingService.class);
+    private final ManageTokenIssuer tokens = mock(ManageTokenIssuer.class);
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final MyBookingsService service =
+            new MyBookingsService(accounts, bookings, manage, tokens, new MyBookingsMetrics(registry));
+
+    @BeforeEach
+    void setUp() {
+        when(accounts.findById(7L)).thenReturn(Optional.of(
+                TravellerAccount.unverified(new ContactEmail("priya@example.com"), INDEX, NOW)));
+    }
+
+    private static BookingSummary summary(String locator) {
+        return new BookingSummary(locator, PnrStatus.CONFIRMED,
+                List.of(new PnrView.SegmentView("SK001", LocalDate.parse("2026-12-01"))), 2, NOW);
+    }
+
+    private double count(String outcome) {
+        var counter = registry.find("skyhub.my.bookings").tag("outcome", outcome).counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    @Test
+    void should_list_the_bookings_made_with_the_accounts_address() {
+        when(bookings.newest(INDEX, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("ABC234"), summary("DEF345")));
+
+        var list = service.list(7L);
+
+        assertThat(list.bookings()).extracting(BookingSummary::locator).containsExactly("ABC234", "DEF345");
+        assertThat(list.truncated()).isFalse();
+        assertThat(count("listed")).isEqualTo(1);
+    }
+
+    @Test
+    void should_ask_for_one_more_than_the_limit_to_know_whether_there_are_more() {
+        List<BookingSummary> found = new ArrayList<>(IntStream.rangeClosed(1, MyBookingsService.LIMIT + 1)
+                .mapToObj(i -> summary("L%05d".formatted(i))).toList());
+        when(bookings.newest(INDEX, MyBookingsService.LIMIT + 1)).thenReturn(found);
+
+        var list = service.list(7L);
+
+        assertThat(list.bookings()).hasSize(MyBookingsService.LIMIT);
+        assertThat(list.truncated()).isTrue();
+        assertThat(list.bookings()).doesNotContain(found.get(MyBookingsService.LIMIT));
+    }
+
+    @Test
+    void should_list_nothing_for_an_address_with_no_bookings() {
+        when(bookings.newest(INDEX, MyBookingsService.LIMIT + 1)).thenReturn(List.of());
+
+        var list = service.list(7L);
+
+        assertThat(list.bookings()).isEmpty();
+        assertThat(list.truncated()).isFalse();
+    }
+
+    @Test
+    void should_refuse_a_token_for_an_account_that_no_longer_exists() {
+        assertThatExceptionOfType(AccountLoginFailedException.class).isThrownBy(() -> service.list(99L));
+    }
+
+    @Test
+    void should_open_a_booking_the_account_owns_with_a_manage_token_for_that_booking_only() {
+        var token = new ManageToken("signed", NOW.plusSeconds(900));
+        var view = mock(PnrView.class);
+        when(bookings.owns(INDEX, "ABC234")).thenReturn(true);
+        when(tokens.issue("ABC234")).thenReturn(token);
+        when(manage.find("ABC234")).thenReturn(view);
+
+        var session = service.openSession(7L, "ABC234");
+
+        assertThat(session.token()).isEqualTo(token);
+        assertThat(session.pnr()).isSameAs(view);
+        assertThat(count("opened")).isEqualTo(1);
+    }
+
+    @Test
+    void should_answer_a_booking_of_someone_else_exactly_like_an_unknown_one() {
+        when(bookings.owns(INDEX, "ABC234")).thenReturn(false);
+
+        assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.openSession(7L, "ABC234"))
+                .withMessage("No booking matches this reference");
+        assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.openSession(7L, "ZZZZZZ"))
+                .withMessage("No booking matches this reference");
+        verify(tokens, never()).issue(anyString());
+        assertThat(count("denied")).isEqualTo(2);
+    }
+
+    @Test
+    void should_issue_no_token_for_an_account_that_no_longer_exists() {
+        assertThatExceptionOfType(AccountLoginFailedException.class).isThrownBy(() -> service.openSession(99L, "ABC234"));
+        verify(tokens, never()).issue(anyString());
+    }
+}

@@ -344,6 +344,48 @@ export async function getMyAccount(token: string): Promise<MyAccountOutcome> {
   return { kind: "unavailable" };
 }
 
+export type MyBooking = components["schemas"]["BookingSummary"];
+
+export type MyBookingsOutcome =
+  | { kind: "bookings"; bookings: MyBooking[]; truncated: boolean }
+  | { kind: "unauthorized" }
+  | { kind: "unavailable" };
+
+/** The bookings made with the signed-in traveller's address, newest first (ADR-0034). */
+export async function listMyBookings(token: string): Promise<MyBookingsOutcome> {
+  const response = await call("/api/v1/accounts/me/bookings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) {
+    const list = (await response.json()) as components["schemas"]["MyBookings"];
+    return { kind: "bookings", bookings: list.bookings, truncated: list.truncated };
+  }
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
+export type MyBookingSessionOutcome =
+  | { kind: "opened"; accessToken: string; expiresAt: string }
+  | { kind: "not-found" } // not this account's, or no such booking: the service does not say which
+  | { kind: "unauthorized" }
+  | { kind: "unavailable" };
+
+/** Opens one of the traveller's own bookings: the answer is the ordinary manage token for that booking. */
+export async function openMyBookingSession(token: string, locator: string): Promise<MyBookingSessionOutcome> {
+  const response = await call(`/api/v1/accounts/me/bookings/${encodeURIComponent(locator)}/sessions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 201) {
+    const session = (await response.json()) as components["schemas"]["ManageSession"];
+    return { kind: "opened", accessToken: session.accessToken, expiresAt: session.expiresAt };
+  }
+  if (response.status === 404) return { kind: "not-found" };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
 export type RebookOutcome =
   | { kind: "moved" | "unchanged"; seats: string[] } // unchanged: it was already on that flight
   | { kind: "refused"; detail: string } // a rule forbids the move, or the seats are not there: the reason is for staff

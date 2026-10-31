@@ -127,6 +127,10 @@ public class TravellerAccount {
         return email;
     }
 
+    public String getEmailIndex() {
+        return emailIndex;
+    }
+
     public String getPasswordHash() {
         return passwordHash;
     }

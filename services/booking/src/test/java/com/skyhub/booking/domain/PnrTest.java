@@ -35,6 +35,15 @@ class PnrTest {
     }
 
     @Test
+    void should_have_no_address_index_until_it_is_given_one() {
+        assertThat(pnr.getContactEmailIndex()).isNull();
+
+        pnr.indexContactEmail("a-keyed-hash");
+
+        assertThat(pnr.getContactEmailIndex()).isEqualTo("a-keyed-hash");
+    }
+
+    @Test
     void should_not_match_unknown_last_name() {
         assertThat(pnr.hasPassengerWithLastName("Silva")).isFalse();
     }

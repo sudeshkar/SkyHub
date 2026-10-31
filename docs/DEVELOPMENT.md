@@ -85,16 +85,17 @@ Ask of every slice: *what will the next feature make me edit?* and *what happens
 
 The full table is [`ROADMAP.md`](ROADMAP.md). The order we plan to work in (each is one or more thin slices, picked one at a time):
 
-1. **My bookings.** A signed-in traveller sees every booking made with their address and opens one without its reference. Add the keyed index (`PiiCipher.blindIndex`) to the booking contact address, backfill old rows safely, list bookings for an account, issue a manage token for a booking the account owns. Saved passengers and changing the account email come after.
-2. **Fuller rebooking.** A bulk rebooking endpoint; grouping and filtering proposals for big flights; arrival times and a connection rule in the booking service; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline.
-3. **More notifications.** HTML email and a boarding-pass attachment; SMS; non-blocking retry topics; skipping one parked message that can never succeed.
-4. **Real payment provider.** An adapter for a real provider, webhooks, 3-D Secure (option 3 in ADR-0015). Also write an intent before charging, so a crash between charging and recording cannot lose a charge (ADR-0030).
-5. **Check-in extras.** Per-passenger check-in, check-out (to allow seat changes), a QR/PDF417 boarding-pass image.
-6. **Gateway and deployment.** Kong gateway, containers for every service, Kubernetes with Helm, a SonarQube quality gate, a per-client hold limit at the gateway.
+1. **Fuller rebooking.** A bulk rebooking endpoint; grouping and filtering proposals for big flights; arrival times and a connection rule in the booking service; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline.
+2. **More notifications.** HTML email and a boarding-pass attachment; SMS; non-blocking retry topics; skipping one parked message that can never succeed.
+3. **Real payment provider.** An adapter for a real provider, webhooks, 3-D Secure (option 3 in ADR-0015). Also write an intent before charging, so a crash between charging and recording cannot lose a charge (ADR-0030).
+4. **Check-in extras.** Per-passenger check-in, check-out (to allow seat changes), a QR/PDF417 boarding-pass image.
+5. **Gateway and deployment.** Kong gateway, containers for every service, Kubernetes with Helm, a SonarQube quality gate, a per-client hold limit at the gateway.
+
+**Account follow-ups (small slices, any time):** changing the account email (prove the new address with a link), saved passengers, paging past the newest 50 bookings.
 
 **Loose ends to fold in when a slice touches them:** browser tests (Playwright) for check-in and boarding passes, disruption notices, the refund retry, the withdraw form and the account pages; Next.js tracing; manage-token and account-token revocation; pass only a reference (not the token) through Kafka for account links; share the lock-out logic between staff and traveller accounts; homepage hero video (needs a paid plan); the graphify hook.
 
 **Needs the author, not code:**
 - Set `GROQ_API_KEY`, then run `python -m evals --live` and `python -m disruption_agent SK001 <date>`: the live Groq model has never been run.
-- Restart the booking service with its usual keys to get the account endpoints; set `SKYHUB_SITE_URL` anywhere that is not local.
+- Restart the booking service with its usual keys to get the account and My bookings endpoints (the first start indexes older bookings, see ADR-0034); set `SKYHUB_SITE_URL` anywhere that is not local.
 - On a new machine, turn the Java extension's auto-build off in `.vscode/settings.json` (it can overwrite `target/classes`); `.vscode/` is not committed.
