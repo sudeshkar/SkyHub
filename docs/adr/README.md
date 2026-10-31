@@ -52,3 +52,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0046](0046-sealing-link-tokens-on-the-topic.md) | Sealing one-time link tokens on the topic | Accepted |
 | [0047](0047-sign-out-everywhere.md) | Signing out everywhere | Accepted |
 | [0048](0048-one-password-rule-and-the-72-byte-limit.md) | One password rule, and the 72-byte limit | Accepted |
+| [0049](0049-proving-the-real-chain-live.md) | Proving the real chain live | Accepted |
