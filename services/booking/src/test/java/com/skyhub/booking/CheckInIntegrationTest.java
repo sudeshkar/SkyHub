@@ -298,4 +298,84 @@ class CheckInIntegrationTest {
 
         mvc.perform(checkOut(locator, tokenFor(locator), 3)).andExpect(status().isBadRequest());
     }
+
+    // ---- a gate asks whether a pass is still good (ADR-0056) --------------------------------------------------------------
+
+    private org.springframework.test.web.servlet.ResultActions verify(String barcode, String authorization) throws Exception {
+        var request = post("/api/v1/ops/boarding-passes/verification").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"barcode\":\"%s\"}".formatted(barcode));
+        return mvc.perform(authorization == null ? request : request.header("Authorization", authorization));
+    }
+
+    @Test
+    void should_accept_a_pass_that_is_current_and_refuse_it_once_the_passenger_has_checked_out() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String locator = book("SK501", "2029-05-11", "13D");
+        String token = tokenFor(locator);
+        String barcode = JsonPath.read(mvc.perform(checkIn(locator, token, 0)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(),
+                "$.passes[0].barcode");
+
+        verify(barcode, ops).andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.pass.passengerName").value("PERERA/PRIYA"))
+                .andExpect(jsonPath("$.pass.seatNumber").value("13D"))
+                .andExpect(jsonPath("$.reason").doesNotExist());
+
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isNoContent());
+
+        // The signature on this pass is still genuine (signer.verify), and the gate still refuses it.
+        assertThat(signer.verify(barcode)).isTrue();
+        verify(barcode, ops).andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(false))
+                .andExpect(jsonPath("$.reason").value("NOT_CHECKED_IN"))
+                .andExpect(jsonPath("$.pass").doesNotExist());   // a refused pass says nothing about who it was for
+    }
+
+    @Test
+    void should_refuse_the_old_pass_after_a_new_seat_and_check_in_and_accept_the_new_one() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String locator = book("SK501", "2029-05-12", "13D");
+        String token = tokenFor(locator);
+        String old = JsonPath.read(mvc.perform(checkIn(locator, token, 0)).andReturn().getResponse().getContentAsString(), "$.passes[0].barcode");
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isNoContent());
+        mvc.perform(put("/api/v1/pnrs/{l}/seat-assignments", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"passengerIndex\":0,\"segmentIndex\":0,\"seatNumber\":\"30D\"}")).andExpect(status().isOk());
+        String fresh = JsonPath.read(mvc.perform(checkIn(locator, token, 0)).andReturn().getResponse().getContentAsString(), "$.passes[0].barcode");
+
+        verify(old, ops).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.reason").value("SUPERSEDED"));
+        verify(fresh, ops).andExpect(jsonPath("$.valid").value(true)).andExpect(jsonPath("$.pass.seatNumber").value("30D"));
+    }
+
+    @Test
+    void should_refuse_the_pass_of_a_cancelled_booking() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String locator = book("SK501", "2029-05-13", "13D");
+        String token = tokenFor(locator);
+        String barcode = JsonPath.read(mvc.perform(checkIn(locator, token, 0)).andReturn().getResponse().getContentAsString(), "$.passes[0].barcode");
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", locator).header("Authorization", token)).andExpect(status().isOk());
+
+        verify(barcode, ops).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.reason").value("BOOKING_CANCELLED"));
+    }
+
+    @Test
+    void should_refuse_text_that_we_did_not_sign_or_that_was_changed() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String locator = book("SK501", "2029-05-14", "13D");
+        String barcode = JsonPath.read(mvc.perform(checkIn(locator, tokenFor(locator), 0)).andReturn().getResponse().getContentAsString(), "$.passes[0].barcode");
+
+        verify(barcode.replace("13D", "1A"), ops).andExpect(jsonPath("$.reason").value("BAD_SIGNATURE"));
+        verify("M1PERERA/PRIYA " + locator + " SK501 2029-05-14 13D 0001.forged", ops).andExpect(jsonPath("$.reason").value("BAD_SIGNATURE"));
+        verify("x".repeat(400), ops).andExpect(status().isBadRequest());   // longer than the contract allows
+    }
+
+    @Test
+    void should_be_for_staff_only_not_for_travellers_or_anyone_without_a_token() throws Exception {
+        String locator = book("SK501", "2029-05-15", "13D");
+        String token = tokenFor(locator);
+        String barcode = JsonPath.read(mvc.perform(checkIn(locator, token, 0)).andReturn().getResponse().getContentAsString(), "$.passes[0].barcode");
+
+        verify(barcode, null).andExpect(status().isUnauthorized());
+        verify(barcode, "Bearer not-a-token").andExpect(status().isUnauthorized());
+        verify(barcode, token).andExpect(status().isForbidden());   // the traveller's own booking token is not a staff token
+    }
 }

@@ -9,6 +9,8 @@ import com.skyhub.booking.api.model.DisruptionDto;
 import com.skyhub.booking.api.model.DisruptionTypeDto;
 import com.skyhub.booking.api.model.RecordDisruptionRequestDto;
 import com.skyhub.booking.api.model.BoardingPassDto;
+import com.skyhub.booking.api.model.BoardingPassVerificationDto;
+import com.skyhub.booking.application.BoardingPassVerifier;
 import com.skyhub.booking.api.model.BoardingPassesDto;
 import com.skyhub.booking.api.model.CreateHoldRequestDto;
 import com.skyhub.booking.api.model.HoldDto;
@@ -99,6 +101,18 @@ final class BookingDtoMapper {
                 .map(p -> new BoardingPassDto(p.passengerName(), p.locator(), p.flightNumber(), p.departureDate(),
                         p.seatNumber(), p.sequence(), p.barcode()))
                 .toList());
+    }
+
+    static BoardingPassVerificationDto toDto(BoardingPassVerifier.Verdict verdict) {
+        BoardingPassVerificationDto dto = new BoardingPassVerificationDto(verdict.valid());
+        if (verdict.reason() != null) {
+            dto.setReason(BoardingPassVerificationDto.ReasonEnum.valueOf(verdict.reason().name()));
+        }
+        if (verdict.pass() != null) {
+            var p = verdict.pass();
+            dto.setPass(new BoardingPassDto(p.passengerName(), p.locator(), p.flightNumber(), p.departureDate(), p.seatNumber(), p.sequence(), p.barcode()));
+        }
+        return dto;
     }
 
     static HoldDto toDto(HoldView hold) {
