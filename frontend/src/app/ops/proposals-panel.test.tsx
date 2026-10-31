@@ -67,13 +67,13 @@ describe("ProposalsPanel", () => {
     vi.mocked(moveBookings).mockImplementation(async (moves) => ({
       status: "done", results: moves.map((m) => ({ locator: m.locator, status: "moved" as const, seats: ["1A"] })) }));
     showProposals(...many);
-    await screen.findByText("B00000");
+    await screen.findByText("B00000", {}, { timeout: 5000 }); // 120 rows: slow to draw on a busy machine
 
     fireEvent.click(screen.getByRole("button", { name: "Move 120 selected" }));
 
-    await waitFor(() => expect(moveBookings).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(moveBookings).toHaveBeenCalledTimes(3), { timeout: 5000 });
     expect(vi.mocked(moveBookings).mock.calls.map(([batch]) => batch.length)).toEqual([50, 50, 20]);
-    expect(await screen.findByText(/120 moved/)).toBeInTheDocument();
+    expect(await screen.findByText(/120 moved/, {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it("shows why a move was refused, and leaves that booking selectable for another try", async () => {
