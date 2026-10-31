@@ -2,6 +2,8 @@
 
 SkyHub is built as **thin vertical slices**: each slice is one small, complete piece of behaviour that goes all the way down (contract, tests, backend, website, monitoring, docs), is merged on its own, and leaves `main` working. We do not build a layer across the whole system first. A slice is done when its tests pass and its decision is written down in an ADR.
 
+How we work (standards, security, testing, verification, machine notes) is written in [`DEVELOPMENT.md`](DEVELOPMENT.md).
+
 How a slice goes, every time:
 
 1. Branch from an up-to-date `main`. Pull requests go to `main` (not stacked on other PRs: a stacked PR merges into its parent branch and never reaches `main`).
