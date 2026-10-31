@@ -45,6 +45,9 @@ class MyBookingsIntegrationTest {
     @Autowired
     private ContactEmailIndexBackfill backfill;
 
+    @Autowired
+    private com.skyhub.booking.application.BookingsByAddress byAddress;
+
     private final JsonMapper json = JsonMapper.builder().build();
 
     @Test
@@ -137,6 +140,56 @@ class MyBookingsIntegrationTest {
         mvc.perform(get("/api/v1/accounts/me/bookings").header("Authorization", bearer))
                 .andExpect(jsonPath("$.bookings[0].locator").value(legacy));
         assertThat(backfill.run()).isZero();    // nothing left to do, so a normal start writes nothing
+    }
+
+    @Test
+    void should_walk_every_booking_once_in_pages_even_when_two_were_made_in_the_same_instant() throws Exception {
+        String email = "pages.walker@example.com";
+        List<String> made = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            made.add(book(email, "2026-12-2" + i, "11D"));
+        }
+        // Two bookings with exactly the same creation time: the reference must break the tie, or one could be skipped or shown twice.
+        jdbc.update("UPDATE pnr SET created_at = (SELECT created_at FROM pnr WHERE locator = ?) WHERE locator = ?", made.get(3), made.get(2));
+        String index = cipher.blindIndex(email);
+
+        List<String> seen = new java.util.ArrayList<>();
+        com.skyhub.booking.application.BookingCursor after = null;
+        int pages = 0;
+        while (true) {
+            var page = byAddress.newestAfter(index, after, 3);   // pages of two, plus the one extra that says there is more
+            List<String> shown = page.stream().limit(2).map(com.skyhub.booking.application.view.BookingSummary::locator).toList();
+            seen.addAll(shown);
+            pages++;
+            if (page.size() <= 2) {
+                break;
+            }
+            var last = page.get(1);
+            after = new com.skyhub.booking.application.BookingCursor(last.createdAt(), last.locator());
+        }
+
+        assertThat(pages).isEqualTo(3);
+        assertThat(seen).hasSize(5).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(made);
+        // Newest first overall, and for the two made together, the higher reference first.
+        var times = seen.stream().map(l -> jdbc.queryForObject("SELECT created_at FROM pnr WHERE locator = ?", java.sql.Timestamp.class, l)).toList();
+        assertThat(times).isSortedAccordingTo(java.util.Comparator.reverseOrder());
+        int tied = seen.indexOf(made.get(2).compareTo(made.get(3)) > 0 ? made.get(2) : made.get(3));
+        assertThat(tied).isLessThan(seen.indexOf(made.get(2).compareTo(made.get(3)) > 0 ? made.get(3) : made.get(2)));
+    }
+
+    @Test
+    void should_answer_a_page_through_http_and_refuse_a_cursor_that_is_not_one() throws Exception {
+        book("http.pages@example.com", "2026-12-30", "11D");
+        String bearer = signedIn("http.pages@example.com");
+
+        mvc.perform(get("/api/v1/accounts/me/bookings").header("Authorization", bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.truncated").value(false)).andExpect(jsonPath("$.nextCursor").doesNotExist());
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("cursor", "forged").header("Authorization", bearer))
+                .andExpect(status().isBadRequest());
+        // A cursor past the oldest booking is simply an empty last page.
+        String past = new com.skyhub.booking.application.BookingCursor(java.time.Instant.parse("2000-01-01T00:00:00Z"), "AAAAAA").encode();
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("cursor", past).header("Authorization", bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.bookings").isEmpty());
     }
 
     // ---- helpers -------------------------------------------------------------------------------------------------------

@@ -9,8 +9,11 @@ import java.util.List;
  */
 public interface BookingsByAddress {
 
-    /** At most {@code limit} bookings, newest first. Cost depends on {@code limit}, not on how many bookings exist. */
-    List<BookingSummary> newest(String emailIndex, int limit);
+    /**
+     * At most {@code limit} bookings, newest first, starting strictly after {@code after} (the first page when null). Cost depends
+     * on {@code limit}, not on how many bookings exist or how far back the page is (ADR-0038).
+     */
+    List<BookingSummary> newestAfter(String emailIndex, BookingCursor after, int limit);
 
     /** Whether this booking was made with this address. False for an unknown reference. */
     boolean owns(String emailIndex, String locator);

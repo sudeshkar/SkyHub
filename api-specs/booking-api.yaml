@@ -654,17 +654,29 @@ paths:
       operationId: listMyBookings
       summary: Bookings made with the signed-in traveller's address
       description: |
-        The newest 50 bookings whose contact address is the account's address (ADR-0034), newest first. Summaries hold
-        no names, seats or addresses. `truncated` is true when there are more than 50.
+        Up to 50 bookings whose contact address is the account's address (ADR-0034), newest first. Summaries hold
+        no names, seats or addresses. When there are older bookings, `nextCursor` is set and `truncated` is true: send
+        `nextCursor` back as `cursor` for the next page (ADR-0038). Every page costs the same however far back it is. A
+        cursor that this service did not make is a 400.
       security:
         - accountToken: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          description: 'The `nextCursor` of the previous page. Opaque, so do not build one.'
+          schema:
+            type: string
+            maxLength: 200
       responses:
         '200':
-          description: The bookings
+          description: One page of bookings
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MyBookings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1429,6 +1441,11 @@ components:
             $ref: '#/components/schemas/BookingSummary'
         truncated:
           type: boolean
+          description: True when there are older bookings than this page holds, that is, when `nextCursor` is set.
+        nextCursor:
+          type: string
+          nullable: true
+          description: Absent on the last page. Pass it back as `cursor` to read the next page.
 
     BookingSummary:
       type: object

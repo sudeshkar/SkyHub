@@ -49,6 +49,7 @@ How a slice goes, every time:
 | 30 | Bulk rebooking: up to 50 moves in one request, each all or nothing, each result reported; the operations page makes one call per batch | ADR-0035 |
 | 31 | A rebooking keeps the traveller's connections: the booking service now refuses a replacement that lands too late for the next flight or leaves too soon after the previous one, on expected times | ADR-0036 |
 | 32 | Skip a parked notification that can never succeed: listed by partition and offset with a reason, left out of the replay | ADR-0037 |
+| 33 | Paging "Your bookings" past the newest 50: a keyset cursor, so every page costs the same | ADR-0038 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -59,7 +60,7 @@ Ordered by how much they add to the story, not a commitment.
 | **Fuller rebooking** | Grouping and filtering proposals for big flights; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline (needs a Groq key; `python -m evals --live`) | Approval and rebooking exist (ADR-0022, 0023, 0024). Run `python -m evals --live` with a Groq key first: the live model has not been run yet. |
 | **More notifications** | HTML email and a boarding-pass attachment; SMS; non-blocking retry topics; a person's identity on management-port actions (replay, skip) | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
-| **Account follow-ups** | Change the account's email address (and so which bookings it owns); saved passengers; paging past the newest 50 bookings | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
+| **Account follow-ups** | Change the account's email address (and so which bookings it owns); saved passengers; filtering the bookings list (upcoming and past) | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
 | **Check-in extras** | Per-passenger check-in, check-out (to allow seat changes), QR/PDF417 boarding pass image | |
 | **Gateway and deployment** | Kong gateway, containers for every service, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
 

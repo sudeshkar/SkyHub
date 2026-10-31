@@ -37,12 +37,18 @@ public class MyBookingsService {
         this.metrics = metrics;
     }
 
-    public BookingList list(long accountId) {
+    /** @param cursor where the previous page ended (its {@code nextCursor}); null or empty for the newest bookings */
+    public BookingList list(long accountId, String cursor) {
+        BookingCursor after = BookingCursor.decodeOrNull(cursor);   // refused before anything is read
         // One more than the limit is how we know there are more, without counting them all.
-        List<BookingSummary> found = bookings.newest(indexOf(accountId), LIMIT + 1);
-        boolean truncated = found.size() > LIMIT;
+        List<BookingSummary> found = bookings.newestAfter(indexOf(accountId), after, LIMIT + 1);
         metrics.listed();
-        return new BookingList(truncated ? found.subList(0, LIMIT) : found, truncated);
+        if (found.size() <= LIMIT) {
+            return new BookingList(found, null);
+        }
+        List<BookingSummary> page = found.subList(0, LIMIT);
+        BookingSummary last = page.getLast();
+        return new BookingList(page, new BookingCursor(last.createdAt(), last.locator()).encode());
     }
 
     /** Someone else's booking and a reference that does not exist are indistinguishable to the caller. */

@@ -29,10 +29,11 @@ public class MyBookingsController implements MyBookingsApi {
     }
 
     @Override
-    public ResponseEntity<MyBookingsDto> listMyBookings() {
-        BookingList list = myBookings.list(accountId());
+    public ResponseEntity<MyBookingsDto> listMyBookings(String cursor) {
+        BookingList list = myBookings.list(accountId(), cursor);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(new MyBookingsDto(list.bookings().stream().map(MyBookingsController::toDto).toList(), list.truncated()));
+                .body(new MyBookingsDto(list.bookings().stream().map(MyBookingsController::toDto).toList(), list.truncated())
+                        .nextCursor(list.nextCursor()));
     }
 
     @Override

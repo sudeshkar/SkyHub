@@ -416,8 +416,10 @@ export interface paths {
         };
         /**
          * Bookings made with the signed-in traveller's address
-         * @description The newest 50 bookings whose contact address is the account's address (ADR-0034), newest first. Summaries hold
-         *     no names, seats or addresses. `truncated` is true when there are more than 50.
+         * @description Up to 50 bookings whose contact address is the account's address (ADR-0034), newest first. Summaries hold
+         *     no names, seats or addresses. When there are older bookings, `nextCursor` is set and `truncated` is true: send
+         *     `nextCursor` back as `cursor` for the next page (ADR-0038). Every page costs the same however far back it is. A
+         *     cursor that this service did not make is a 400.
          */
         get: operations["listMyBookings"];
         put?: never;
@@ -782,7 +784,10 @@ export interface components {
         };
         MyBookings: {
             bookings: components["schemas"]["BookingSummary"][];
+            /** @description True when there are older bookings than this page holds, that is, when `nextCursor` is set. */
             truncated: boolean;
+            /** @description Absent on the last page. Pass it back as `cursor` to read the next page. */
+            nextCursor?: string | null;
         };
         BookingSummary: {
             /** @example ABC234 */
@@ -1507,14 +1512,17 @@ export interface operations {
     };
     listMyBookings: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The `nextCursor` of the previous page. Opaque, so do not build one. */
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The bookings */
+            /** @description One page of bookings */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1523,6 +1531,7 @@ export interface operations {
                     "application/json": components["schemas"]["MyBookings"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

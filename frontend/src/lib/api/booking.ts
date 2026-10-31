@@ -347,18 +347,21 @@ export async function getMyAccount(token: string): Promise<MyAccountOutcome> {
 export type MyBooking = components["schemas"]["BookingSummary"];
 
 export type MyBookingsOutcome =
-  | { kind: "bookings"; bookings: MyBooking[]; truncated: boolean }
+  | { kind: "bookings"; bookings: MyBooking[]; nextCursor: string | null } // nextCursor is null on the last page
+  | { kind: "bad-cursor" } // the page asked for is not one this service made
   | { kind: "unauthorized" }
   | { kind: "unavailable" };
 
-/** The bookings made with the signed-in traveller's address, newest first (ADR-0034). */
-export async function listMyBookings(token: string): Promise<MyBookingsOutcome> {
-  const response = await call("/api/v1/accounts/me/bookings", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+/** One page of the bookings made with the signed-in traveller's address, newest first (ADR-0034, ADR-0038). */
+export async function listMyBookings(token: string, cursor?: string): Promise<MyBookingsOutcome> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await call(`/api/v1/accounts/me/bookings${query}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
   if (!response) return { kind: "unavailable" };
   if (response.ok) {
     const list = (await response.json()) as components["schemas"]["MyBookings"];
-    return { kind: "bookings", bookings: list.bookings, truncated: list.truncated };
+    return { kind: "bookings", bookings: list.bookings, nextCursor: list.nextCursor ?? null };
   }
+  if (response.status === 400) return { kind: "bad-cursor" };
   if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
   return { kind: "unavailable" };
 }
