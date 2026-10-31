@@ -62,18 +62,18 @@ describe("ProposalsPanel", () => {
     expect(moveBookings).toHaveBeenCalledWith([{ locator: "GHI890", segmentIndex: 0, flightNumber: "SK503", departureDate: "2026-11-02" }]);
   });
 
-  it("sends a long list in batches of twenty, one after another, and says how far it has got", async () => {
-    const many = Array.from({ length: 45 }, (_, i) => proposal(`B${String(i).padStart(5, "0")}`));
+  it("sends a long list in batches of fifty, one after another, and says how far it has got", async () => {
+    const many = Array.from({ length: 120 }, (_, i) => proposal(`B${String(i).padStart(5, "0")}`));
     vi.mocked(moveBookings).mockImplementation(async (moves) => ({
       status: "done", results: moves.map((m) => ({ locator: m.locator, status: "moved" as const, seats: ["1A"] })) }));
     showProposals(...many);
     await screen.findByText("B00000");
 
-    fireEvent.click(screen.getByRole("button", { name: "Move 45 selected" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move 120 selected" }));
 
     await waitFor(() => expect(moveBookings).toHaveBeenCalledTimes(3));
-    expect(vi.mocked(moveBookings).mock.calls.map(([batch]) => batch.length)).toEqual([20, 20, 5]);
-    expect(await screen.findByText(/45 moved/)).toBeInTheDocument();
+    expect(vi.mocked(moveBookings).mock.calls.map(([batch]) => batch.length)).toEqual([50, 50, 20]);
+    expect(await screen.findByText(/120 moved/)).toBeInTheDocument();
   });
 
   it("shows why a move was refused, and leaves that booking selectable for another try", async () => {

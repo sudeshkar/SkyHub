@@ -85,7 +85,7 @@ Ask of every slice: *what will the next feature make me edit?* and *what happens
 
 The full table is [`ROADMAP.md`](ROADMAP.md). The order we plan to work in (each is one or more thin slices, picked one at a time):
 
-1. **Fuller rebooking.** A bulk rebooking endpoint; grouping and filtering proposals for big flights; arrival times and a connection rule in the booking service; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline.
+1. **Fuller rebooking** (the bulk endpoint is done, ADR-0035). Grouping and filtering proposals for big flights; arrival times and a connection rule in the booking service; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline.
 2. **More notifications.** HTML email and a boarding-pass attachment; SMS; non-blocking retry topics; skipping one parked message that can never succeed.
 3. **Real payment provider.** An adapter for a real provider, webhooks, 3-D Secure (option 3 in ADR-0015). Also write an intent before charging, so a crash between charging and recording cannot lose a charge (ADR-0030).
 4. **Check-in extras.** Per-passenger check-in, check-out (to allow seat changes), a QR/PDF417 boarding-pass image.

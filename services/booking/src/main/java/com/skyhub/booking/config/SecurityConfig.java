@@ -65,6 +65,7 @@ public class SecurityConfig {
                         .requestMatchers(GET, "/api/v1/ops/flights/{flightNumber}/departures/{departureDate}/bookings")
                                 .access(StaffAuthorization.viewsAffectedBookings())
                         .requestMatchers(POST, "/api/v1/ops/pnrs/{locator}/rebooking").access(StaffAuthorization.rebooks())
+                        .requestMatchers(POST, "/api/v1/ops/rebookings").access(StaffAuthorization.rebooks())
                         .requestMatchers(POST, "/api/v1/ops/disruptions").access(StaffAuthorization.recordsDisruptions())
                         .requestMatchers(DELETE, "/api/v1/ops/disruptions/{flightNumber}/{departureDate}")
                                 .access(StaffAuthorization.recordsDisruptions())

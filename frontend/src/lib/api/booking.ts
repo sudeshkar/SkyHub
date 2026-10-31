@@ -386,6 +386,33 @@ export async function openMyBookingSession(token: string, locator: string): Prom
   return { kind: "unavailable" };
 }
 
+export type BulkMove = { locator: string; segmentIndex: number; flightNumber: string; departureDate: string };
+export type BulkMoveResult = components["schemas"]["MoveResult"];
+
+export type BulkRebookOutcome =
+  | { kind: "results"; results: BulkMoveResult[] } // one per move, in the order sent; each move succeeded or not on its own
+  | { kind: "rejected"; detail: string } // the whole set was refused (too many, or a move listed twice): nothing changed
+  | { kind: "unauthorized" } // token missing, expired, or the role may not do this
+  | { kind: "unavailable" };
+
+/** Moves many bookings in one call (ADR-0035). Each move is all or nothing; the call is not. Repeating it is safe. */
+export async function rebookFlights(token: string, moves: BulkMove[]): Promise<BulkRebookOutcome> {
+  const response = await call("/api/v1/ops/rebookings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ moves }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) return { kind: "results", results: ((await response.json()) as components["schemas"]["BulkRebooked"]).results };
+  if (response.status === 400) {
+    const problem = (await response.json().catch(() => null)) as Problem | null;
+    return { kind: "rejected", detail: problem?.detail ?? "These moves were not accepted." };
+  }
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
 export type RebookOutcome =
   | { kind: "moved" | "unchanged"; seats: string[] } // unchanged: it was already on that flight
   | { kind: "refused"; detail: string } // a rule forbids the move, or the seats are not there: the reason is for staff

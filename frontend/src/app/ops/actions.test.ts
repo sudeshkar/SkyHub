@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProposals } from "@/lib/api/agent";
-import { openStaffSession, rebookFlight, recordDisruption as recordCall, withdrawDisruption as withdrawCall } from "@/lib/api/booking";
+import { openStaffSession, rebookFlights, recordDisruption as recordCall, withdrawDisruption as withdrawCall } from "@/lib/api/booking";
 import { rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
 import { loadProposals, logOut, moveBookings, recordDisruption, staffLogin, withdrawDisruption } from "./actions";
@@ -12,7 +12,7 @@ vi.mock("@/lib/staff-session", () => ({
   clearStaffSession: vi.fn(),
 }));
 vi.mock("@/lib/api/booking", () => ({
-  openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlight: vi.fn(), withdrawDisruption: vi.fn(),
+  openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlights: vi.fn(), withdrawDisruption: vi.fn(),
 }));
 vi.mock("@/lib/api/agent", () => ({ getProposals: vi.fn() }));
 // redirect() works by throwing; the real one is not available outside a request.
@@ -217,50 +217,66 @@ describe("moveBookings", () => {
     vi.mocked(readStaffSession).mockResolvedValue(SESSION);
   });
 
-  it("moves each approved booking with the staff member's own token, so the audit names them", async () => {
-    vi.mocked(rebookFlight).mockResolvedValue({ kind: "moved", seats: ["14A", "14B"] });
+  it("moves the approved bookings in one call with the staff member's own token, so the audit names them", async () => {
+    vi.mocked(rebookFlights).mockResolvedValue({ kind: "results", results: [
+      { locator: "ABC234", segmentIndex: 0, outcome: "MOVED", seats: ["14A", "14B"] },
+      { locator: "DEF567", segmentIndex: 1, outcome: "UNCHANGED", seats: ["14C"] }] });
 
     const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567", segmentIndex: 1 }]);
 
-    expect(rebookFlight).toHaveBeenNthCalledWith(1, SESSION.token, "ABC234", { segmentIndex: 0, flightNumber: "SK503", departureDate: "2026-11-02" });
-    expect(rebookFlight).toHaveBeenNthCalledWith(2, SESSION.token, "DEF567", { segmentIndex: 1, flightNumber: "SK503", departureDate: "2026-11-02" });
+    expect(rebookFlights).toHaveBeenCalledTimes(1);
+    expect(rebookFlights).toHaveBeenCalledWith(SESSION.token, [MOVE, { ...MOVE, locator: "DEF567", segmentIndex: 1 }]);
     expect(result).toEqual({ status: "done", results: [
-      { locator: "ABC234", status: "moved", seats: ["14A", "14B"] }, { locator: "DEF567", status: "moved", seats: ["14A", "14B"] }] });
+      { locator: "ABC234", status: "moved", seats: ["14A", "14B"] }, { locator: "DEF567", status: "unchanged", seats: ["14C"] }] });
   });
 
-  it("reports a refused move with the booking service's reason and carries on with the rest", async () => {
-    vi.mocked(rebookFlight)
-      .mockResolvedValueOnce({ kind: "refused", detail: "SK503 flies DXB to JFK, not the booked route DXB to LHR" })
-      .mockResolvedValueOnce({ kind: "unchanged", seats: ["14A"] });
+  it("reports a refused move with the booking service's reason and the others as they went", async () => {
+    vi.mocked(rebookFlights).mockResolvedValue({ kind: "results", results: [
+      { locator: "ABC234", segmentIndex: 0, outcome: "REFUSED", detail: "SK503 flies DXB to JFK, not the booked route DXB to LHR" },
+      { locator: "DEF567", segmentIndex: 0, outcome: "NOT_FOUND", detail: "No booking matches this reference" },
+      { locator: "GHI890", segmentIndex: 0, outcome: "CONFLICT", detail: "The seats changed while this booking was being moved; try again." },
+      { locator: "JKL123", segmentIndex: 0, outcome: "MOVED", seats: ["14A"] }] });
 
-    const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567" }]);
+    const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567" }, { ...MOVE, locator: "GHI890" }, { ...MOVE, locator: "JKL123" }]);
 
     expect(result).toEqual({ status: "done", results: [
       { locator: "ABC234", status: "refused", detail: "SK503 flies DXB to JFK, not the booked route DXB to LHR" },
-      { locator: "DEF567", status: "unchanged", seats: ["14A"] }] });
+      { locator: "DEF567", status: "failed", detail: "That booking was not found." },
+      { locator: "GHI890", status: "failed", detail: "The seats changed while this booking was being moved; try again." },
+      { locator: "JKL123", status: "moved", seats: ["14A"] }] });
   });
 
-  it("stops at once and signs the person out when the token is refused, keeping what was already done", async () => {
-    vi.mocked(rebookFlight).mockResolvedValueOnce({ kind: "moved", seats: ["14A"] }).mockResolvedValueOnce({ kind: "unauthorized" });
+  it("keeps what was moved and reports the moves that were not tried when the service stops partway", async () => {
+    vi.mocked(rebookFlights).mockResolvedValue({ kind: "results", results: [
+      { locator: "ABC234", segmentIndex: 0, outcome: "MOVED", seats: ["14A"] },
+      { locator: "DEF567", segmentIndex: 0, outcome: "UNAVAILABLE", detail: "The timetable is not answering." },
+      { locator: "GHI890", segmentIndex: 0, outcome: "NOT_ATTEMPTED", detail: "Not tried: an earlier move could not be completed." }] });
 
     const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567" }, { ...MOVE, locator: "GHI890" }]);
 
-    expect(result).toEqual({ status: "signed-out", results: [{ locator: "ABC234", status: "moved", seats: ["14A"] }] });
+    // The page stops sending further batches when fewer results than moves come back, so not-tried moves are left out.
+    expect(result).toEqual({ status: "done", results: [
+      { locator: "ABC234", status: "moved", seats: ["14A"] },
+      { locator: "DEF567", status: "failed", detail: "The timetable is not answering." }] });
+  });
+
+  it("signs the person out when the token is refused, and says so plainly when the service cannot be reached", async () => {
+    vi.mocked(rebookFlights).mockResolvedValueOnce({ kind: "unauthorized" });
+    expect(await moveBookings([MOVE])).toEqual({ status: "signed-out", results: [] });
     expect(clearStaffSession).toHaveBeenCalled();
-    expect(rebookFlight).toHaveBeenCalledTimes(2);
+
+    vi.mocked(rebookFlights).mockResolvedValueOnce({ kind: "unavailable" });
+    expect(await moveBookings([MOVE])).toMatchObject({ status: "error", message: expect.stringContaining("not responding") });
   });
 
-  it("stops when the booking service stops answering instead of hammering it", async () => {
-    vi.mocked(rebookFlight).mockResolvedValueOnce({ kind: "moved", seats: ["14A"] }).mockResolvedValueOnce({ kind: "unavailable" });
+  it("shows the service's reason when it refuses the whole set", async () => {
+    vi.mocked(rebookFlights).mockResolvedValue({ kind: "rejected", detail: "ABC234 flight 0 is listed twice" });
 
-    const result = await moveBookings([MOVE, { ...MOVE, locator: "DEF567" }, { ...MOVE, locator: "GHI890" }]);
-
-    expect(result).toMatchObject({ status: "done", results: [{ status: "moved" }, { locator: "DEF567", status: "failed" }] });
-    expect(rebookFlight).toHaveBeenCalledTimes(2);
+    expect(await moveBookings([MOVE])).toEqual({ status: "error", message: "ABC234 flight 0 is listed twice" });
   });
 
   it("refuses more than one batch at a time, and anything that is not a valid move, before changing anything", async () => {
-    const tooMany = Array.from({ length: 21 }, (_, i) => ({ ...MOVE, locator: `B${String(i).padStart(5, "0")}` }));
+    const tooMany = Array.from({ length: 51 }, (_, i) => ({ ...MOVE, locator: `B${String(i).padStart(5, "0")}` }));
 
     expect((await moveBookings(tooMany)).status).toBe("error");
     expect((await moveBookings([])).status).toBe("error");
@@ -268,21 +284,21 @@ describe("moveBookings", () => {
     expect((await moveBookings([{ ...MOVE, segmentIndex: 9 }])).status).toBe("error");
     expect((await moveBookings([{ ...MOVE, flightNumber: "../x" }])).status).toBe("error");
     expect((await moveBookings([{ ...MOVE, departureDate: "soon" }])).status).toBe("error");
-    expect(rebookFlight).not.toHaveBeenCalled();
+    expect(rebookFlights).not.toHaveBeenCalled();
   });
 
   it("asks a signed-out person to sign in", async () => {
     vi.mocked(readStaffSession).mockResolvedValue(null);
 
     expect(await moveBookings([MOVE])).toEqual({ status: "signed-out", results: [] });
-    expect(rebookFlight).not.toHaveBeenCalled();
+    expect(rebookFlights).not.toHaveBeenCalled();
   });
 
   it("slows a flood of requests", async () => {
     vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 30 });
 
     expect((await moveBookings([MOVE])).status).toBe("error");
-    expect(rebookFlight).not.toHaveBeenCalled();
+    expect(rebookFlights).not.toHaveBeenCalled();
   });
 });
 
