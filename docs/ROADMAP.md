@@ -54,6 +54,7 @@ How a slice goes, every time:
 | 35 | Telling the old address when an account moves: a notice with the new address masked, no link, no secret | ADR-0040 |
 | 36 | Ending every open session when an account's credentials change: a per-account session epoch carried in the token, checked on every account request | ADR-0041 |
 | 37 | Filtering "Your bookings" into upcoming and past, in the query, with the same order and cursor | ADR-0042 |
+| 38 | Grouping and finding proposals on the operations page: by destination flight, select all or none per group, find a booking by reference | ADR-0043 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -61,7 +62,7 @@ Ordered by how much they add to the story, not a commitment.
 
 | Slice | What it adds | Notes |
 |---|---|---|
-| **Fuller rebooking** | Grouping and filtering proposals for big flights; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline (needs a Groq key; `python -m evals --live`) | Approval and rebooking exist (ADR-0022, 0023, 0024). Run `python -m evals --live` with a Groq key first: the live model has not been run yet. |
+| **Fuller rebooking** | Windowing very large proposal lists, and filtering by moved or refused; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline (needs a Groq key; `python -m evals --live`) | Approval and rebooking exist (ADR-0022, 0023, 0024). Run `python -m evals --live` with a Groq key first: the live model has not been run yet. |
 | **More notifications** | HTML email and a boarding-pass attachment; SMS; non-blocking retry topics; a person's identity on management-port actions (replay, skip) | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
 | **Account follow-ups** | A "sign out everywhere" action; a way for the owner to recover an account that was moved without them; saved passengers; sort upcoming bookings by flight date; share the lock logic between staff and traveller accounts | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |

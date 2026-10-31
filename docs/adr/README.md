@@ -46,3 +46,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0040](0040-telling-the-old-address.md) | Telling the old address when an account moves | Accepted |
 | [0041](0041-ending-sessions-when-credentials-change.md) | Ending sessions when an account's credentials change | Accepted |
 | [0042](0042-filtering-my-bookings.md) | Filtering "Your bookings" into upcoming and past | Accepted |
+| [0043](0043-grouping-proposals-on-the-operations-page.md) | Grouping and finding proposals on the operations page | Accepted |
