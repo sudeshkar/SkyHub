@@ -359,6 +359,39 @@ paths:
         '503':
           $ref: '#/components/responses/ScheduleUnavailable'
 
+  /api/v1/ops/boarding-passes/verification:
+    post:
+      tags: [CheckIn]
+      operationId: verifyBoardingPass
+      summary: Is this scanned boarding pass still good?
+      description: |
+        For a gate (ADR-0056). A pass is good only if it is signed by us AND is exactly the pass that would be issued for the booking
+        now. A pass that was checked out of (ADR-0055), replaced by a new seat or a new check-in, or that belongs to a cancelled booking
+        or flight, is refused even though its signature is still genuine. A refused pass answers `valid: false` with a `reason` and
+        nothing about the passenger; only a good pass returns who and where. Not valid is a 200, because it is the answer, not an error.
+        Anything not signed by us, or changed, is `BAD_SIGNATURE` and nothing is looked up.
+      security:
+        - staffToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoardingPassVerificationRequest'
+      responses:
+        '200':
+          description: The verdict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPassVerification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/v1/ops/disruptions:
     post:
       tags: [Disruptions]
@@ -1357,6 +1390,28 @@ components:
         barcode:
           type: string
           description: Signed payload for the gate scanner. Any change to the pass invalidates it.
+
+    BoardingPassVerificationRequest:
+      type: object
+      required: [barcode]
+      properties:
+        barcode:
+          type: string
+          maxLength: 300
+          description: The text scanned from the pass, as printed in `barcode` of the boarding pass.
+
+    BoardingPassVerification:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+        reason:
+          type: string
+          enum: [BAD_SIGNATURE, UNKNOWN_BOOKING, BOOKING_CANCELLED, FLIGHT_CANCELLED, NOT_CHECKED_IN, SUPERSEDED]
+          description: Why a pass was refused. Absent for a good pass.
+        pass:
+          $ref: '#/components/schemas/BoardingPass'
 
     BoardingPasses:
       type: object

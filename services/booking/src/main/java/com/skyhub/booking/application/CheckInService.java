@@ -201,7 +201,7 @@ public class CheckInService {
         PnrPassenger passenger = pnr.getPassengers().get(row.getPassengerIndex());
         String name = (passenger.getLastName() + "/" + passenger.getFirstName()).toUpperCase(Locale.ROOT);
         String seat = pnr.seatOf(row.getPassengerIndex(), row.getSegmentIndex());
-        String payload = "M1%s %s %s %s %s %04d".formatted(
+        String payload = BoardingPassPayload.of(
                 name, pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat, row.getBoardingSequence());
         return new BoardingPass(name, pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat,
                 row.getBoardingSequence(), signer.sign(payload));

@@ -208,6 +208,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/boarding-passes/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Is this scanned boarding pass still good?
+         * @description For a gate (ADR-0056). A pass is good only if it is signed by us AND is exactly the pass that would be issued for the booking
+         *     now. A pass that was checked out of (ADR-0055), replaced by a new seat or a new check-in, or that belongs to a cancelled booking
+         *     or flight, is refused even though its signature is still genuine. A refused pass answers `valid: false` with a `reason` and
+         *     nothing about the passenger; only a good pass returns who and where. Not valid is a 200, because it is the answer, not an error.
+         *     Anything not signed by us, or changed, is `BAD_SIGNATURE` and nothing is looked up.
+         */
+        post: operations["verifyBoardingPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/disruptions": {
         parameters: {
             query?: never;
@@ -793,6 +817,19 @@ export interface components {
             /** @description Signed payload for the gate scanner. Any change to the pass invalidates it. */
             barcode: string;
         };
+        BoardingPassVerificationRequest: {
+            /** @description The text scanned from the pass, as printed in `barcode` of the boarding pass. */
+            barcode: string;
+        };
+        BoardingPassVerification: {
+            valid: boolean;
+            /**
+             * @description Why a pass was refused. Absent for a good pass.
+             * @enum {string}
+             */
+            reason?: "BAD_SIGNATURE" | "UNKNOWN_BOOKING" | "BOOKING_CANCELLED" | "FLIGHT_CANCELLED" | "NOT_CHECKED_IN" | "SUPERSEDED";
+            pass?: components["schemas"]["BoardingPass"];
+        };
         BoardingPasses: {
             passes: components["schemas"]["BoardingPass"][];
         };
@@ -1362,6 +1399,33 @@ export interface operations {
                 };
             };
             503: components["responses"]["ScheduleUnavailable"];
+        };
+    };
+    verifyBoardingPass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardingPassVerificationRequest"];
+            };
+        };
+        responses: {
+            /** @description The verdict */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardingPassVerification"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     recordDisruption: {

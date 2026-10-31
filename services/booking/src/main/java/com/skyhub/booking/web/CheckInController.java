@@ -1,8 +1,11 @@
 package com.skyhub.booking.web;
 
 import com.skyhub.booking.api.CheckInApi;
+import com.skyhub.booking.api.model.BoardingPassVerificationDto;
+import com.skyhub.booking.api.model.BoardingPassVerificationRequestDto;
 import com.skyhub.booking.api.model.BoardingPassesDto;
 import com.skyhub.booking.api.model.CheckInRequestDto;
+import com.skyhub.booking.application.BoardingPassVerifier;
 import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.CheckInService;
 import org.springframework.http.CacheControl;
@@ -18,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CheckInController implements CheckInApi {
 
     private final CheckInService checkIn;
+    private final BoardingPassVerifier verifier;
 
-    public CheckInController(CheckInService checkIn) {
+    public CheckInController(CheckInService checkIn, BoardingPassVerifier verifier) {
         this.checkIn = checkIn;
+        this.verifier = verifier;
     }
 
     @Override
@@ -39,6 +44,13 @@ public class CheckInController implements CheckInApi {
     public ResponseEntity<Void> checkOut(String locator, Integer segmentIndex) {
         checkIn.checkOut(locator, segmentIndex);
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    /** A staff check (SecurityConfig): a refused pass is still a 200, because "not valid" is the answer, not an error. */
+    @Override
+    public ResponseEntity<BoardingPassVerificationDto> verifyBoardingPass(BoardingPassVerificationRequestDto request) {
+        BoardingPassVerifier.Verdict verdict = verifier.verify(request.getBarcode());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(BookingDtoMapper.toDto(verdict));
     }
 
     private static ResponseEntity<BoardingPassesDto> respond(CheckInResult result, HttpStatus status) {

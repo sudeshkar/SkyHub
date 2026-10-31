@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.skyhub.booking.application.BoardingPass;
 import com.skyhub.booking.application.CheckInResult;
+import com.skyhub.booking.application.BoardingPassVerifier;
 import com.skyhub.booking.application.CheckInService;
 import com.skyhub.booking.domain.CheckInClosedException;
 import com.skyhub.booking.domain.NotCheckedInException;
@@ -38,6 +39,9 @@ class CheckInControllerTest {
 
     @MockitoBean
     private CheckInService checkInService;
+
+    @MockitoBean
+    private BoardingPassVerifier boardingPassVerifier;
 
     /** A request made with a manage token issued for booking ABC234, as the security rules require. */
     private static RequestPostProcessor owner() {

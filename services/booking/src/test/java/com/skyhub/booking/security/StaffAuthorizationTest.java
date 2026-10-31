@@ -62,6 +62,18 @@ class StaffAuthorizationTest {
     }
 
     @Test
+    void should_let_both_roles_check_a_boarding_pass_but_not_a_traveller_or_nobody() {
+        Authentication ops = authenticate(staffTokens.issue("priya.ops", StaffRole.OPS).value());
+        Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
+        Authentication traveller = authenticate(manageTokens.issue("ABC234").value());
+
+        assertThat(granted(StaffAuthorization.verifiesBoardingPasses(), ops)).isTrue();
+        assertThat(granted(StaffAuthorization.verifiesBoardingPasses(), admin)).isTrue();
+        assertThat(granted(StaffAuthorization.verifiesBoardingPasses(), traveller)).isFalse();
+        assertThat(granted(StaffAuthorization.verifiesBoardingPasses(), null)).isFalse();
+    }
+
+    @Test
     void should_let_an_admin_do_both() {
         Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
 

@@ -38,6 +38,10 @@ public final class StaffAuthorization implements AuthorizationManager<RequestAut
         return new StaffAuthorization(StaffRole::mayRebook);
     }
 
+    public static StaffAuthorization verifiesBoardingPasses() {
+        return new StaffAuthorization(StaffRole::mayVerifyBoardingPasses);
+    }
+
     public static StaffAuthorization createsStaff() {
         return new StaffAuthorization(StaffRole::mayCreateStaff);
     }

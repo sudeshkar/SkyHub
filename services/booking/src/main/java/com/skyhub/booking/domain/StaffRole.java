@@ -27,6 +27,11 @@ public enum StaffRole {
         return true; // both roles; written out so the rule is findable and the next role has to decide
     }
 
+    /** Ask whether a scanned boarding pass is still good (ADR-0056). Both roles; there is no gate-agent role yet. */
+    public boolean mayVerifyBoardingPasses() {
+        return true;
+    }
+
     public boolean mayCreateStaff() {
         return createsStaff;
     }

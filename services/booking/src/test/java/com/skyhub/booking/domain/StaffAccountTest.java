@@ -77,6 +77,8 @@ class StaffAccountTest {
 
     @Test
     void should_know_which_role_may_do_what() {
+        assertThat(StaffRole.OPS.mayVerifyBoardingPasses()).isTrue();
+        assertThat(StaffRole.ADMIN.mayVerifyBoardingPasses()).isTrue();
         assertThat(StaffRole.OPS.mayViewAffectedBookings()).isTrue();
         assertThat(StaffRole.ADMIN.mayViewAffectedBookings()).isTrue();
         assertThat(StaffRole.OPS.mayRecordDisruptions()).isTrue();
