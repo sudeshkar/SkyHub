@@ -64,3 +64,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0058](0058-checking-in-one-passenger-at-a-time.md) | Checking in one passenger at a time | Accepted |
 | [0059](0059-reaching-check-in-in-the-live-check.md) | Reaching check-in in the live check | Accepted |
 | [0060](0060-boarding-and-the-gate-agent.md) | Boarding, and a role that can only work the gate | Accepted |
+| [0061](0061-browser-coverage-on-the-live-stack.md) | Browser coverage on the live stack | Accepted |

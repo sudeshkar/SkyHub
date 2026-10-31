@@ -73,6 +73,7 @@ How a slice goes, every time:
 | 54 | Check in and check out one passenger at a time; a checked-in passenger's seat freezes, the others' do not; a pass says which passenger it is for | ADR-0058 |
 | 55 | The live check reaches check-in: booking starts with a wide check-in window, and the booking journey drives per-passenger check-in, check-out, the gate check and a cancelled flight and booking through the real chain | ADR-0059 |
 | 56 | A passenger boards once (the first scan counts, and who made it is kept), a boarded passenger cannot check out, and a GATE role may check passes and board and do nothing else | ADR-0060 |
+| 57 | Browser tests for check-in and check-out one passenger at a time, closing a booking, and the undo-email page, run against the live stack; the stale ops spec fixed | ADR-0061 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -89,7 +90,7 @@ Ordered by how much they add to the story, not a commitment.
 
 ## Smaller loose ends
 
-- **Browser coverage:** `npm run e2e` (Playwright) drives search, the seat hold countdown, payment, finding a booking, cancelling and the refund panel in a real browser. Still not clicked through: check-in and boarding passes, disruption notices, and the refund-pending retry. It runs by hand against a local stack, not in CI.
+- **Browser coverage:** `npm run e2e` (Playwright) drives search, the seat hold countdown, payment, finding a booking, cancelling and the refund panel in a real browser. `check-in.spec.ts` (ADR-0061) also covers check-in and check-out one passenger at a time, closing a booking so a copied token dies, and the undo-email page, against the live stack. Still not clicked through: disruption notices, the refund-pending retry and the gate (no screen exists). It runs by hand against a local stack, not in CI, and the website's rate-limit counters must be cleared between runs.
 - **Monitoring gaps:** no Next.js tracing yet. (JDBC spans: each SQL statement is a span, from `datasource-micrometer`.) (The disruptions panel exists; no alert on purpose, since recording a disruption is a deliberate operations action.)
 - **Hold abuse:** holds are limited per client at the website (6 a minute); a per-client limit at the gateway is the next step (ADR-0012).
 - **Homepage hero video:** needs a paid plan on the video-generation service; the start frame is already prepared.
