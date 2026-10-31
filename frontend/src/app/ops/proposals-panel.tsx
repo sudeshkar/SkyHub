@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import type { Proposal, ProposalSet } from "@/lib/api/agent";
 import { loadProposals, moveBookings, type MoveResult, type ProposalsState } from "./actions";
 import { MAX_MOVES_PER_CALL as BATCH } from "./limits";
+import { groupProposals, type ProposalGroup } from "./proposal-groups";
 
 const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
 
@@ -77,10 +78,16 @@ function ProposalTable({ set }: { set: ProposalSet }) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [signedOut, setSignedOut] = useState(false);
+  const [query, setQuery] = useState("");
 
   const done = (p: Proposal) => results[p.locator]?.status === "moved" || results[p.locator]?.status === "unchanged";
   const movable = set.proposals.filter((p) => p.action === "REBOOK" && !done(p));
   const chosen = movable.filter((p) => !deselected.has(p.locator));
+  // What is shown is what is acted on (ADR-0043): a ticked booking that the search hides is neither counted nor moved.
+  const groups = groupProposals(set.proposals, query);
+  const shown = new Set(groups.flatMap((g) => g.proposals.map((p) => p.locator)));
+  const chosenShown = chosen.filter((p) => shown.has(p.locator));
+  const hiddenChosen = chosen.length - chosenShown.length;
   const moving = progress !== null;
 
   function toggle(locator: string) {
@@ -91,8 +98,21 @@ function ProposalTable({ set }: { set: ProposalSet }) {
     });
   }
 
+  /** Ticks or unticks every booking in a group that is still to be moved. A group only holds bookings that are shown. */
+  function select(group: ProposalGroup, ticked: boolean) {
+    setDeselected((current) => {
+      const next = new Set(current);
+      for (const p of group.proposals) {
+        if (p.action !== "REBOOK" || done(p)) continue;
+        if (ticked) next.delete(p.locator);
+        else next.add(p.locator);
+      }
+      return next;
+    });
+  }
+
   async function approve() {
-    const moves = chosen.map((p) => ({
+    const moves = chosenShown.map((p) => ({
       locator: p.locator, segmentIndex: p.segmentIndex ?? 0, flightNumber: p.flightNumber ?? "", departureDate: p.departureDate ?? "",
     }));
     setProblem(null);
@@ -138,21 +158,33 @@ function ProposalTable({ set }: { set: ProposalSet }) {
         </p>
       )}
 
-      <ul className="divide-y divide-sand border border-sand bg-white">
-        {set.proposals.map((p) => (
-          <ProposalRow key={p.locator} proposal={p} result={results[p.locator]} selected={!deselected.has(p.locator)}
-            disabled={moving} onToggle={() => toggle(p.locator)} />
-        ))}
-      </ul>
+      <label className="block max-w-xs text-sm font-medium">
+        Find a booking
+        <input value={query} onChange={(event) => setQuery(event.target.value)} autoComplete="off" placeholder="Part of a reference"
+          className={`${field} font-mono uppercase tracking-widest`} />
+      </label>
+
+      {groups.length === 0 && <p className="text-sm text-muted">No booking matches “{query.trim()}”.</p>}
+      {groups.map((group) => (
+        <ProposalGroupSection key={group.key} group={group} results={results} deselected={deselected} disabled={moving}
+          onToggle={toggle} onSelect={select} />
+      ))}
+
+      {hiddenChosen > 0 && (
+        <p className="text-sm text-muted">
+          {hiddenChosen} ticked booking{hiddenChosen === 1 ? " is" : "s are"} hidden by the search. They stay ticked but are not moved
+          until you clear it.
+        </p>
+      )}
 
       {movable.length > 0 && (
         <button
           type="button"
           onClick={approve}
-          disabled={moving || chosen.length === 0}
+          disabled={moving || chosenShown.length === 0}
           className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60"
         >
-          {moving ? `Moving ${progress.done} of ${progress.total}…` : `Move ${chosen.length} selected`}
+          {moving ? `Moving ${progress.done} of ${progress.total}…` : `Move ${chosenShown.length} selected`}
         </button>
       )}
 
@@ -162,6 +194,39 @@ function ProposalTable({ set }: { set: ProposalSet }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** One destination (or the bookings that need a person), with its size and, for a destination, buttons to tick or untick all of it. */
+function ProposalGroupSection({ group, results, deselected, disabled, onToggle, onSelect }: {
+  group: ProposalGroup; results: Readonly<Record<string, MoveResult>>; deselected: ReadonlySet<string>; disabled: boolean;
+  onToggle: (locator: string) => void; onSelect: (group: ProposalGroup, ticked: boolean) => void;
+}) {
+  const person = group.kind === "person";
+  const where = `${group.flightNumber} on ${group.departureDate}`;
+  return (
+    <section aria-label={person ? "Needs a person" : `Going to ${where}`} className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-display text-lg">
+          {person ? "Needs a person" : <>Move to <strong>{where}</strong></>}
+          <span className="text-sm font-normal text-muted"> · {plural(group.proposals.length, "booking")} · {group.passengers} {group.passengers === 1 ? "person" : "people"}</span>
+        </h3>
+        {!person && (
+          <span className="flex gap-2 text-sm">
+            <button type="button" disabled={disabled} onClick={() => onSelect(group, true)} aria-label={`Select all going to ${where}`}
+              className="rounded-md border border-sand px-3 py-1 hover:bg-white disabled:opacity-60">All</button>
+            <button type="button" disabled={disabled} onClick={() => onSelect(group, false)} aria-label={`Select none going to ${where}`}
+              className="rounded-md border border-sand px-3 py-1 hover:bg-white disabled:opacity-60">None</button>
+          </span>
+        )}
+      </div>
+      <ul className="divide-y divide-sand border border-sand bg-white">
+        {group.proposals.map((p) => (
+          <ProposalRow key={p.locator} proposal={p} result={results[p.locator]} selected={!deselected.has(p.locator)}
+            disabled={disabled} onToggle={() => onToggle(p.locator)} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -184,9 +249,7 @@ function ProposalRow({ proposal, result, selected, disabled, onToggle }: {
           <span className="text-muted"> · {plural(proposal.passengerCount ?? 0, "passenger")}</span>
         </p>
         {rebook ? (
-          <p className="text-sm">
-            Move to <strong>{proposal.flightNumber} on {proposal.departureDate}</strong>. <span className="text-muted">{proposal.rationale}</span>
-          </p>
+          <p className="text-sm text-muted">{proposal.rationale}</p>
         ) : (
           <p className="text-sm text-muted">Needs a person to decide. {proposal.rationale}</p>
         )}

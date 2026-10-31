@@ -39,4 +39,4 @@ HTTP service for proposals; the person's own login for moves.
 - Negative: proposals are computed per request, so asking twice repeats the work (cheap for the rule-based planner, a cost for a model). Seats and bookings change constantly, so caching them would show stale answers.
 - Negative: approvals are applied one booking at a time, in order, so approving 500 bookings takes 25 sequential calls. Fine for one flight; a bulk endpoint in the booking service is the next step if it matters.
 - Negative: the page shows proposals as a flat list. Grouping bookings that share a destination flight, a filter, and a search box are not built.
-- Follow-up: a bulk rebooking endpoint; grouping and filtering for large flights; showing each booking's passengers' names to staff (only on the booking page, never through the agent).
+- Follow-up: a bulk rebooking endpoint (since ADR-0035); grouping and filtering for large flights (since ADR-0043); showing each booking's passengers' names to staff (only on the booking page, never through the agent).
