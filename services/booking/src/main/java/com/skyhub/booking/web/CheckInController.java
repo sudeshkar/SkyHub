@@ -8,6 +8,7 @@ import com.skyhub.booking.api.model.CheckInRequestDto;
 import com.skyhub.booking.application.BoardingPassVerifier;
 import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.CheckInService;
+import java.util.List;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,20 +31,21 @@ public class CheckInController implements CheckInApi {
 
     @Override
     public ResponseEntity<BoardingPassesDto> checkIn(String locator, CheckInRequestDto request) {
-        CheckInResult result = checkIn.checkIn(locator, request.getSegmentIndex());
+        List<Integer> who = request.getPassengerIndexes() == null ? List.of() : request.getPassengerIndexes();
+        CheckInResult result = checkIn.checkIn(locator, request.getSegmentIndex(), who);
         return respond(result, result.created() ? HttpStatus.CREATED : HttpStatus.OK);
+    }
+
+    /** Asking again, or for passengers who were never checked in, is the same 204: the end state is what was asked for. */
+    @Override
+    public ResponseEntity<Void> checkOut(String locator, Integer segmentIndex, List<Integer> passengerIndex) {
+        checkIn.checkOut(locator, segmentIndex, passengerIndex == null ? List.of() : passengerIndex);
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
 
     @Override
     public ResponseEntity<BoardingPassesDto> getBoardingPasses(String locator, Integer segmentIndex) {
         return respond(checkIn.boardingPasses(locator, segmentIndex), HttpStatus.OK);
-    }
-
-    /** Asking again, or for a flight that was never checked in, is the same 204: the end state is what was asked for. */
-    @Override
-    public ResponseEntity<Void> checkOut(String locator, Integer segmentIndex) {
-        checkIn.checkOut(locator, segmentIndex);
-        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
 
     /** A staff check (SecurityConfig): a refused pass is still a 200, because "not valid" is the answer, not an error. */

@@ -31,7 +31,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @Import(WebSliceSecurity.class)
 class CheckInControllerTest {
 
-    private static final CheckInResult RESULT = new CheckInResult(List.of(new BoardingPass("PERERA/PRIYA", "ABC234", "SK501",
+    private static final CheckInResult RESULT = new CheckInResult(List.of(new BoardingPass("PERERA/PRIYA", 0, "ABC234", "SK501",
             LocalDate.of(2026, 11, 2), "11D", 7, "M1PERERA/PRIYA ABC234 SK501 2026-11-02 11D 0007.sig")), true);
 
     @Autowired
@@ -56,10 +56,11 @@ class CheckInControllerTest {
 
     @Test
     void should_answer_201_with_the_boarding_passes_when_checked_in_now() throws Exception {
-        when(checkInService.checkIn("ABC234", 0)).thenReturn(RESULT);
+        when(checkInService.checkIn("ABC234", 0, List.of())).thenReturn(RESULT);
 
         mvc.perform(checkIn("{\"segmentIndex\": 0}"))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.passes[0].passengerIndex").value(0))
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.passes[0].passengerName").value("PERERA/PRIYA"))
                 .andExpect(jsonPath("$.passes[0].sequence").value(7))
@@ -68,14 +69,14 @@ class CheckInControllerTest {
 
     @Test
     void should_answer_200_when_the_flight_was_already_checked_in() throws Exception {
-        when(checkInService.checkIn("ABC234", 0)).thenReturn(new CheckInResult(RESULT.passes(), false));
+        when(checkInService.checkIn("ABC234", 0, List.of())).thenReturn(new CheckInResult(RESULT.passes(), false));
 
         mvc.perform(checkIn("{\"segmentIndex\": 0}")).andExpect(status().isOk());
     }
 
     @Test
     void should_answer_409_when_check_in_is_not_open() throws Exception {
-        when(checkInService.checkIn("ABC234", 0)).thenThrow(new CheckInClosedException("Check-in opens at 2026-11-01T10:00:00Z"));
+        when(checkInService.checkIn("ABC234", 0, List.of())).thenThrow(new CheckInClosedException("Check-in opens at 2026-11-01T10:00:00Z"));
 
         mvc.perform(checkIn("{\"segmentIndex\": 0}"))
                 .andExpect(status().isConflict())
@@ -105,5 +106,29 @@ class CheckInControllerTest {
         mvc.perform(get("/api/v1/pnrs/ABC234/check-ins/1").with(owner()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("Not checked in"));
+    }
+
+    @Test
+    void should_pass_on_which_passengers_are_to_be_checked_in() throws Exception {
+        when(checkInService.checkIn("ABC234", 0, List.of(1, 2))).thenReturn(RESULT);
+
+        mvc.perform(checkIn("{\"segmentIndex\": 0, \"passengerIndexes\": [1, 2]}")).andExpect(status().isCreated());
+    }
+
+    @Test
+    void should_refuse_a_passenger_index_the_contract_does_not_allow() throws Exception {
+        mvc.perform(checkIn("{\"segmentIndex\": 0, \"passengerIndexes\": [-1]}")).andExpect(status().isBadRequest());
+        mvc.perform(checkIn("{\"segmentIndex\": 0, \"passengerIndexes\": [0,1,2,3,4,5,6,7,8,9]}")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void should_pass_on_which_passengers_are_to_be_checked_out() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/pnrs/ABC234/check-ins/0")
+                .param("passengerIndex", "0").param("passengerIndex", "1").with(owner())).andExpect(status().isNoContent());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/pnrs/ABC234/check-ins/0").with(owner()))
+                .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(checkInService).checkOut("ABC234", 0, List.of(0, 1));
+        org.mockito.Mockito.verify(checkInService).checkOut("ABC234", 0, List.of());
     }
 }

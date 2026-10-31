@@ -61,3 +61,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0055](0055-checking-out.md) | Checking out, so the seats can change again | Accepted |
 | [0056](0056-checking-a-boarding-pass-against-the-booking.md) | Checking a boarding pass against the booking | Accepted |
 | [0057](0057-signing-out-of-a-booking.md) | Signing out of a booking ends every session of it | Accepted |
+| [0058](0058-checking-in-one-passenger-at-a-time.md) | Checking in one passenger at a time | Accepted |

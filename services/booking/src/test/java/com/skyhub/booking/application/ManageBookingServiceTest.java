@@ -93,7 +93,7 @@ class ManageBookingServiceTest {
 
     @Test
     void should_freeze_the_seats_of_a_flight_that_is_checked_in() {
-        when(checkIns.existsByLocatorAndSegmentIndex("ABC234", 1)).thenReturn(true);
+        when(checkIns.existsByLocatorAndSegmentIndexAndPassengerIndex("ABC234", 1, 0)).thenReturn(true);
 
         org.assertj.core.api.Assertions.assertThatExceptionOfType(com.skyhub.booking.domain.AlreadyCheckedInException.class)
                 .isThrownBy(() -> service.changeSeat("ABC234", new SeatChangeCommand(0, 1, "30C")))
@@ -336,5 +336,17 @@ class ManageBookingServiceTest {
         org.assertj.core.api.Assertions.assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.endSessions("ZZZZZZ"));
 
         org.mockito.Mockito.verify(sessions, org.mockito.Mockito.never()).endAll(anyString());
+    }
+
+    @Test
+    void should_let_a_passenger_who_is_not_checked_in_change_seat_while_another_one_is() {
+        when(checkIns.existsByLocatorAndSegmentIndexAndPassengerIndex("ABC234", 1, 0)).thenReturn(true);   // Priya is in, Raj is not
+
+        var change = service.changeSeat("ABC234", new SeatChangeCommand(1, 1, "30C"));
+
+        assertThat(change.passengers().get(1).seats().get(1)).isEqualTo("30C");
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(com.skyhub.booking.domain.AlreadyCheckedInException.class)
+                .isThrownBy(() -> service.changeSeat("ABC234", new SeatChangeCommand(0, 1, "30C")))
+                .withMessageContaining("Priya");
     }
 }

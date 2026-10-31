@@ -110,13 +110,14 @@ export function ManageView({
     return false;
   }
 
-  function checkIn(segment: number) {
+  /** `who` names passengers by position on the booking (ADR-0058); leave it out for everyone who is not yet in. */
+  function checkIn(segment: number, who?: number[]) {
     setNotice(null);
     startTransition(async () => {
-      const result = await checkInFlight(segment);
+      const result = who ? await checkInFlight(segment, who) : await checkInFlight(segment);
       if (result.kind === "ok") {
-        setPasses((current) => ({ ...current, [segment]: result.passes }));
-        setEditing((current) => (current?.segment === segment ? null : current));
+        setPasses((current) => ({ ...current, [segment]: result.passes })); // the passes of everyone who is checked in on the flight
+        setEditing((current) => (current?.segment === segment && result.passes.some((pass) => pass.passengerIndex === current.passenger) ? null : current));
         setNotice({ tone: "ok", text: `Checked in for ${pnr.segments[segment].flightNumber}.` });
         return;
       }
@@ -125,12 +126,17 @@ export function ManageView({
     });
   }
 
-  function checkOut(segment: number) {
+  /** `who` names passengers by position on the booking (ADR-0058); leave it out for everyone who is checked in. */
+  function checkOut(segment: number, who?: number[]) {
     setNotice(null);
     startTransition(async () => {
-      const result = await checkOutFlight(segment);
+      const result = who ? await checkOutFlight(segment, who) : await checkOutFlight(segment);
       if (result.kind === "ok") {
-        setPasses((current) => Object.fromEntries(Object.entries(current).filter(([index]) => Number(index) !== segment)));
+        setPasses((current) => {
+          const left = (current[segment] ?? []).filter((pass) => who !== undefined && !who.includes(pass.passengerIndex));
+          const others = Object.entries(current).filter(([index]) => Number(index) !== segment);
+          return Object.fromEntries(left.length > 0 ? [...others, [String(segment), left]] : others);
+        });
         setNotice({
           tone: "ok",
           text: `Checked out of ${pnr.segments[segment].flightNumber}. Its boarding passes no longer apply; you can change seats and check in again.`,
@@ -231,30 +237,33 @@ export function ManageView({
         {pnr.segments.map((segment, s) => {
           const disruption = disruptions.find((d) => d.segmentIndex === s);
           const flightCancelled = disruption?.type === "CANCELLED";
+          const checkedIn = passes[s] ?? [];
+          const isIn = (passenger: number) => checkedIn.some((pass) => pass.passengerIndex === passenger);
           return (
             <div key={`${segment.flightNumber}-${segment.departureDate}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-mono text-lg">
                   {segment.flightNumber} <span className="text-muted">· {segment.departureDate}</span>
                 </h2>
-                {passes[s] ? (
-                  <div className="flex items-center gap-3">
-                    <p className="text-sm font-semibold text-copper">Checked in</p>
-                    {!cancelled && (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => checkOut(s)}
-                        aria-label={`Check out of ${segment.flightNumber}`}
-                        className="text-sm text-copper underline hover:text-copper-strong disabled:opacity-50"
-                      >
-                        Check out
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  !cancelled &&
-                  !flightCancelled && (
+                <div className="flex items-center gap-3">
+                  {checkedIn.length === pnr.passengers.length && <p className="text-sm font-semibold text-copper">Checked in</p>}
+                  {checkedIn.length > 0 && checkedIn.length < pnr.passengers.length && (
+                    <p className="text-sm font-semibold text-copper">
+                      {checkedIn.length} of {pnr.passengers.length} checked in
+                    </p>
+                  )}
+                  {checkedIn.length > 0 && !cancelled && (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => checkOut(s)}
+                      aria-label={`Check out of ${segment.flightNumber}`}
+                      className="text-sm text-copper underline hover:text-copper-strong disabled:opacity-50"
+                    >
+                      Check out
+                    </button>
+                  )}
+                  {checkedIn.length < pnr.passengers.length && !cancelled && !flightCancelled && (
                     <button
                       type="button"
                       disabled={pending}
@@ -264,8 +273,8 @@ export function ManageView({
                     >
                       Check in
                     </button>
-                  )
-                )}
+                  )}
+                </div>
               </div>
               {disruption && <DisruptionNotice flightNumber={segment.flightNumber} disruption={disruption} />}
               <ul className="mt-3 divide-y divide-sand rounded-lg border border-sand bg-white">
@@ -276,9 +285,20 @@ export function ManageView({
                     </span>
                     <span className="flex items-center gap-4">
                       <span className="font-mono text-sm">Seat {passenger.seats[s]}</span>
+                      {pnr.passengers.length > 1 && !cancelled && !flightCancelled && (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => (isIn(p) ? checkOut(s, [p]) : checkIn(s, [p]))}
+                          aria-label={isIn(p) ? `Check out ${passenger.firstName} of ${segment.flightNumber}` : `Check in ${passenger.firstName} for ${segment.flightNumber}`}
+                          className="text-sm text-copper underline hover:text-copper-strong disabled:opacity-50"
+                        >
+                          {isIn(p) ? "Check out" : "Check in"}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        disabled={cancelled || flightCancelled || pending || Boolean(passes[s])}
+                        disabled={cancelled || flightCancelled || pending || isIn(p)}
                         onClick={() => openPicker(p, s)}
                         aria-label={`Change seat for ${passenger.firstName} ${passenger.lastName} on ${segment.flightNumber}`}
                         className="text-sm text-copper hover:text-copper-strong disabled:cursor-not-allowed disabled:text-muted"
@@ -289,9 +309,9 @@ export function ManageView({
                   </li>
                 ))}
               </ul>
-              {passes[s] && !cancelled && (
+              {checkedIn.length > 0 && !cancelled && (
                 <ul aria-label={`Boarding passes for ${segment.flightNumber}`} className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {passes[s].map((pass) => (
+                  {checkedIn.map((pass) => (
                     <BoardingPassCard key={pass.barcode} pass={pass} />
                   ))}
                 </ul>

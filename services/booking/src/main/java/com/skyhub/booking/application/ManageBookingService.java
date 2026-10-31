@@ -7,6 +7,7 @@ import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.Money;
 import com.skyhub.booking.domain.Pnr;
 import com.skyhub.booking.domain.PnrNotFoundException;
+import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.domain.PnrStatus;
 import com.skyhub.booking.domain.RefundPolicy;
@@ -171,9 +172,10 @@ public class ManageBookingService {
         String current = pnr.seatOf(command.passengerIndex(), command.segmentIndex());
         pnr.requireActive();
         PnrSegment flight = pnr.getSegments().get(command.segmentIndex());
-        if (checkIns.existsByLocatorAndSegmentIndex(locator, command.segmentIndex())) {
+        if (checkIns.existsByLocatorAndSegmentIndexAndPassengerIndex(locator, command.segmentIndex(), command.passengerIndex())) {
+            PnrPassenger who = pnr.getPassengers().get(command.passengerIndex());
             throw new AlreadyCheckedInException(
-                    flight.flightNumber() + " is checked in, so its seats can no longer be changed");
+                    who.getFirstName() + " is checked in on " + flight.flightNumber() + ", so their seat can no longer be changed");
         }
         if (current.equals(command.seatNumber())) {
             return new SeatChange(PnrView.of(pnr), flight, false);

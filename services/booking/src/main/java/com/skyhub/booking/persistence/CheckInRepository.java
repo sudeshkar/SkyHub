@@ -10,6 +10,9 @@ public interface CheckInRepository extends JpaRepository<CheckIn, Long> {
 
     boolean existsByLocatorAndSegmentIndex(String locator, int segmentIndex);
 
-    /** Removes the check-in of the whole party on one flight (ADR-0055). @return how many rows went */
-    long deleteByLocatorAndSegmentIndex(String locator, int segmentIndex);
+    /** Whether this one passenger is checked in on the flight (ADR-0058): the seat of a checked-in passenger is frozen. */
+    boolean existsByLocatorAndSegmentIndexAndPassengerIndex(String locator, int segmentIndex, int passengerIndex);
+
+    /** Removes the check-in of the named passengers on one flight (ADR-0058). @return how many rows went */
+    long deleteByLocatorAndSegmentIndexAndPassengerIndexIn(String locator, int segmentIndex, java.util.Collection<Integer> passengerIndexes);
 }

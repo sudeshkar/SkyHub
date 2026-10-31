@@ -141,6 +141,7 @@ describe("ManageView", () => {
   describe("checking in", () => {
     const PASS = {
       passengerName: "PERERA/PRIYA",
+      passengerIndex: 0,
       locator: "YUFHBD",
       flightNumber: "SK501",
       departureDate: "2026-11-02",
@@ -150,7 +151,8 @@ describe("ManageView", () => {
     };
 
     it("checks in one flight and shows each passenger's boarding pass", async () => {
-      vi.mocked(checkInFlight).mockResolvedValue({ kind: "ok", passes: [PASS], created: true });
+      const RAJ_PASS = { ...PASS, passengerName: "PERERA/RAJ", passengerIndex: 1, seatNumber: "11E", sequence: 8, barcode: "M1PERERA/RAJ YUFHBD SK501 2026-11-02 11E 0008.sig" };
+      vi.mocked(checkInFlight).mockResolvedValue({ kind: "ok", passes: [PASS, RAJ_PASS], created: true }); // the whole party, as the service answers
       render(<ManageView pnr={PNR} />);
 
       fireEvent.click(screen.getByRole("button", { name: "Check in for SK501" }));
@@ -321,5 +323,97 @@ describe("ManageView", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent("Your session has ended");
       expect(refresh).toHaveBeenCalled();
     });
+  });
+});
+
+describe("one passenger at a time (ADR-0058)", () => {
+  const PRIYA = {
+    passengerName: "PERERA/PRIYA", passengerIndex: 0, locator: "YUFHBD", flightNumber: "SK501", departureDate: "2026-11-02",
+    seatNumber: "11D", sequence: 7, barcode: "M1PERERA/PRIYA YUFHBD SK501 2026-11-02 11D 0007.sig",
+  };
+  const RAJ = {
+    passengerName: "PERERA/RAJ", passengerIndex: 1, locator: "YUFHBD", flightNumber: "SK501", departureDate: "2026-11-02",
+    seatNumber: "11E", sequence: 8, barcode: "M1PERERA/RAJ YUFHBD SK501 2026-11-02 11E 0008.sig",
+  };
+
+  beforeEach(() => vi.resetAllMocks());
+
+  it("offers each passenger their own check-in on a booking of more than one", () => {
+    render(<ManageView pnr={PNR} />);
+
+    expect(screen.getByRole("button", { name: "Check in Priya for SK501" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check in Raj for SK501" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check in for SK501" })).toBeInTheDocument(); // everyone, as before
+  });
+
+  it("offers no separate check-in on a booking of one passenger", () => {
+    render(<ManageView pnr={{ ...PNR, passengers: [PNR.passengers[0]] }} />);
+
+    expect(screen.queryByRole("button", { name: /Check in Priya/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check in for SK501" })).toBeInTheDocument();
+  });
+
+  it("checks in one passenger, shows only their pass and freezes only their seat", async () => {
+    vi.mocked(checkInFlight).mockResolvedValue({ kind: "ok", passes: [RAJ], created: true });
+    render(<ManageView pnr={PNR} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check in Raj for SK501" }));
+
+    expect(await screen.findByText("PERERA/RAJ")).toBeInTheDocument();
+    expect(checkInFlight).toHaveBeenCalledWith(0, [1]);
+    expect(screen.queryByText("PERERA/PRIYA")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change seat for Raj Perera on SK501" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Check in Raj for SK501" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check in Priya for SK501" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check out Raj of SK501" })).toBeInTheDocument();
+  });
+
+  it("checks in everyone who is left when the flight's own button is pressed", async () => {
+    vi.mocked(checkInFlight).mockResolvedValue({ kind: "ok", passes: [PRIYA, RAJ], created: true });
+    render(<ManageView pnr={PNR} boardingPasses={{ 0: [RAJ] }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check in for SK501" }));
+
+    expect(await screen.findByText("PERERA/PRIYA")).toBeInTheDocument();
+    expect(checkInFlight).toHaveBeenCalledWith(0);
+    expect(screen.getByText("PERERA/RAJ")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check in for SK501" })).not.toBeInTheDocument(); // nobody is left
+  });
+
+  it("checks one passenger out and keeps the other's pass", async () => {
+    vi.mocked(checkOutFlight).mockResolvedValue({ kind: "ok" });
+    render(<ManageView pnr={PNR} boardingPasses={{ 0: [PRIYA, RAJ] }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check out Priya of SK501" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/checked out/i);
+    expect(checkOutFlight).toHaveBeenCalledWith(0, [0]);
+    expect(screen.queryByText(PRIYA.barcode)).not.toBeInTheDocument();
+    expect(screen.getByText(RAJ.barcode)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Change seat for Raj Perera on SK501" })).toBeDisabled();
+  });
+
+  it("checks everyone out with the flight's own button", async () => {
+    vi.mocked(checkOutFlight).mockResolvedValue({ kind: "ok" });
+    render(<ManageView pnr={PNR} boardingPasses={{ 0: [PRIYA, RAJ] }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check out of SK501" }));
+
+    await screen.findByRole("status");
+    expect(checkOutFlight).toHaveBeenCalledWith(0);
+    expect(screen.queryByText(PRIYA.barcode)).not.toBeInTheDocument();
+    expect(screen.queryByText(RAJ.barcode)).not.toBeInTheDocument();
+  });
+
+  it("keeps the passes and says why when check-out is refused", async () => {
+    vi.mocked(checkOutFlight).mockResolvedValue({ kind: "closed", detail: "Check-in is closed; it closed at 2026-11-02T09:00:00Z" });
+    render(<ManageView pnr={PNR} boardingPasses={{ 0: [PRIYA, RAJ] }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check out Raj of SK501" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Check-in is closed");
+    expect(screen.getByText(RAJ.barcode)).toBeInTheDocument();
   });
 });

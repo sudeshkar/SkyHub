@@ -98,7 +98,7 @@ final class BookingDtoMapper {
 
     static BoardingPassesDto toDto(CheckInResult result) {
         return new BoardingPassesDto(result.passes().stream()
-                .map(p -> new BoardingPassDto(p.passengerName(), p.locator(), p.flightNumber(), p.departureDate(),
+                .map(p -> new BoardingPassDto(p.passengerName(), p.passengerIndex(), p.locator(), p.flightNumber(), p.departureDate(),
                         p.seatNumber(), p.sequence(), p.barcode()))
                 .toList());
     }
@@ -110,7 +110,7 @@ final class BookingDtoMapper {
         }
         if (verdict.pass() != null) {
             var p = verdict.pass();
-            dto.setPass(new BoardingPassDto(p.passengerName(), p.locator(), p.flightNumber(), p.departureDate(), p.seatNumber(), p.sequence(), p.barcode()));
+            dto.setPass(new BoardingPassDto(p.passengerName(), p.passengerIndex(), p.locator(), p.flightNumber(), p.departureDate(), p.seatNumber(), p.sequence(), p.barcode()));
         }
         return dto;
     }

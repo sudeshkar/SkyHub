@@ -117,36 +117,46 @@ export async function changeSeat(change: {
 
 export type CheckInActionResult = CheckInOutcome | { kind: "rate-limited"; retryAfterSeconds: number };
 
-/** Checks in every passenger on one flight of the open booking and returns their boarding passes. */
-export async function checkInFlight(segmentIndex: number): Promise<CheckInActionResult> {
+/** Passengers are named by their position on the booking; at most nine, each once or not, as the service allows. */
+function validPassengers(passengerIndexes: number[] | undefined): boolean {
+  return passengerIndexes === undefined || (passengerIndexes.length <= 9 && passengerIndexes.every((p) => Number.isInteger(p) && p >= 0 && p <= 8));
+}
+
+/**
+ * Checks in the named passengers on one flight of the open booking, or everyone not yet in when none are named (ADR-0058), and returns
+ * the boarding passes of everyone who is checked in on the flight afterwards.
+ */
+export async function checkInFlight(segmentIndex: number, passengerIndexes?: number[]): Promise<CheckInActionResult> {
   if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex > 3) {
     return { kind: "rejected", detail: "Choose one of your flights." };
   }
+  if (!validPassengers(passengerIndexes)) return { kind: "rejected", detail: "Choose passengers on this booking." };
   const decision = await rateLimit(POLICIES.manage);
   if (!decision.allowed) return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
 
   const session = await readSession();
   if (!session) return { kind: "unauthorized" };
 
-  const outcome = await checkInCall(session.locator, session.token, segmentIndex);
+  const outcome = await checkInCall(session.locator, session.token, segmentIndex, passengerIndexes);
   if (outcome.kind === "unauthorized") await clearSession();
   return outcome;
 }
 
 export type CheckOutActionResult = CheckOutOutcome | { kind: "rate-limited"; retryAfterSeconds: number };
 
-/** Checks the whole party out of one flight of the open booking, so its seats can be changed again (ADR-0055). */
-export async function checkOutFlight(segmentIndex: number): Promise<CheckOutActionResult> {
+/** Checks the named passengers out of one flight of the open booking, or everyone who is in, so their seats can be changed again (ADR-0055, ADR-0058). */
+export async function checkOutFlight(segmentIndex: number, passengerIndexes?: number[]): Promise<CheckOutActionResult> {
   if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex > 3) {
     return { kind: "rejected", detail: "Choose one of your flights." };
   }
+  if (!validPassengers(passengerIndexes)) return { kind: "rejected", detail: "Choose passengers on this booking." };
   const decision = await rateLimit(POLICIES.manage);
   if (!decision.allowed) return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
 
   const session = await readSession();
   if (!session) return { kind: "unauthorized" };
 
-  const outcome = await checkOutCall(session.locator, session.token, segmentIndex);
+  const outcome = await checkOutCall(session.locator, session.token, segmentIndex, passengerIndexes);
   if (outcome.kind === "unauthorized") await clearSession();
   return outcome;
 }

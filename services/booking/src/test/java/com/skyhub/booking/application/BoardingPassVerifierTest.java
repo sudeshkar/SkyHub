@@ -141,6 +141,18 @@ class BoardingPassVerifierTest {
     }
 
     @Test
+    void should_say_not_checked_in_for_a_passenger_who_is_out_while_another_on_the_booking_is_in() {
+        String priya = checkedIn(0, 7);
+        checkedIn(1, 8);
+        stored.removeIf(c -> c.getPassengerIndex() == 0);   // Priya checks out (ADR-0058); Raj stays in
+
+        var verdict = verifier.verify(priya);
+
+        assertThat(verdict.reason()).isEqualTo(Reason.NOT_CHECKED_IN);
+        assertThat(verifier.verify(barcode(1, 8, "11E")).valid()).isTrue();
+    }
+
+    @Test
     void should_refuse_a_pass_with_the_old_number_even_if_the_seat_is_the_same() {
         String old = checkedIn(0, 7);
         stored.clear();
