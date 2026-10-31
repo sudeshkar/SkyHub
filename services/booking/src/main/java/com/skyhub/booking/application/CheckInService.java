@@ -100,6 +100,49 @@ public class CheckInService {
         }
     }
 
+    /**
+     * Takes the whole party off a flight's check-in (ADR-0055), so its seats can be changed again. Allowed until check-in closes, by the
+     * revised time if the flight was delayed; a cancelled flight can always be checked out of, since a booking that is checked in cannot
+     * be moved to another flight (ADR-0022). The old passes stop being shown, and checking in again numbers the party afresh.
+     *
+     * @return true if a check-in was removed, false if the flight was not checked in (so asking twice is harmless)
+     */
+    public boolean checkOut(String locator, int segmentIndex) {
+        Pnr pnr = pnrs.findByLocator(locator).orElseThrow(CheckInService::notFound);
+        pnr.requireActive();
+        PnrSegment flight = flightAt(pnr, segmentIndex);
+        if (rows(locator, segmentIndex).isEmpty()) {
+            return false;
+        }
+        requireCheckInNotClosedFor(flight);
+        Long removed = transactions.execute(status -> checkIns.deleteByLocatorAndSegmentIndex(locator, segmentIndex));
+        if (removed == null || removed == 0) {
+            return false;   // another request got there first
+        }
+        metrics.record(Outcome.CHECKED_OUT);
+        log.atInfo()
+                .addKeyValue("pnr.locator", locator)
+                .addKeyValue("flight", flight.flightNumber())
+                .addKeyValue("check_in.passengers", removed)
+                .log("Checked out");
+        return true;
+    }
+
+    private void requireCheckInNotClosedFor(PnrSegment flight) {
+        Disruption disruption = disruptions.findByFlightNumberAndDepartureDate(flight.flightNumber(), flight.departureDate()).orElse(null);
+        if (disruption != null && disruption.isCancelled()) {
+            return;
+        }
+        Instant departure = disruption != null ? disruption.getRevisedDeparture() : flights.departure(flight.flightNumber(), flight.departureDate())
+                .orElseThrow(() -> new FlightNotFoundException(flight.flightNumber() + " does not operate on " + flight.departureDate()));
+        try {
+            window.requireNotClosed(departure, clock.instant());
+        } catch (CheckInClosedException e) {
+            metrics.record(Outcome.REFUSED);
+            throw e;
+        }
+    }
+
     /** A disruption beats the timetable: a cancelled flight has no check-in, a delayed one uses its revised time. */
     private Instant departureOf(PnrSegment flight) {
         Disruption disruption = disruptions.findByFlightNumberAndDepartureDate(flight.flightNumber(), flight.departureDate())

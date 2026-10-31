@@ -75,6 +75,7 @@ public class SecurityConfig {
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}/disruptions").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/check-ins").access(ownsBooking)
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}/check-ins/{segmentIndex}").access(ownsBooking)
+                        .requestMatchers(DELETE, "/api/v1/pnrs/{locator}/check-ins/{segmentIndex}").access(ownsBooking)
                         // Actuator is only served on the management port, which is never exposed publicly.
                         .requestMatchers(GET, "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .anyRequest().denyAll())

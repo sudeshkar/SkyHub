@@ -208,4 +208,94 @@ class CheckInIntegrationTest {
         return post("/api/v1/pnrs/{locator}/check-ins", locator).header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"segmentIndex\":%d}".formatted(segmentIndex));
     }
+
+    // ---- checking out (ADR-0055) -------------------------------------------------------------------------------------
+
+    private MockHttpServletRequestBuilder checkOut(String locator, String token, int segmentIndex) {
+        return org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/pnrs/{locator}/check-ins/{segment}", locator, segmentIndex)
+                .header("Authorization", token);
+    }
+
+    @Test
+    void should_let_the_seat_be_changed_again_after_checking_out_and_check_in_afresh_with_new_numbers() throws Exception {
+        String locator = book("SK501", "2029-05-01", "11D");
+        String token = tokenFor(locator);
+        mvc.perform(checkIn(locator, token, 0)).andExpect(status().isCreated()).andExpect(jsonPath("$.passes[0].sequence").value(1));
+        String move = "{\"passengerIndex\":0,\"segmentIndex\":0,\"seatNumber\":\"30C\"}";
+        mvc.perform(put("/api/v1/pnrs/{l}/seat-assignments", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON).content(move))
+                .andExpect(status().isConflict());
+
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/pnrs/{l}/check-ins/0", locator).header("Authorization", token)).andExpect(status().isNotFound());   // the passes are gone
+        mvc.perform(put("/api/v1/pnrs/{l}/seat-assignments", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON).content(move))
+                .andExpect(status().isOk());
+        mvc.perform(checkIn(locator, token, 0)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.passes[0].seatNumber").value("30C"))
+                .andExpect(jsonPath("$.passes[0].sequence").value(2));   // the old pass's number 1 is not reused
+    }
+
+    @Test
+    void should_answer_204_again_when_there_is_nothing_to_check_out_of() throws Exception {
+        String locator = book("SK501", "2029-05-02", "11D");
+        String token = tokenFor(locator);
+
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isNoContent());
+        mvc.perform(checkIn(locator, token, 0)).andExpect(status().isCreated());
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isNoContent());
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isNoContent());
+    }
+
+    @Test
+    void should_leave_the_other_flight_of_the_booking_checked_in() throws Exception {
+        String body = """
+                {"paymentToken":"tok_visa","contactEmail":"priya@example.com",
+                 "segments":[{"flightNumber":"SK501","departureDate":"2029-05-03"},{"flightNumber":"SK901","departureDate":"2029-05-03"}],
+                 "passengers":[{"firstName":"Priya","lastName":"Perera","seats":["12D","12D"]}]}""";
+        String locator = JsonPath.read(mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.locator");
+        String token = tokenFor(locator);
+        mvc.perform(checkIn(locator, token, 0)).andExpect(status().isCreated());
+        mvc.perform(checkIn(locator, token, 1)).andExpect(status().isCreated());
+
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/pnrs/{l}/check-ins/1", locator).header("Authorization", token)).andExpect(status().isOk());
+    }
+
+    @Test
+    void should_refuse_checking_out_once_check_in_has_closed() throws Exception {
+        String late = book("SK888", "2029-05-04", "11D");   // leaves in 30 minutes: check-in is already closed
+        jdbc.update("INSERT INTO check_in (locator, segment_index, passenger_index, boarding_sequence, checked_in_at) VALUES (?, 0, 0, 1, now())", late);
+
+        mvc.perform(checkOut(late, tokenFor(late), 0))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Check-in unavailable"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("closed")));
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM check_in WHERE locator = ?", Integer.class, late)).isEqualTo(1);
+    }
+
+    @Test
+    void should_check_out_only_for_the_owner_and_not_a_cancelled_booking() throws Exception {
+        String mine = book("SK501", "2029-05-05", "11D");
+        String other = book("SK501", "2029-05-05", "11E");
+        String token = tokenFor(mine);
+        mvc.perform(checkIn(mine, token, 0)).andExpect(status().isCreated());
+
+        mvc.perform(checkOut(mine, tokenFor(other), 0)).andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/pnrs/{l}/check-ins/0", mine))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/pnrs/{l}/check-ins/0", mine).header("Authorization", token)).andExpect(status().isOk());   // untouched
+
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", mine).header("Authorization", token)).andExpect(status().isOk());
+        mvc.perform(checkOut(mine, token, 0)).andExpect(status().isConflict());
+    }
+
+    @Test
+    void should_refuse_a_flight_index_the_booking_does_not_have() throws Exception {
+        String locator = book("SK501", "2029-05-06", "11D");
+
+        mvc.perform(checkOut(locator, tokenFor(locator), 3)).andExpect(status().isBadRequest());
+    }
 }

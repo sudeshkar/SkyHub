@@ -34,6 +34,13 @@ public class CheckInController implements CheckInApi {
         return respond(checkIn.boardingPasses(locator, segmentIndex), HttpStatus.OK);
     }
 
+    /** Asking again, or for a flight that was never checked in, is the same 204: the end state is what was asked for. */
+    @Override
+    public ResponseEntity<Void> checkOut(String locator, Integer segmentIndex) {
+        checkIn.checkOut(locator, segmentIndex);
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
     private static ResponseEntity<BoardingPassesDto> respond(CheckInResult result, HttpStatus status) {
         return ResponseEntity.status(status).cacheControl(CacheControl.noStore()).body(BookingDtoMapper.toDto(result));
     }

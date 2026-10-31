@@ -5,9 +5,11 @@ import {
   cancelPnr,
   changeSeat as changeSeatCall,
   checkIn as checkInCall,
+  checkOut as checkOutCall,
   getSeatMap,
   openManageSession,
   type CheckInOutcome,
+  type CheckOutOutcome,
   type ManageOutcome,
   type SeatMap,
   type Segment,
@@ -121,6 +123,24 @@ export async function checkInFlight(segmentIndex: number): Promise<CheckInAction
   if (!session) return { kind: "unauthorized" };
 
   const outcome = await checkInCall(session.locator, session.token, segmentIndex);
+  if (outcome.kind === "unauthorized") await clearSession();
+  return outcome;
+}
+
+export type CheckOutActionResult = CheckOutOutcome | { kind: "rate-limited"; retryAfterSeconds: number };
+
+/** Checks the whole party out of one flight of the open booking, so its seats can be changed again (ADR-0055). */
+export async function checkOutFlight(segmentIndex: number): Promise<CheckOutActionResult> {
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex > 3) {
+    return { kind: "rejected", detail: "Choose one of your flights." };
+  }
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
+
+  const session = await readSession();
+  if (!session) return { kind: "unauthorized" };
+
+  const outcome = await checkOutCall(session.locator, session.token, segmentIndex);
   if (outcome.kind === "unauthorized") await clearSession();
   return outcome;
 }

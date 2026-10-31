@@ -67,6 +67,7 @@ How a slice goes, every time:
 | 48 | Replay, skip and un-skip must say who is running them; recorded with each skip and in the logs (self-declared: the port has no login) | ADR-0052 |
 | 49 | `stack.py check`: one command starts a throwaway stack, runs every live check including the park-and-recover restart, and tears it down | ADR-0053 |
 | 50 | The notice to the old address carries a one-time link that takes the account back: old address restored, password thrown away, every session ended, a reset link sent | ADR-0054 |
+| 51 | Check out of a flight (whole party) until check-in closes, so seats can change again and a checked-in booking on a cancelled flight can be moved | ADR-0055 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -78,7 +79,7 @@ Ordered by how much they add to the story, not a commitment.
 | **More notifications** | a boarding-pass attachment; SMS; non-blocking retry topics | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
 | **Account follow-ups** | Saved passengers (revisit ADR-0054's mailbox trust first) | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
-| **Check-in extras** | Per-passenger check-in, check-out (to allow seat changes), QR/PDF417 boarding pass image | |
+| **Check-in extras** | Per-passenger check-in and check-out, QR/PDF417 boarding pass image; a gate that checks the booking, not only a pass's signature (ADR-0055) | |
 | **Gateway and deployment** | Kong gateway, containers for every service, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
 
 ## Smaller loose ends

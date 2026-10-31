@@ -3,12 +3,13 @@ import {
   cancelPnr,
   changeSeat as changeSeatCall,
   checkIn as checkInCall,
+  checkOut as checkOutCall,
   openManageSession,
   type Pnr,
 } from "@/lib/api/booking";
 import { clearSession, readSession, saveSession } from "@/lib/manage-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { cancelBooking, changeSeat, checkInFlight, closeSession, lookupBooking } from "./actions";
+import { cancelBooking, changeSeat, checkInFlight, checkOutFlight, closeSession, lookupBooking } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: { lookup: {}, manage: {} }, rateLimit: vi.fn() }));
 vi.mock("@/lib/manage-session", () => ({ readSession: vi.fn(), saveSession: vi.fn(), clearSession: vi.fn() }));
@@ -17,6 +18,7 @@ vi.mock("@/lib/api/booking", () => ({
   cancelPnr: vi.fn(),
   changeSeat: vi.fn(),
   checkIn: vi.fn(),
+  checkOut: vi.fn(),
   getSeatMap: vi.fn(),
 }));
 // redirect() works by throwing; the real one is not available outside a request.
@@ -192,5 +194,45 @@ describe("checkInFlight", () => {
 
     expect(await checkInFlight(0)).toEqual({ kind: "rate-limited", retryAfterSeconds: 9 });
     expect(checkInCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkOutFlight (ADR-0055)", () => {
+  beforeEach(() => vi.mocked(readSession).mockResolvedValue(SESSION));
+
+  it("checks the flight out with the booking's own token", async () => {
+    vi.mocked(checkOutCall).mockResolvedValue({ kind: "ok" });
+
+    expect(await checkOutFlight(1)).toEqual({ kind: "ok" });
+    expect(checkOutCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 1);
+  });
+
+  it.each([[-1], [4], [1.5], [Number.NaN]])("rejects flight index %s without calling the API", async (index) => {
+    expect((await checkOutFlight(index)).kind).toBe("rejected");
+    expect(checkOutCall).not.toHaveBeenCalled();
+  });
+
+  it("needs a session", async () => {
+    vi.mocked(readSession).mockResolvedValue(null);
+
+    expect(await checkOutFlight(0)).toEqual({ kind: "unauthorized" });
+    expect(checkOutCall).not.toHaveBeenCalled();
+  });
+
+  it("passes the closed message through and drops a dead token", async () => {
+    vi.mocked(checkOutCall).mockResolvedValueOnce({ kind: "closed", detail: "Check-in is closed; it closed at 2026-11-02T09:00:00Z" });
+    expect(await checkOutFlight(0)).toEqual({ kind: "closed", detail: "Check-in is closed; it closed at 2026-11-02T09:00:00Z" });
+    expect(clearSession).not.toHaveBeenCalled();
+
+    vi.mocked(checkOutCall).mockResolvedValueOnce({ kind: "unauthorized" });
+    await checkOutFlight(0);
+    expect(clearSession).toHaveBeenCalled();
+  });
+
+  it("is rate limited", async () => {
+    vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 9 });
+
+    expect(await checkOutFlight(0)).toEqual({ kind: "rate-limited", retryAfterSeconds: 9 });
+    expect(checkOutCall).not.toHaveBeenCalled();
   });
 });

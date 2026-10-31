@@ -954,6 +954,45 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+    delete:
+      tags: [CheckIn]
+      operationId: checkOut
+      summary: Check the whole party out of one flight, so its seats can be changed again
+      description: |
+        Undoes the check-in of one flight (ADR-0055). Allowed until check-in closes, 60 minutes before departure (the revised time
+        if the flight was delayed), and always for a cancelled flight. The boarding passes stop being shown, and checking in again gives
+        the party new boarding numbers. Passes already issued are signed and are not revoked; there is no gate system here to refuse
+        them. Idempotent: a flight that is not checked in is also 204.
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+        - name: segmentIndex
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 3
+      responses:
+        '204':
+          description: The flight is not checked in now
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
+        '409':
+          description: Check-in has closed, or the booking is cancelled
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/ScheduleUnavailable'
 
 components:
   securitySchemes:

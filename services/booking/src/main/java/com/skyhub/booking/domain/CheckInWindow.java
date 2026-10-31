@@ -12,6 +12,19 @@ public record CheckInWindow(Duration opensBefore, Duration closesBefore) {
         }
     }
 
+    /**
+     * Checking out is allowed until check-in closes (ADR-0055): after that the passes are what the gate works from. Before it opens
+     * there is nothing to check out of, so only the closing time matters.
+     *
+     * @throws CheckInClosedException when check-in has closed
+     */
+    public void requireNotClosed(Instant departure, Instant now) {
+        Instant closes = departure.minus(closesBefore);
+        if (!now.isBefore(closes)) {
+            throw new CheckInClosedException("Check-in is closed; it closed at " + closes);
+        }
+    }
+
     /** @throws CheckInClosedException when {@code now} is outside the window */
     public void requireOpen(Instant departure, Instant now) {
         Instant opens = departure.minus(opensBefore);
