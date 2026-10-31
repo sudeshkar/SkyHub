@@ -12,7 +12,18 @@ import tools.jackson.databind.json.JsonMapper;
  * and why it was parked. Never its body, which holds the traveller's address, and never an address that an error message
  * happens to contain.
  */
-public record ParkedMessage(int partition, long offset, long timestamp, String originalTopic, String eventType, String error) {
+public record ParkedMessage(int partition, long offset, long timestamp, String originalTopic, String eventType, String error,
+                            boolean skipped) {
+
+    /** A message that is not (yet) known to be skipped. */
+    public ParkedMessage(int partition, long offset, long timestamp, String originalTopic, String eventType, String error) {
+        this(partition, offset, timestamp, originalTopic, eventType, error, false);
+    }
+
+    /** The same message, marked as one the next replay will leave out (ADR-0037). */
+    ParkedMessage withSkipped(boolean skipped) {
+        return new ParkedMessage(partition, offset, timestamp, originalTopic, eventType, error, skipped);
+    }
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Pattern ADDRESS = Pattern.compile("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+");
@@ -39,7 +50,12 @@ public record ParkedMessage(int partition, long offset, long timestamp, String o
     }
 
     private static String clean(String error) {
-        String hidden = ADDRESS.matcher(error).replaceAll("[address hidden]");
+        String hidden = hideAddresses(error);
         return hidden.length() <= MAX_ERROR ? hidden : hidden.substring(0, MAX_ERROR);
+    }
+
+    /** Any email address in free text, replaced: operators' notes and error messages must not become a list of addresses. */
+    static String hideAddresses(String text) {
+        return ADDRESS.matcher(text).replaceAll("[address hidden]");
     }
 }

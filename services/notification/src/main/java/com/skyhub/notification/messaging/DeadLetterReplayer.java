@@ -1,6 +1,7 @@
 package com.skyhub.notification.messaging;
 
 import com.skyhub.notification.application.NotificationMetrics;
+import com.skyhub.notification.application.SkippedLetters;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,7 +32,7 @@ import org.springframework.stereotype.Component;
  * in an instance.
  */
 @Component
-public class DeadLetterReplayer {
+public class DeadLetterReplayer implements ParkedLookup {
 
     private static final Logger log = LoggerFactory.getLogger(DeadLetterReplayer.class);
 
@@ -44,18 +45,24 @@ public class DeadLetterReplayer {
     public record Parked(long parked, List<ParkedMessage> messages) {
     }
 
-    /** {@code busy}: another replay was already running, so this one did nothing. */
-    public record Replay(int replayed, long remaining, boolean busy, String stoppedBecause) {
+    /**
+     * {@code skipped}: parked messages left out because a person listed them (ADR-0037). {@code busy}: another replay was already
+     * running, so this one did nothing.
+     */
+    public record Replay(int replayed, int skipped, long remaining, boolean busy, String stoppedBecause) {
     }
 
     private final ConsumerFactory<String, String> consumers;
     private final KafkaTemplate<String, String> kafka;
     private final NotificationMetrics metrics;
+    private final SkippedLetters skipped;
     private final String topic;
     private final ReentrantLock running = new ReentrantLock();
 
     public DeadLetterReplayer(ConsumerFactory<String, String> consumers, KafkaTemplate<String, String> kafka,
-                              NotificationMetrics metrics, @Value("${skyhub.notifications.topic:skyhub.booking.events}") String topic) {
+                              NotificationMetrics metrics, SkippedLetters skipped,
+                              @Value("${skyhub.notifications.topic:skyhub.booking.events}") String topic) {
+        this.skipped = skipped;
         this.consumers = consumers;
         this.kafka = kafka;
         this.metrics = metrics;
@@ -74,22 +81,64 @@ public class DeadLetterReplayer {
     public Parked peek(int limit) {
         try (Consumer<String, String> consumer = consumers.createConsumer(GROUP, "peek")) {
             Set<TopicPartition> partitions = assign(consumer);
-            List<ParkedMessage> messages = read(consumer, clamp(limit)).stream().map(ParkedMessage::of).toList();
+            List<ConsumerRecord<String, String>> records = read(consumer, clamp(limit));
+            Map<Integer, Set<Long>> skippedByPartition = skippedAmong(records);
+            List<ParkedMessage> messages = records.stream()
+                    .map(r -> ParkedMessage.of(r).withSkipped(skippedByPartition.getOrDefault(r.partition(), Set.of()).contains(r.offset())))
+                    .toList();
             return new Parked(lag(consumer, partitions), messages);
         }
+    }
+
+    /** Whether a message is still waiting: the partition exists and the offset is not yet taken and is before its end. */
+    @Override
+    public boolean isWaiting(int partition, long offset) {
+        try (Consumer<String, String> consumer = consumers.createConsumer(GROUP, "waiting")) {
+            TopicPartition target = new TopicPartition(deadLetterTopic(), partition);
+            List<PartitionInfo> info = consumer.partitionsFor(deadLetterTopic(), Duration.ofSeconds(10));
+            if (info == null || info.stream().noneMatch(p -> p.partition() == partition)) {
+                return false;
+            }
+            Set<TopicPartition> one = Set.of(target);
+            OffsetAndMetadata committed = consumer.committed(one).get(target);
+            long from = committed != null ? committed.offset() : consumer.beginningOffsets(one).getOrDefault(target, 0L);
+            return offset >= from && offset < consumer.endOffsets(one).getOrDefault(target, 0L);
+        }
+    }
+
+    /** One lookup per partition in the batch (not one per message): the skip list, restricted to the offsets that were read. */
+    private Map<Integer, Set<Long>> skippedAmong(List<ConsumerRecord<String, String>> records) {
+        Map<Integer, long[]> range = new HashMap<>();   // partition -> {lowest offset, highest offset}
+        for (ConsumerRecord<String, String> record : records) {
+            long[] bounds = range.computeIfAbsent(record.partition(), p -> new long[] {record.offset(), record.offset()});
+            bounds[0] = Math.min(bounds[0], record.offset());
+            bounds[1] = Math.max(bounds[1], record.offset());
+        }
+        Map<Integer, Set<Long>> found = new HashMap<>();
+        range.forEach((partition, bounds) -> found.put(partition, skipped.skippedIn(partition, bounds[0], bounds[1])));
+        return found;
     }
 
     /** Puts up to {@code limit} parked messages back. */
     public Replay replay(int limit) {
         if (!running.tryLock()) {
-            return new Replay(0, -1, true, "another replay is already running");
+            return new Replay(0, 0, -1, true, "another replay is already running");
         }
         try (Consumer<String, String> consumer = consumers.createConsumer(GROUP, "replay")) {
             Set<TopicPartition> partitions = assign(consumer);
             Map<TopicPartition, OffsetAndMetadata> done = new HashMap<>();
             int replayed = 0;
             String stopped = null;
-            for (ConsumerRecord<String, String> record : read(consumer, clamp(limit))) {
+            List<ConsumerRecord<String, String>> batch = read(consumer, clamp(limit));
+            Map<Integer, Set<Long>> leftOut = skippedAmong(batch);
+            Map<Integer, List<Long>> passed = new HashMap<>();   // skipped messages the replay has gone past
+            for (ConsumerRecord<String, String> record : batch) {
+                if (leftOut.getOrDefault(record.partition(), Set.of()).contains(record.offset())) {
+                    // A person decided this can never succeed: not republished, but dealt with, so the offset moves past it.
+                    done.put(new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset() + 1));
+                    passed.computeIfAbsent(record.partition(), p -> new ArrayList<>()).add(record.offset());
+                    continue;
+                }
                 try {
                     kafka.send(topic, record.key(), record.value()).get(10, java.util.concurrent.TimeUnit.SECONDS);
                 } catch (Exception failed) {
@@ -109,10 +158,31 @@ public class DeadLetterReplayer {
                 metrics.replayed(replayed);
                 log.atInfo().addKeyValue("dlt.replayed", replayed).log("Parked messages put back");
             }
-            return new Replay(replayed, lag(consumer, partitions), false, stopped);
+            int skippedCount = forgetPassed(passed, done);
+            return new Replay(replayed, skippedCount, lag(consumer, partitions), false, stopped);
         } finally {
             running.unlock();
         }
+    }
+
+    /**
+     * Removes the skip entries the replay has gone past, but only those below what was actually committed: a message after a stop
+     * (the broker refusing one) was not passed, and stays listed for the next replay.
+     */
+    private int forgetPassed(Map<Integer, List<Long>> passed, Map<TopicPartition, OffsetAndMetadata> committed) {
+        int count = 0;
+        for (Map.Entry<Integer, List<Long>> entry : passed.entrySet()) {
+            long committedTo = committed.entrySet().stream().filter(e -> e.getKey().partition() == entry.getKey())
+                    .mapToLong(e -> e.getValue().offset()).max().orElse(0);
+            List<Long> gone = entry.getValue().stream().filter(offset -> offset < committedTo).toList();
+            skipped.forget(entry.getKey(), gone);
+            count += gone.size();
+        }
+        if (count > 0) {
+            metrics.skipped(count);
+            log.atInfo().addKeyValue("dlt.skipped", count).log("Parked messages passed over, as decided by a person");
+        }
+        return count;
     }
 
     private Set<TopicPartition> assign(Consumer<String, String> consumer) {
