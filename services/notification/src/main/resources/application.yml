@@ -59,8 +59,9 @@ management:
   endpoints:
     web:
       exposure:
-        # deadletters lists and replays parked messages (ADR-0032); this port is never exposed publicly.
-        include: health,info,prometheus,deadletters
+        # deadletters lists and replays parked messages (ADR-0032); deadletterskips leaves one out of the replay (ADR-0037).
+        # This port is never exposed publicly.
+        include: health,info,prometheus,deadletters,deadletterskips
   endpoint:
     health:
       probes:

@@ -40,3 +40,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0034](0034-my-bookings.md) | My bookings: a signed-in traveller sees the bookings made with their address | Accepted |
 | [0035](0035-bulk-rebooking.md) | Moving many bookings in one request | Accepted |
 | [0036](0036-rebooking-keeps-connections.md) | A rebooking must not break the traveller's connections | Accepted |
+| [0037](0037-skipping-a-parked-notification.md) | Skipping a parked notification that can never succeed | Accepted |
