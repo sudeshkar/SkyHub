@@ -1,6 +1,7 @@
 package com.skyhub.booking.integration;
 
 import com.skyhub.booking.application.AccountEvents;
+import com.skyhub.booking.application.LinkTokenSealer;
 import com.skyhub.booking.application.PasswordLinkPurpose;
 import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.OutboxEvent;
@@ -17,8 +18,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Adapter: records "send this person a link" in the outbox (ADR-0033). The payload holds a one-time token, so like every
- * payload it is encrypted at rest; the shape is api-specs/events/account-password-link.v1.example.json.
+ * Adapter: records "send this person a link" in the outbox (ADR-0033). The payload holds a one-time token, which goes in sealed
+ * (ADR-0046) because the relay publishes the payload to the topic in the clear; like every payload it is also encrypted at rest; the shape is api-specs/events/account-password-link.v1.example.json.
  */
 @Component
 public class OutboxAccountEvents implements AccountEvents {
@@ -31,14 +32,17 @@ public class OutboxAccountEvents implements AccountEvents {
     private final PiiCipher cipher;
     private final JsonMapper json;
     private final Clock clock;
+    private final LinkTokenSealer sealer;
     private final Supplier<UUID> ids;
 
     @Autowired
-    public OutboxAccountEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock) {
-        this(outbox, cipher, json, clock, UUID::randomUUID);
+    public OutboxAccountEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock, LinkTokenSealer sealer) {
+        this(outbox, cipher, json, clock, sealer, UUID::randomUUID);
     }
 
-    OutboxAccountEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock, Supplier<UUID> ids) {
+    OutboxAccountEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock, LinkTokenSealer sealer,
+                        Supplier<UUID> ids) {
+        this.sealer = sealer;
         this.outbox = outbox;
         this.cipher = cipher;
         this.json = json;
@@ -56,7 +60,7 @@ public class OutboxAccountEvents implements AccountEvents {
         event.put("occurredAt", clock.instant().toString());
         event.put("contactEmail", email.value());
         event.put("purpose", purpose.name());
-        event.put("token", token);
+        event.put("sealedToken", sealer.seal(token, PASSWORD_LINK, email.value()));   // never the token itself (ADR-0046)
         event.put("expiresAt", expiresAt.toString());
         outbox.save(OutboxEvent.pending(id, "account-" + accountId, PASSWORD_LINK,
                 cipher.encrypt(json.writeValueAsString(event)), clock.instant()));
@@ -87,7 +91,7 @@ public class OutboxAccountEvents implements AccountEvents {
         event.put("version", 1);
         event.put("occurredAt", clock.instant().toString());
         event.put("contactEmail", newEmail.value());
-        event.put("token", token);
+        event.put("sealedToken", sealer.seal(token, EMAIL_CHANGE_LINK, newEmail.value()));   // never the token itself (ADR-0046)
         event.put("expiresAt", expiresAt.toString());
         outbox.save(OutboxEvent.pending(id, "account-" + accountId, EMAIL_CHANGE_LINK,
                 cipher.encrypt(json.writeValueAsString(event)), clock.instant()));

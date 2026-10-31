@@ -52,7 +52,7 @@ class AccountsIntegrationTest {
         for (String payload : payloads) {
             var event = json.readTree(cipher.decrypt(payload));
             if (email.equalsIgnoreCase(event.get("contactEmail").asString())) {
-                return event.get("token").asString();
+                return TestLinkTokens.tokenOf(event);
             }
         }
         throw new AssertionError("No link was queued for " + email);
@@ -159,5 +159,27 @@ class AccountsIntegrationTest {
     @Test
     void should_refuse_a_link_request_that_is_not_an_address() throws Exception {
         mvc.perform(body("/api/v1/accounts/password-links", "{\"email\":\"not an address\"}")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void should_never_put_the_link_token_on_the_topic_in_the_clear_only_sealed() throws Exception {
+        requestLink("sealed.on.topic@example.com");
+
+        String published = null;   // what the outbox relay publishes: the stored payload, decrypted
+        for (String payload : jdbc.queryForList("SELECT payload FROM outbox_event WHERE event_type = 'account.password-link' ORDER BY seq DESC LIMIT 50", String.class)) {
+            String clear = cipher.decrypt(payload);
+            if (json.readTree(clear).get("contactEmail").asString().equalsIgnoreCase("sealed.on.topic@example.com")) {
+                published = clear;
+                break;
+            }
+        }
+
+        var event = json.readTree(published);
+        String token = latestToken("sealed.on.topic@example.com");
+        assertThat(event.has("token")).isFalse();
+        assertThat(event.get("sealedToken").asString()).startsWith("v1:");
+        assertThat(published).doesNotContain(token);                       // the readable token is nowhere in what is published
+        mvc.perform(body("/api/v1/accounts/passwords", "{\"token\":\"%s\",\"password\":\"%s\"}".formatted(token, PASSWORD)))
+                .andExpect(status().isNoContent());                        // and the sealed one is the real one: the traveller can use it
     }
 }

@@ -85,7 +85,7 @@ class NotificationEventsTest {
         assertThat(event.eventId()).isEqualTo(UUID.fromString("2b6d8f10-4c93-4a57-9e21-8f0a1c3d5e77"));
         assertThat(event.contactEmail()).isEqualTo("priya@example.com");
         assertThat(event.purpose()).isEqualTo("SIGN_UP");
-        assertThat(event.token()).startsWith("dGVzdC10b2tlbi");
+        assertThat(event.sealedToken()).startsWith("v1:");
         assertThat(event.expiresAt()).isEqualTo(Instant.parse("2026-10-30T11:00:00Z"));
         assertThat(event.locator()).isNull();
     }
@@ -96,8 +96,8 @@ class NotificationEventsTest {
         for (String broken : new String[] {
                 link.replace("account.password-link", "booking.cancelled"),
                 link.replace("SIGN_UP", "SOMETHING_ELSE"),
-                link.replaceAll("\\s*\"token\": \"[^\"]*\",", ""),
-                link.replaceAll("\\s*\"expiresAt\": \"[^\"]*\"", "").replace("\"token\"", "\"x\""),
+                link.replaceAll("\\s*\"sealedToken\": \"[^\"]*\",", ""),
+                link.replaceAll("\\s*\"expiresAt\": \"[^\"]*\"", "").replace("\"sealedToken\"", "\"x\""),
                 link.replace("\"contactEmail\": \"priya@example.com\",", "")}) {
             assertThatExceptionOfType(InvalidEventException.class).as(broken)
                     .isThrownBy(() -> EventParser.parse(broken, AccountPasswordLinkEvent.class));
@@ -108,7 +108,7 @@ class NotificationEventsTest {
     void should_never_print_the_token_or_the_address() throws Exception {
         AccountPasswordLinkEvent event = EventParser.parse(Files.readString(PASSWORD_LINK), AccountPasswordLinkEvent.class);
 
-        assertThat(event.toString()).doesNotContain("priya@example.com").doesNotContain(event.token());
+        assertThat(event.toString()).doesNotContain("priya@example.com").doesNotContain(event.sealedToken());
     }
 
     @Test
@@ -227,7 +227,7 @@ class NotificationEventsTest {
         assertThat(event.eventId()).isEqualTo(UUID.fromString("6c1e9a52-7d3b-4f08-b4a6-2e9f0d8c3a14"));
         assertThat(event.type()).isEqualTo("account.email-change-link");
         assertThat(event.contactEmail()).isEqualTo("priya.new@example.com");
-        assertThat(event.token()).startsWith("bm90LWEtcmVhbC1v");
+        assertThat(event.sealedToken()).startsWith("v1:");
         assertThat(event.expiresAt()).isEqualTo(Instant.parse("2026-11-01T11:00:00Z"));
         assertThat(event.locator()).isNull();
     }
@@ -237,7 +237,7 @@ class NotificationEventsTest {
         String link = Files.readString(EMAIL_CHANGE_LINK);
         for (String broken : new String[] {
                 link.replace("account.email-change-link", "account.password-link"),
-                link.replaceAll("\\s*\"token\": \"[^\"]*\",", ""),
+                link.replaceAll("\\s*\"sealedToken\": \"[^\"]*\",", ""),
                 link.replaceAll(",\\s*\"expiresAt\": \"[^\"]*\"", ""),
                 link.replace("\"contactEmail\": \"priya.new@example.com\",", "")}) {
             assertThatExceptionOfType(InvalidEventException.class).as(broken)
@@ -249,7 +249,7 @@ class NotificationEventsTest {
     void should_never_print_the_email_change_token_or_the_new_address() throws Exception {
         AccountEmailChangeLinkEvent event = EventParser.parse(Files.readString(EMAIL_CHANGE_LINK), AccountEmailChangeLinkEvent.class);
 
-        assertThat(event.toString()).doesNotContain("priya.new@example.com").doesNotContain(event.token());
+        assertThat(event.toString()).doesNotContain("priya.new@example.com").doesNotContain(event.sealedToken());
     }
 
     private static final Path EMAIL_CHANGED = Path.of("../../api-specs/events/account-email-changed.v1.example.json");

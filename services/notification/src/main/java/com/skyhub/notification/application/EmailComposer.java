@@ -97,10 +97,13 @@ public final class EmailComposer {
         return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " has moved to " + newFlight, body);
     }
 
-    /** The link carries the token in the query string, encoded, to the page where the person chooses a password. */
-    public static EmailMessage passwordLink(AccountPasswordLinkEvent event, String siteUrl) {
+    /**
+     * The link carries the token in the query string, encoded, to the page where the person chooses a password. {@code token} is the
+     * opened one (ADR-0046): the event itself only ever holds it sealed.
+     */
+    public static EmailMessage passwordLink(AccountPasswordLinkEvent event, String token, String siteUrl) {
         String base = siteUrl.endsWith("/") ? siteUrl.substring(0, siteUrl.length() - 1) : siteUrl;
-        String link = base + "/account/set-password?token=" + java.net.URLEncoder.encode(event.token(), java.nio.charset.StandardCharsets.UTF_8);
+        String link = base + "/account/set-password?token=" + java.net.URLEncoder.encode(token, java.nio.charset.StandardCharsets.UTF_8);
         String until = UTC_TIME.format(event.expiresAt());
         if ("RESET".equals(event.purpose())) {
             return new EmailMessage(event.contactEmail(), "Reset your SkyHub password", """
@@ -128,9 +131,9 @@ public final class EmailComposer {
      * Goes to the NEW address, whose owner proves it can be read by using the link while signed in to the account (ADR-0039). It
      * says what it will do, and that nothing changes unless the link is used.
      */
-    public static EmailMessage emailChangeLink(AccountEmailChangeLinkEvent event, String siteUrl) {
+    public static EmailMessage emailChangeLink(AccountEmailChangeLinkEvent event, String token, String siteUrl) {
         String base = siteUrl.endsWith("/") ? siteUrl.substring(0, siteUrl.length() - 1) : siteUrl;
-        String link = base + "/account/confirm-email?token=" + java.net.URLEncoder.encode(event.token(), java.nio.charset.StandardCharsets.UTF_8);
+        String link = base + "/account/confirm-email?token=" + java.net.URLEncoder.encode(token, java.nio.charset.StandardCharsets.UTF_8);
         return new EmailMessage(event.contactEmail(), "Confirm your new SkyHub email address", """
                 Someone signed in to a SkyHub account asked to change its email address to this one. To confirm, sign in to that
                 account and then open this link:

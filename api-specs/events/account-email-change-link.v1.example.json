@@ -4,6 +4,6 @@
   "version": 1,
   "occurredAt": "2026-11-01T10:00:00Z",
   "contactEmail": "priya.new@example.com",
-  "token": "bm90LWEtcmVhbC1vbmUtdGVzdC10b2tlbi1mb3ItZW1haWwtY2hhbmdl",
+  "sealedToken": "v1:7YwhO3HlZIK0DzYDGO0A3JrtdoDvoY8Ur84/Jy5TeM6HCEhL9lQ4EyHnI3BTMVVEJf5QFJ8OmNmXbROhQ+2wOb8/vOYSAL8MPcatoH3KC1V0IwoN",
   "expiresAt": "2026-11-01T11:00:00Z"
 }

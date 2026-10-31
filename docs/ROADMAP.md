@@ -57,6 +57,7 @@ How a slice goes, every time:
 | 38 | Grouping and finding proposals on the operations page: by destination flight, select all or none per group, find a booking by reference | ADR-0043 |
 | 39 | Upcoming bookings listed soonest flight first, by each booking's next flight date, with its own kind of cursor | ADR-0044 |
 | 40 | One login lock and one password gate shared by staff and traveller accounts (a refactor: same behaviour, same tables, one copy of the rule) | ADR-0045 |
+| 41 | One-time link tokens sealed in the events that carry them (AES-GCM, bound to the event type and address), so the topic no longer holds a usable secret | ADR-0046 |
 
 ## Next slices (pick one at a time; each is independent)
 

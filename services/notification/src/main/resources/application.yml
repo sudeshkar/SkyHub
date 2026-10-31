@@ -36,6 +36,10 @@ spring:
       enable-auto-commit: false
 
 skyhub:
+  security:
+    # Base64 256-bit key that opens the sealed one-time tokens in link events, shared with the booking service and nothing else
+    # (ADR-0046). Without it booking emails still go out, but sign-up, reset and address-change links are refused and parked.
+    link-token-key: ${SKYHUB_LINK_TOKEN_KEY:}
   notifications:
     topic: skyhub.booking.events
     # Where emailed links lead (the website). Set SKYHUB_SITE_URL in any environment that is not local.

@@ -118,12 +118,12 @@ class EmailComposerTest {
 
     private static AccountPasswordLinkEvent link(String purpose) {
         return new AccountPasswordLinkEvent(UUID.randomUUID(), "account.password-link", 1, Instant.parse("2026-10-30T10:00:00Z"),
-                "priya@example.com", purpose, "tok+en/with=chars", Instant.parse("2026-10-30T11:00:00Z"));
+                "priya@example.com", purpose, "v1:sealed-not-the-token", Instant.parse("2026-10-30T11:00:00Z"));
     }
 
     @Test
     void should_send_a_sign_up_link_that_carries_the_token_safely_and_says_when_it_stops_working() {
-        EmailMessage message = EmailComposer.passwordLink(link("SIGN_UP"), "https://skyhub.example");
+        EmailMessage message = EmailComposer.passwordLink(link("SIGN_UP"), "tok+en/with=chars", "https://skyhub.example");
 
         assertThat(message.subject()).isEqualTo("Finish creating your SkyHub account");
         assertThat(message.body()).contains("https://skyhub.example/account/set-password?token=tok%2Ben%2Fwith%3Dchars")
@@ -132,7 +132,7 @@ class EmailComposerTest {
 
     @Test
     void should_send_a_reset_link_that_says_the_old_password_works_until_a_new_one_is_chosen() {
-        EmailMessage message = EmailComposer.passwordLink(link("RESET"), "https://skyhub.example/");
+        EmailMessage message = EmailComposer.passwordLink(link("RESET"), "tok+en/with=chars", "https://skyhub.example/");
 
         assertThat(message.subject()).isEqualTo("Reset your SkyHub password");
         assertThat(message.body()).contains("https://skyhub.example/account/set-password?token=").contains("current password");
@@ -216,9 +216,9 @@ class EmailComposerTest {
     @Test
     void should_send_the_email_change_link_to_the_new_address_with_the_token_encoded_and_say_what_it_does() {
         var event = new com.skyhub.notification.domain.AccountEmailChangeLinkEvent(UUID.randomUUID(), "account.email-change-link", 1,
-                Instant.parse("2026-11-01T10:00:00Z"), "priya.new@example.com", "tok+en/with=chars", Instant.parse("2026-11-01T11:00:00Z"));
+                Instant.parse("2026-11-01T10:00:00Z"), "priya.new@example.com", "v1:sealed-not-the-token", Instant.parse("2026-11-01T11:00:00Z"));
 
-        EmailMessage message = EmailComposer.emailChangeLink(event, "https://skyhub.example/");
+        EmailMessage message = EmailComposer.emailChangeLink(event, "tok+en/with=chars", "https://skyhub.example/");
 
         assertThat(message.to()).isEqualTo("priya.new@example.com");
         assertThat(message.subject()).isEqualTo("Confirm your new SkyHub email address");
