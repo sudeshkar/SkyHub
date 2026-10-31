@@ -225,4 +225,18 @@ class EmailComposerTest {
         assertThat(message.body()).contains("https://skyhub.example/account/confirm-email?token=tok%2Ben%2Fwith%3Dchars")
                 .contains("2026-11-01 11:00 UTC").contains("signed in").contains("did not ask").contains("nothing changes");
     }
+
+    @Test
+    void should_tell_the_old_address_the_account_moved_without_a_link_or_a_secret_and_say_what_to_do_if_it_was_not_them() {
+        var event = new com.skyhub.notification.domain.AccountEmailChangedEvent(UUID.randomUUID(), "account.email-changed", 1,
+                Instant.parse("2026-11-01T10:30:00Z"), "priya@example.com", "p****@example.com");
+
+        EmailMessage message = EmailComposer.emailChanged(event);
+
+        assertThat(message.to()).isEqualTo("priya@example.com");
+        assertThat(message.subject()).isEqualTo("The email address of your SkyHub account was changed");
+        assertThat(message.body()).contains("p****@example.com").contains("2026-11-01 10:30 UTC").contains("support")
+                .contains("did not make this change").contains("nothing you need to do");
+        assertThat(message.body()).doesNotContain("http").doesNotContain("token");   // no way to act through the email itself
+    }
 }

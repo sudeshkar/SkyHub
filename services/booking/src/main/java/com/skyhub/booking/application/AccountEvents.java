@@ -13,4 +13,10 @@ public interface AccountEvents {
 
     /** A link to the NEW address that, used while signed in to the account, moves the account to it (ADR-0039). */
     void emailChangeRequested(long accountId, ContactEmail newEmail, String token, Instant expiresAt);
+
+    /**
+     * The account has moved: a notice for the OLD address (ADR-0040). It names the new address only masked and carries no token or
+     * link, so it is not a second way to change an account.
+     */
+    void emailChanged(long accountId, ContactEmail oldEmail, ContactEmail newEmail);
 }

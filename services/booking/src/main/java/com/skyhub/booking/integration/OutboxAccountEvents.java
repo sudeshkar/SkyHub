@@ -25,6 +25,7 @@ public class OutboxAccountEvents implements AccountEvents {
 
     static final String PASSWORD_LINK = "account.password-link";
     static final String EMAIL_CHANGE_LINK = "account.email-change-link";
+    static final String EMAIL_CHANGED = "account.email-changed";
 
     private final OutboxEventRepository outbox;
     private final PiiCipher cipher;
@@ -58,6 +59,21 @@ public class OutboxAccountEvents implements AccountEvents {
         event.put("token", token);
         event.put("expiresAt", expiresAt.toString());
         outbox.save(OutboxEvent.pending(id, "account-" + accountId, PASSWORD_LINK,
+                cipher.encrypt(json.writeValueAsString(event)), clock.instant()));
+    }
+
+    /** The shape is api-specs/events/account-email-changed.v1.example.json. {@code contactEmail} is the OLD address. */
+    @Override
+    public void emailChanged(long accountId, ContactEmail oldEmail, ContactEmail newEmail) {
+        UUID id = ids.get();
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("eventId", id.toString());
+        event.put("type", EMAIL_CHANGED);
+        event.put("version", 1);
+        event.put("occurredAt", clock.instant().toString());
+        event.put("contactEmail", oldEmail.value());
+        event.put("newEmailMasked", newEmail.masked());
+        outbox.save(OutboxEvent.pending(id, "account-" + accountId, EMAIL_CHANGED,
                 cipher.encrypt(json.writeValueAsString(event)), clock.instant()));
     }
 

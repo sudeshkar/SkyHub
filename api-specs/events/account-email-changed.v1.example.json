@@ -1,0 +1,8 @@
+{
+  "eventId": "9d4f2b73-1a8e-4c60-b5d9-3e7a0c6f1b28",
+  "type": "account.email-changed",
+  "version": 1,
+  "occurredAt": "2026-11-01T10:30:00Z",
+  "contactEmail": "priya@example.com",
+  "newEmailMasked": "p****@example.com"
+}

@@ -237,8 +237,11 @@ public class AccountService {
                 if (!account.emailChangeIsValidFor(hash, now)) {
                     return false;
                 }
+                ContactEmail oldEmail = account.getEmail();
                 account.confirmEmailChange(now);
                 accounts.saveAndFlush(account);   // flushing here surfaces an address another account took in the meantime
+                // Same transaction as the change, after it is known to hold: a notice for the old address exists exactly when a change does.
+                events.emailChanged(accountId, oldEmail, account.getEmail());
                 return true;
             }));
         } catch (DataIntegrityViolationException addressTakenMeanwhile) {

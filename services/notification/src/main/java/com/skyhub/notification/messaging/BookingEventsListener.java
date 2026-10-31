@@ -2,6 +2,7 @@ package com.skyhub.notification.messaging;
 
 import com.skyhub.notification.application.NotificationService;
 import com.skyhub.notification.domain.AccountEmailChangeLinkEvent;
+import com.skyhub.notification.domain.AccountEmailChangedEvent;
 import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
@@ -54,6 +55,8 @@ public class BookingEventsListener {
                     notifications.passwordLink(EventParser.parse(message, AccountPasswordLinkEvent.class));
             case AccountEmailChangeLinkEvent.TYPE ->
                     notifications.emailChangeLink(EventParser.parse(message, AccountEmailChangeLinkEvent.class));
+            case AccountEmailChangedEvent.TYPE ->
+                    notifications.emailChanged(EventParser.parse(message, AccountEmailChangedEvent.class));
             default -> log.atDebug().addKeyValue("event.type", type).log("Event type not handled here; skipped");
         }
     }
