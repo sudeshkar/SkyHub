@@ -11,7 +11,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * An operator's decision to leave one parked message out of the replay (ADR-0037). Only a message that is really waiting can be
- * skipped, and a reason is required, so the list holds nothing a typo put there and every entry says why.
+ * skipped, and a reason and an operator are required, so the list holds nothing a typo put there and every entry says why and
+ * who (ADR-0052).
  */
 @Component
 class DeadLetterSkips {
@@ -30,7 +31,7 @@ class DeadLetterSkips {
         this.clock = clock;
     }
 
-    Skip skip(int partition, long offset, String reason) {
+    Skip skip(int partition, long offset, String reason, Operator by) {
         if (partition < 0 || offset < 0) {
             throw invalid("The partition and offset must not be negative");
         }
@@ -41,17 +42,21 @@ class DeadLetterSkips {
             throw invalid("That message is not waiting on the dead-letter topic (partition " + partition + ", offset " + offset + ")");
         }
         String cleaned = ParkedMessage.hideAddresses(reason.strip());
-        store.skip(partition, offset, cleaned, clock.instant());
+        store.skip(partition, offset, cleaned, by.name(), clock.instant());
         log.atInfo().addKeyValue("dlt.partition", partition).addKeyValue("dlt.offset", offset).addKeyValue("dlt.skip.reason", cleaned)
+                .addKeyValue("ops.operator", by.name())
                 .log("A parked message will be left out of the replay");
         // The entry that is stored, which is the first one if the message was already listed.
         return store.all().stream().filter(s -> s.partition() == partition && s.offset() == offset).findFirst()
-                .orElse(new Skip(partition, offset, cleaned, clock.instant()));
+                .orElse(new Skip(partition, offset, cleaned, by.name(), clock.instant()));
     }
 
     /** @return false if the message was not listed */
-    boolean unskip(int partition, long offset) {
-        return store.unskip(partition, offset);
+    boolean unskip(int partition, long offset, Operator by) {
+        boolean removed = store.unskip(partition, offset);
+        log.atInfo().addKeyValue("dlt.partition", partition).addKeyValue("dlt.offset", offset).addKeyValue("ops.operator", by.name())
+                .addKeyValue("dlt.unskipped", removed).log("A parked message was put back on the replay list");
+        return removed;
     }
 
     List<Skip> listed() {

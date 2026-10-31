@@ -55,3 +55,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0049](0049-proving-the-real-chain-live.md) | Proving the real chain live (account and booking journeys) | Accepted |
 | [0050](0050-html-email-beside-the-text.md) | HTML email beside the plain text | Accepted |
 | [0051](0051-past-bookings-most-recently-flown-first.md) | Past bookings, most recently flown first | Accepted |
+| [0052](0052-who-ran-a-management-port-action.md) | Who ran a management-port action | Accepted |

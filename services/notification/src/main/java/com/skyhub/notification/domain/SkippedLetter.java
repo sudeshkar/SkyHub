@@ -26,17 +26,21 @@ public class SkippedLetter {
     @Column(nullable = false, length = 200)
     private String reason;
 
+    @Column(nullable = false, length = 60)
+    private String skippedBy;
+
     @Column(nullable = false)
     private Instant skippedAt;
 
     protected SkippedLetter() {
     }
 
-    public static SkippedLetter of(int partition, long offset, String reason, Instant skippedAt) {
+    public static SkippedLetter of(int partition, long offset, String reason, String skippedBy, Instant skippedAt) {
         SkippedLetter letter = new SkippedLetter();
         letter.partition = partition;
         letter.offset = offset;
         letter.reason = reason;
+        letter.skippedBy = skippedBy;
         letter.skippedAt = skippedAt;
         return letter;
     }
@@ -51,6 +55,10 @@ public class SkippedLetter {
 
     public String getReason() {
         return reason;
+    }
+
+    public String getSkippedBy() {
+        return skippedBy;
     }
 
     public Instant getSkippedAt() {

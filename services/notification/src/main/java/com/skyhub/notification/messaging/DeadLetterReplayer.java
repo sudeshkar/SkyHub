@@ -119,8 +119,8 @@ public class DeadLetterReplayer implements ParkedLookup {
         return found;
     }
 
-    /** Puts up to {@code limit} parked messages back. */
-    public Replay replay(int limit) {
+    /** Puts up to {@code limit} parked messages back, on the word of {@code by} (ADR-0052). */
+    public Replay replay(int limit, Operator by) {
         if (!running.tryLock()) {
             return new Replay(0, 0, -1, true, "another replay is already running");
         }
@@ -156,7 +156,7 @@ public class DeadLetterReplayer implements ParkedLookup {
             if (!done.isEmpty()) {
                 consumer.commitSync(done);   // only what the broker confirmed
                 metrics.replayed(replayed);
-                log.atInfo().addKeyValue("dlt.replayed", replayed).log("Parked messages put back");
+                log.atInfo().addKeyValue("dlt.replayed", replayed).addKeyValue("ops.operator", by.name()).log("Parked messages put back");
             }
             int skippedCount = forgetPassed(passed, done);
             return new Replay(replayed, skippedCount, lag(consumer, partitions), false, stopped);

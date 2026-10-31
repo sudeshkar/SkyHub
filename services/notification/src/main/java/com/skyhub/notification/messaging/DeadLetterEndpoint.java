@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * {@code GET /actuator/deadletters?limit=} shows what is parked; {@code POST /actuator/deadletters} with {@code {"limit": n}}
- * puts it back (ADR-0032). It is an actuator endpoint on purpose: that port is never exposed publicly (ADR-0010), so the
+ * puts it back (ADR-0032); the person says who they are with {@code "operator"} (ADR-0052). It is an actuator endpoint on purpose: that port is never exposed publicly (ADR-0010), so the
  * tool needs no login of its own and no public API.
  */
 @Component
@@ -27,7 +27,7 @@ class DeadLetterEndpoint {
     }
 
     @WriteOperation
-    DeadLetterReplayer.Replay replay(@Nullable Integer limit) {
-        return replayer.replay(limit == null ? 0 : limit);
+    DeadLetterReplayer.Replay replay(@Nullable Integer limit, @Nullable String operator) {
+        return replayer.replay(limit == null ? 0 : limit, Operator.named(operator));
     }
 }

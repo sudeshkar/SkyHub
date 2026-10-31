@@ -42,12 +42,12 @@ class DeadLetterEndpointTest {
                 .andExpect(jsonPath("$.messages[0].eventType").value("seat.changed"))
                 .andExpect(jsonPath("$.messages[0].error").value("boom"));
 
-        mvc.perform(post("/actuator/deadletters").contentType(MediaType.APPLICATION_JSON).content("{\"limit\": 5}"))
+        mvc.perform(post("/actuator/deadletters").contentType(MediaType.APPLICATION_JSON).content("{\"limit\": 5, \"operator\": \"priya.perera\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.replayed").value(1))
                 .andExpect(jsonPath("$.remaining").value(0));
 
-        mvc.perform(post("/actuator/deadletters").contentType(MediaType.APPLICATION_JSON).content("{}"))
+        mvc.perform(post("/actuator/deadletters").contentType(MediaType.APPLICATION_JSON).content("{\"operator\": \"priya.perera\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.replayed").value(0));
     }

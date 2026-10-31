@@ -39,6 +39,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import(PostgresTestcontainer.class)
 class DeadLetterSkipIntegrationTest {
 
+    private static final Operator ME = Operator.named("priya.perera");
+
     private static final Path EXAMPLE = Path.of("../../api-specs/events/booking-confirmed.v1.example.json");
 
     @Autowired
@@ -58,7 +60,7 @@ class DeadLetterSkipIntegrationTest {
 
     @BeforeEach
     void startFromEmpty() {
-        replayer.replay(1000);
+        replayer.replay(1000, ME);
         jdbc.update("DELETE FROM skipped_dead_letter");
     }
 
@@ -90,9 +92,9 @@ class DeadLetterSkipIntegrationTest {
         UUID b = park("SKIPB2", "Event type removed; can never be parsed");
         UUID c = park("SKIPC3", "Mail server did not answer too");
         ParkedMessage bad = find("Event type removed; can never be parsed");
-        skips.skip(bad.partition(), bad.offset(), "Can never succeed: sent by the retired v1 producer");
+        skips.skip(bad.partition(), bad.offset(), "Can never succeed: sent by the retired v1 producer", ME);
 
-        var result = replayer.replay(1000);
+        var result = replayer.replay(1000, ME);
 
         assertThat(result.replayed()).isEqualTo(2);
         assertThat(result.skipped()).isEqualTo(1);
@@ -101,7 +103,7 @@ class DeadLetterSkipIntegrationTest {
         assertThat(rows(b)).isZero();                      // never republished, so never recorded
         assertThat(skipRows()).isZero();                   // the replay passed it, so the row is gone
         assertThat(replayer.peek(10).parked()).isZero();   // and it does not come back on the next replay
-        assertThat(replayer.replay(1000).replayed()).isZero();
+        assertThat(replayer.replay(1000, ME).replayed()).isZero();
     }
 
     @Test
@@ -109,7 +111,7 @@ class DeadLetterSkipIntegrationTest {
         park("SHOW01", "Reason one");
         park("SHOW02", "Reason two");
         ParkedMessage two = find("Reason two");
-        skips.skip(two.partition(), two.offset(), "Not worth replaying");
+        skips.skip(two.partition(), two.offset(), "Not worth replaying", ME);
 
         var listed = replayer.peek(10).messages();
 
@@ -122,10 +124,10 @@ class DeadLetterSkipIntegrationTest {
     void should_replay_a_message_again_when_its_skip_is_taken_off_before_the_replay() throws Exception {
         UUID id = park("UNDO01", "Looked bad, was fine");
         ParkedMessage message = find("Looked bad, was fine");
-        skips.skip(message.partition(), message.offset(), "Thought it was malformed");
-        assertThat(skips.unskip(message.partition(), message.offset())).isTrue();
+        skips.skip(message.partition(), message.offset(), "Thought it was malformed", ME);
+        assertThat(skips.unskip(message.partition(), message.offset(), ME)).isTrue();
 
-        assertThat(replayer.replay(1000).replayed()).isEqualTo(1);
+        assertThat(replayer.replay(1000, ME).replayed()).isEqualTo(1);
 
         await().atMost(Duration.ofSeconds(30)).until(() -> rows(id) == 1);
     }
@@ -134,14 +136,14 @@ class DeadLetterSkipIntegrationTest {
     void should_refuse_to_skip_a_message_that_is_not_waiting() throws Exception {
         park("GONE01", "Soon replayed");
         ParkedMessage message = find("Soon replayed");
-        replayer.replay(1000);   // now it has been taken
+        replayer.replay(1000, ME);   // now it has been taken
 
         assertThatExceptionOfType(InvalidEndpointRequestException.class)
-                .isThrownBy(() -> skips.skip(message.partition(), message.offset(), "too late"));
+                .isThrownBy(() -> skips.skip(message.partition(), message.offset(), "too late", ME));
         assertThatExceptionOfType(InvalidEndpointRequestException.class)
-                .isThrownBy(() -> skips.skip(0, 9_999_999, "beyond the end of the topic"));
+                .isThrownBy(() -> skips.skip(0, 9_999_999, "beyond the end of the topic", ME));
         assertThatExceptionOfType(InvalidEndpointRequestException.class)
-                .isThrownBy(() -> skips.skip(99, 0, "no such partition"));
+                .isThrownBy(() -> skips.skip(99, 0, "no such partition", ME));
         assertThat(skipRows()).isZero();
     }
 
@@ -152,27 +154,36 @@ class DeadLetterSkipIntegrationTest {
         ParkedMessage bad = find("Bad one");
 
         mvc.perform(post("/actuator/deadletterskips").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"partition\":%d,\"offset\":%d,\"reason\":\"Retired producer\"}".formatted(bad.partition(), bad.offset())))
+                        .content("{\"partition\":%d,\"offset\":%d,\"reason\":\"Retired producer\",\"operator\":\"priya.perera\"}".formatted(bad.partition(), bad.offset())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.reason").value("Retired producer"));
+                .andExpect(jsonPath("$.reason").value("Retired producer"))
+                .andExpect(jsonPath("$.skippedBy").value("priya.perera"));
         mvc.perform(post("/actuator/deadletterskips").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"partition\":0,\"offset\":9999999,\"reason\":\"typo\"}"))
+                        .content("{\"partition\":0,\"offset\":9999999,\"reason\":\"typo\",\"operator\":\"priya.perera\"}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/actuator/deadletterskips").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"partition\":%d,\"offset\":%d}".formatted(bad.partition(), bad.offset())))
+                        .content("{\"partition\":%d,\"offset\":%d,\"operator\":\"priya.perera\"}".formatted(bad.partition(), bad.offset())))
                 .andExpect(status().isBadRequest());   // a reason is required
+        mvc.perform(post("/actuator/deadletterskips").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"partition\":%d,\"offset\":%d,\"reason\":\"No name given\"}".formatted(bad.partition(), bad.offset())))
+                .andExpect(status().isBadRequest());   // and so is a name
+        mvc.perform(post("/actuator/deadletters").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());   // a replay too, and nothing was replayed
         mvc.perform(get("/actuator/deadletterskips"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].offset").value((int) bad.offset()));
+                .andExpect(jsonPath("$[0].offset").value((int) bad.offset()))
+                .andExpect(jsonPath("$[0].skippedBy").value("priya.perera"));
 
-        mvc.perform(post("/actuator/deadletters").contentType(MediaType.APPLICATION_JSON).content("{}"))
+        mvc.perform(post("/actuator/deadletters").contentType(MediaType.APPLICATION_JSON).content("{\"operator\":\"priya.perera\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.replayed").value(1))
                 .andExpect(jsonPath("$.skipped").value(1));
         await().atMost(Duration.ofSeconds(30)).until(() -> rows(keep) == 1);
 
         mvc.perform(delete("/actuator/deadletterskips").param("partition", "0").param("offset", "1"))
+                .andExpect(status().isBadRequest());   // taking one off the list needs a name too
+        mvc.perform(delete("/actuator/deadletterskips").param("partition", "0").param("offset", "1").param("operator", "priya.perera"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.removed").value(false));   // nothing was listed there
     }
 }
