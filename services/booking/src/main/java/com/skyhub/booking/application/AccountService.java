@@ -213,10 +213,11 @@ public class AccountService {
                     return false;
                 }
                 ContactEmail oldEmail = account.getEmail();
-                account.confirmEmailChange(now);
+                String undoToken = newToken.get();   // for the old address's owner to take the account back (ADR-0054)
+                account.confirmEmailChange(now, Sha256.hex(undoToken));
                 accounts.saveAndFlush(account);   // flushing here surfaces an address another account took in the meantime
                 // Same transaction as the change, after it is known to hold: a notice for the old address exists exactly when a change does.
-                events.emailChanged(accountId, oldEmail, account.getEmail());
+                events.emailChanged(accountId, oldEmail, account.getEmail(), undoToken, account.getUndoExpiresAt());
                 return true;
             }));
         } catch (DataIntegrityViolationException addressTakenMeanwhile) {
@@ -228,6 +229,40 @@ public class AccountService {
         }
         metrics.emailChange("confirmed");
         log.atInfo().addKeyValue("account.id", accountId).log("Account moved to a new address");
+    }
+
+    /**
+     * Takes an account back to the address it had before its latest move (ADR-0054), for whoever can read that address: the token
+     * went only there. No sign-in is needed, because the person doing this may have lost the account. The password is thrown away and a
+     * link to the restored address lets its owner choose a new one. Every failure is the same 400, including an old address that another
+     * account has taken since.
+     */
+    public void undoEmailChange(String token) {
+        String hash = Sha256.hex(token == null ? "" : token.strip());
+        boolean undone;
+        try {
+            undone = Boolean.TRUE.equals(tx.execute(status -> {
+                Instant now = clock.instant();
+                TravellerAccount account = accounts.findForUpdateByUndoTokenHash(hash).orElse(null);
+                if (account == null || !account.undoEmailChangeIsValidFor(hash, now)) {
+                    return false;
+                }
+                account.undoEmailChange(now);
+                String linkToken = newToken.get();
+                account.issueLink(Sha256.hex(linkToken), now);
+                account = accounts.saveAndFlush(account);   // flushing here surfaces an address another account took in the meantime
+                events.passwordLinkRequested(account.getId(), account.getEmail(), linkToken, PasswordLinkPurpose.RESET, account.getLinkExpiresAt());
+                log.atWarn().addKeyValue("account.id", account.getId()).log("Account taken back to its previous address by its owner");
+                return true;
+            }));
+        } catch (DataIntegrityViolationException addressTakenMeanwhile) {
+            undone = false;
+        }
+        if (!undone) {
+            metrics.emailChange("undo_invalid");
+            throw new PasswordLinkInvalidException();
+        }
+        metrics.emailChange("undone");
     }
 
     /**

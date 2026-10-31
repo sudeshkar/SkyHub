@@ -56,7 +56,7 @@ public class SecurityConfig {
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/cancellation").access(ownsBooking)
                         .requestMatchers(PUT, "/api/v1/pnrs/{locator}/seat-assignments").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/accounts/password-links", "/api/v1/accounts/passwords",
-                                "/api/v1/accounts/sessions").permitAll()
+                                "/api/v1/accounts/sessions", "/api/v1/accounts/email-change-reversals").permitAll()
                         .requestMatchers(GET, "/api/v1/accounts/me").hasAuthority("SCOPE_account")
                         .requestMatchers(GET, "/api/v1/accounts/me/bookings").hasAuthority("SCOPE_account")
                         .requestMatchers(DELETE, "/api/v1/accounts/me/sessions").hasAuthority("SCOPE_account")

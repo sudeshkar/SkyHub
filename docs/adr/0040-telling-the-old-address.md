@@ -1,6 +1,6 @@
 # ADR-0040: Telling the old address when an account moves
 
-**Status:** Accepted
+**Status:** Accepted. The decision that the notice holds no link was changed by ADR-0054, which adds a narrow undo link.
 **Date:** 2026-11-01
 
 ## Context

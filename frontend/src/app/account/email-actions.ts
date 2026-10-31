@@ -1,7 +1,7 @@
 "use server";
 
 import { clearAccountSession, readAccountSession } from "@/lib/account-session";
-import { confirmAccountEmailChange, requestAccountEmailChange } from "@/lib/api/booking";
+import { confirmAccountEmailChange, requestAccountEmailChange, undoAccountEmailChange } from "@/lib/api/booking";
 import { POLICIES, rateLimit } from "@/lib/rate-limit";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -82,6 +82,36 @@ export async function confirmEmailChange(_previous: ConfirmEmailState, form: For
     case "unauthorized":
       await clearAccountSession();
       return { status: "signed-out" };
+    default:
+      return { status: "error", message: UNAVAILABLE };
+  }
+}
+
+export type UndoEmailState =
+  | { status: "idle" }
+  | { status: "done" }
+  | { status: "link-invalid" }
+  | { status: "error"; message: string };
+
+/**
+ * Takes the account back with the link from the notice sent to the old address (ADR-0054). No session is needed: the link is the
+ * proof, and the person may have lost the account. Attempts are limited like sign-in, because a token is being checked. Every session
+ * of the account ended, so any cookie in this browser is dropped.
+ */
+export async function undoEmailChange(_previous: UndoEmailState, form: FormData): Promise<UndoEmailState> {
+  const token = String(form.get("token") ?? "");
+  if (token.length === 0 || token.length > MAX_TOKEN) return { status: "link-invalid" };
+
+  const decision = await rateLimit(POLICIES.accountSignIn);
+  if (!decision.allowed) return { status: "error", message: waitMessage(decision.retryAfterSeconds) };
+
+  const outcome = await undoAccountEmailChange(token);
+  switch (outcome.kind) {
+    case "undone":
+      await clearAccountSession();
+      return { status: "done" };
+    case "invalid-link":
+      return { status: "link-invalid" };
     default:
       return { status: "error", message: UNAVAILABLE };
   }

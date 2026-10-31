@@ -77,7 +77,9 @@ public class NotificationService {
     }
 
     public void emailChanged(AccountEmailChangedEvent event) {
-        deliver(event, EmailComposer.emailChanged(event));
+        // A notice made before the undo link existed has none; otherwise opened only to build the link (ADR-0046, ADR-0054).
+        String token = event.canBeUndone() ? tokens.open(event.sealedUndoToken(), event.type(), event.contactEmail()) : null;
+        deliver(event, EmailComposer.emailChanged(event, token, siteUrl));
     }
 
     public void emailChangeLink(AccountEmailChangeLinkEvent event) {

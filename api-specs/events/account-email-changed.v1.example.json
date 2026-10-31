@@ -4,5 +4,7 @@
   "version": 1,
   "occurredAt": "2026-11-01T10:30:00Z",
   "contactEmail": "priya@example.com",
-  "newEmailMasked": "p****@example.com"
+  "newEmailMasked": "p****@example.com",
+  "sealedUndoToken": "v1:hJiwXlL6LphYv5gL5VTXxWaeUa+V37kEcg1cMoSEjoOz8Ga+3m/AI1Wd5UmBD01V8XbvUHHQylc4rcXGJQaKa367qHpLsVpLkB6H6g==",
+  "undoExpiresAt": "2026-11-08T10:30:00Z"
 }

@@ -264,6 +264,29 @@ class NotificationEventsTest {
         assertThat(event.newEmailMasked()).isEqualTo("p****@example.com");
         assertThat(event.occurredAt()).isEqualTo(Instant.parse("2026-11-01T10:30:00Z"));
         assertThat(event.locator()).isNull();
+        assertThat(event.sealedUndoToken()).startsWith("v1:");
+        assertThat(event.undoExpiresAt()).isEqualTo(Instant.parse("2026-11-08T10:30:00Z"));
+    }
+
+    @Test
+    void should_still_read_an_email_changed_event_made_before_the_undo_token_existed() throws Exception {
+        String old = Files.readString(EMAIL_CHANGED).replaceAll(",\\s*\"sealedUndoToken\": \"[^\"]*\"", "").replaceAll(",\\s*\"undoExpiresAt\": \"[^\"]*\"", "");
+
+        AccountEmailChangedEvent event = EventParser.parse(old, AccountEmailChangedEvent.class);
+
+        assertThat(event.sealedUndoToken()).isNull();
+        assertThat(event.undoExpiresAt()).isNull();
+    }
+
+    @Test
+    void should_refuse_an_undo_token_without_its_expiry_or_an_expiry_without_its_token() throws Exception {
+        String notice = Files.readString(EMAIL_CHANGED);
+        for (String broken : new String[] {
+                notice.replaceAll(",\\s*\"undoExpiresAt\": \"[^\"]*\"", ""),
+                notice.replaceAll(",\\s*\"sealedUndoToken\": \"[^\"]*\"", "")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, AccountEmailChangedEvent.class));
+        }
     }
 
     @Test
@@ -282,6 +305,6 @@ class NotificationEventsTest {
     void should_never_print_the_old_address() throws Exception {
         AccountEmailChangedEvent event = EventParser.parse(Files.readString(EMAIL_CHANGED), AccountEmailChangedEvent.class);
 
-        assertThat(event.toString()).doesNotContain("priya@example.com");
+        assertThat(event.toString()).doesNotContain("priya@example.com").doesNotContain(event.sealedUndoToken());
     }
 }

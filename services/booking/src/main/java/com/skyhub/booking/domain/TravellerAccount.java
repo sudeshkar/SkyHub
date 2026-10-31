@@ -20,6 +20,8 @@ import java.time.Instant;
 public class TravellerAccount implements PasswordProtected {
 
     public static final Duration LINK_LIFETIME = Duration.ofHours(1);
+    /** How long the owner of the old address can take the account back after it was moved (ADR-0054). */
+    public static final Duration UNDO_LIFETIME = Duration.ofDays(7);
     public static final Duration LINK_RESEND_AFTER = Duration.ofMinutes(2);
     public static final int MAX_FAILED_ATTEMPTS = LoginLock.MAX_FAILED_ATTEMPTS;
     public static final Duration LOCK_DURATION = LoginLock.LOCK_DURATION;
@@ -61,6 +63,21 @@ public class TravellerAccount implements PasswordProtected {
     private Instant changeIssuedAt;
 
     private Instant changeExpiresAt;
+
+    /**
+     * What it takes to undo the latest move (ADR-0054): the address the account had before, and only the hash of the token sent to it.
+     * Replaced by the next move, spent by using it. Null when the account has not moved.
+     */
+    @Column(length = 500)
+    private ContactEmail undoEmail;
+
+    @Column(length = 64)
+    private String undoEmailIndex;
+
+    @Column(length = 64)
+    private String undoTokenHash;
+
+    private Instant undoExpiresAt;
 
     /**
      * Goes up when the credentials change, which ends every session issued before (ADR-0041): an account token carries the epoch it
@@ -159,11 +176,15 @@ public class TravellerAccount implements PasswordProtected {
      * old address, and whoever still reads that mailbox must not be able to set a password on an account that has moved on.
      * The lock state is left alone.
      */
-    public void confirmEmailChange(Instant now) {
+    public void confirmEmailChange(Instant now, String undoTokenHash) {
         if (pendingEmail == null || pendingEmailIndex == null) {
             throw new IllegalStateException("No address change is pending");
         }
         endAllSessions();   // moving the account is a change of credentials: every open session ends
+        undoEmail = email;   // the address it had, for its owner to come back to (ADR-0054)
+        undoEmailIndex = emailIndex;
+        this.undoTokenHash = undoTokenHash;
+        undoExpiresAt = now.plus(UNDO_LIFETIME);
         email = pendingEmail;
         emailIndex = pendingEmailIndex;
         pendingEmail = null;
@@ -173,6 +194,38 @@ public class TravellerAccount implements PasswordProtected {
         changeExpiresAt = null;
         linkTokenHash = null;
         linkExpiresAt = null;
+    }
+
+    public boolean undoEmailChangeIsValidFor(String tokenHash, Instant now) {
+        return undoTokenHash != null && tokenHash != null && undoTokenHash.equals(tokenHash)
+                && undoExpiresAt != null && now.isBefore(undoExpiresAt);
+    }
+
+    /**
+     * Takes the account back to the address it had before the latest move (ADR-0054). Whoever moved it may know the password, so the
+     * password is thrown away (it has to be chosen again through a link to the restored address), every session ends, every link or
+     * request that was out is stopped, and a lock is cleared. The token works once.
+     */
+    public void undoEmailChange(Instant now) {
+        if (undoEmail == null || undoEmailIndex == null) {
+            throw new IllegalStateException("There is no address change to undo");
+        }
+        email = undoEmail;
+        emailIndex = undoEmailIndex;
+        undoEmail = null;
+        undoEmailIndex = null;
+        undoTokenHash = null;
+        undoExpiresAt = null;
+        passwordHash = null;
+        pendingEmail = null;
+        pendingEmailIndex = null;
+        changeTokenHash = null;
+        changeIssuedAt = null;
+        changeExpiresAt = null;
+        linkTokenHash = null;
+        linkExpiresAt = null;
+        lock.clear();
+        endAllSessions();
     }
 
     public boolean hasEmailIndex(String index) {
@@ -210,6 +263,10 @@ public class TravellerAccount implements PasswordProtected {
 
     public Instant getLinkExpiresAt() {
         return linkExpiresAt;
+    }
+
+    public Instant getUndoExpiresAt() {
+        return undoExpiresAt;
     }
 
     public Instant getEmailChangeExpiresAt() {

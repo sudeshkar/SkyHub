@@ -226,17 +226,36 @@ class EmailComposerTest {
                 .contains("2026-11-01 11:00 UTC").contains("signed in").contains("did not ask").contains("nothing changes");
     }
 
-    @Test
-    void should_tell_the_old_address_the_account_moved_without_a_link_or_a_secret_and_say_what_to_do_if_it_was_not_them() {
-        var event = new com.skyhub.notification.domain.AccountEmailChangedEvent(UUID.randomUUID(), "account.email-changed", 1,
-                Instant.parse("2026-11-01T10:30:00Z"), "priya@example.com", "p****@example.com");
+    private static com.skyhub.notification.domain.AccountEmailChangedEvent moved(String sealedUndoToken, Instant undoExpiresAt) {
+        return new com.skyhub.notification.domain.AccountEmailChangedEvent(UUID.randomUUID(), "account.email-changed", 1,
+                Instant.parse("2026-11-01T10:30:00Z"), "priya@example.com", "p****@example.com", sealedUndoToken, undoExpiresAt);
+    }
 
-        EmailMessage message = EmailComposer.emailChanged(event);
+    @Test
+    void should_tell_the_old_address_the_account_moved_and_give_it_a_link_to_take_the_account_back() {
+        EmailMessage message = EmailComposer.emailChanged(moved("v1:sealed", Instant.parse("2026-11-08T10:30:00Z")), "und+o/tok=en",
+                "https://skyhub.example/");
 
         assertThat(message.to()).isEqualTo("priya@example.com");
         assertThat(message.subject()).isEqualTo("The email address of your SkyHub account was changed");
-        assertThat(message.body()).contains("p****@example.com").contains("2026-11-01 10:30 UTC").contains("support")
-                .contains("did not make this change").contains("nothing you need to do");
-        assertThat(message.body()).doesNotContain("http").doesNotContain("token");   // no way to act through the email itself
+        assertThat(message.body()).contains("p****@example.com").contains("2026-11-01 10:30 UTC").contains("nothing you need to do")
+                .contains("did not make this change")
+                .contains("https://skyhub.example/account/undo-email-change?token=und%2Bo%2Ftok%3Den")
+                .contains("2026-11-08 10:30 UTC").contains("choose a new password").contains("support");
+    }
+
+    @Test
+    void should_not_put_the_sealed_token_in_the_email_only_the_opened_one_in_the_link() {
+        EmailMessage message = EmailComposer.emailChanged(moved("v1:sealed", Instant.parse("2026-11-08T10:30:00Z")), "plain", "https://skyhub.example");
+
+        assertThat(message.body()).doesNotContain("v1:sealed").contains("undo-email-change?token=plain");
+    }
+
+    @Test
+    void should_still_tell_the_old_address_with_no_link_for_a_notice_made_before_the_link_existed() {
+        EmailMessage message = EmailComposer.emailChanged(moved(null, null), null, "https://skyhub.example");
+
+        assertThat(message.body()).contains("p****@example.com").contains("did not make this change").contains("support");
+        assertThat(message.body()).doesNotContain("http").doesNotContain("undo");
     }
 }

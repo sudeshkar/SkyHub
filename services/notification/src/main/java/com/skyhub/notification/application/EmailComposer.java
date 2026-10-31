@@ -148,20 +148,36 @@ public final class EmailComposer {
     }
 
     /**
-     * Goes to the OLD address when an account moves (ADR-0040). It informs and holds no link: a notice must not be a second way to
-     * change an account. It names the new address only masked.
+     * Goes to the OLD address when an account moves (ADR-0040). It names the new address only masked. With {@code undoToken} (ADR-0054)
+     * it holds a link that takes the account back; that link can only undo this move, never make one. A notice made before the link
+     * existed passes no token and holds no link.
      */
-    public static EmailMessage emailChanged(AccountEmailChangedEvent event) {
+    public static EmailMessage emailChanged(AccountEmailChangedEvent event, String undoToken, String siteUrl) {
+        String undo = undoToken == null ? "" : """
+
+                If you did not make this change, take your account back by opening this link:
+
+                %s
+
+                It works once and stops working at %s. It puts your old address back on the account, signs everyone out and
+                removes the password, so whoever made the change can no longer use it. We then send you a link to
+                choose a new password. Bookings made with this address will be listed in the account again.
+                """.formatted(undoLink(undoToken, siteUrl), UTC_TIME.format(event.undoExpiresAt()));
         return new EmailMessage(event.contactEmail(), "The email address of your SkyHub account was changed", """
                 The email address of the SkyHub account that used this address was changed to %s at %s.
 
                 From now on that account is signed in to with the new address, and bookings made with the new address are listed in it.
 
                 If you made this change, there is nothing you need to do.
-
+                %s
                 If you did not make this change, someone who knew your password and could read the new mailbox did. Tell SkyHub
                 support straight away.
-                """.formatted(event.newEmailMasked(), UTC_TIME.format(event.occurredAt())));
+                """.formatted(event.newEmailMasked(), UTC_TIME.format(event.occurredAt()), undo));
+    }
+
+    private static String undoLink(String token, String siteUrl) {
+        String base = siteUrl.endsWith("/") ? siteUrl.substring(0, siteUrl.length() - 1) : siteUrl;
+        return base + "/account/undo-email-change?token=" + java.net.URLEncoder.encode(token, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     public static EmailMessage refundCompleted(BookingRefundCompletedEvent event) {
