@@ -130,7 +130,7 @@ public class AccountService {
                 metrics.login("success");
                 TravellerAccount account = attempt.account();
                 log.atInfo().addKeyValue("account.id", account.getId()).log("Traveller signed in");
-                return new AccountSession(tokens.issue(account.getId()), account.getEmail().value());
+                return new AccountSession(tokens.issue(account.getId(), account.getSessionEpoch()), account.getEmail().value());
             }
             case LOCKED -> {
                 metrics.login("locked");

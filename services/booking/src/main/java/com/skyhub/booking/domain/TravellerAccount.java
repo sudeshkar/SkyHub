@@ -61,6 +61,13 @@ public class TravellerAccount {
 
     private Instant changeExpiresAt;
 
+    /**
+     * Goes up when the credentials change, which ends every session issued before (ADR-0041): an account token carries the epoch it
+     * was issued under and is valid only while it is still this one.
+     */
+    @Column(nullable = false)
+    private int sessionEpoch;
+
     @Column(nullable = false)
     private int failedAttempts;
 
@@ -111,6 +118,7 @@ public class TravellerAccount {
         linkExpiresAt = null;
         failedAttempts = 0;
         lockedUntil = null;
+        sessionEpoch++;   // choosing a password is a change of credentials: every open session ends
     }
 
     public boolean isLockedAt(Instant now) {
@@ -162,6 +170,7 @@ public class TravellerAccount {
         if (pendingEmail == null || pendingEmailIndex == null) {
             throw new IllegalStateException("No address change is pending");
         }
+        sessionEpoch++;   // moving the account is a change of credentials: every open session ends
         email = pendingEmail;
         emailIndex = pendingEmailIndex;
         pendingEmail = null;
@@ -183,6 +192,10 @@ public class TravellerAccount {
 
     public ContactEmail getEmail() {
         return email;
+    }
+
+    public int getSessionEpoch() {
+        return sessionEpoch;
     }
 
     public String getEmailIndex() {

@@ -15,7 +15,8 @@ export function SetPasswordForm({ token }: { token: string }) {
       <section role="status" className="max-w-md border-l-4 border-copper bg-white px-4 py-3">
         <p className="font-semibold">Your password is saved.</p>
         <p className="mt-2 text-sm">
-          <Link href="/account" className="underline">Sign in</Link> with your email address and the new password.
+          <Link href="/account" className="underline">Sign in</Link> with your email address and the new password. Everyone who was
+          signed in to this account has been signed out everywhere, including you if you were.
         </p>
       </section>
     );

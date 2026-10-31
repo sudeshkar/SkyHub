@@ -61,7 +61,7 @@ class AccountEmailChangeTest {
 
     private AccountService at(Instant now) {
         return new AccountService(accounts, email -> "idx:" + email.strip().toLowerCase(), passwords,
-                id -> new AccountToken("token-" + id, now.plus(Duration.ofMinutes(30))), events, Clock.fixed(now, ZoneOffset.UTC),
+                (id, epoch) -> new AccountToken("token-" + id, now.plus(Duration.ofMinutes(30))), events, Clock.fixed(now, ZoneOffset.UTC),
                 new AccountMetrics(registry), TransactionOperations.withoutTransaction(), () -> "raw-token");
     }
 
@@ -242,5 +242,26 @@ class AccountEmailChangeTest {
         service.requestEmailChange(7L, "priya.new@example.com", PASSWORD);
 
         verify(events, never()).emailChanged(any(Long.class), any(ContactEmail.class), any(ContactEmail.class));
+    }
+
+    @Test
+    void should_end_every_open_session_when_the_account_moves_and_not_when_it_merely_asks() {
+        int before = account.getSessionEpoch();
+
+        service.requestEmailChange(7L, "priya.new@example.com", PASSWORD);
+        assertThat(account.getSessionEpoch()).isEqualTo(before);
+
+        service.confirmEmailChange(7L, "raw-token");
+        assertThat(account.getSessionEpoch()).isEqualTo(before + 1);
+    }
+
+    @Test
+    void should_keep_every_session_when_the_change_is_refused() {
+        service.requestEmailChange(7L, "priya.new@example.com", PASSWORD);
+        int before = account.getSessionEpoch();
+
+        assertThatExceptionOfType(PasswordLinkInvalidException.class).isThrownBy(() -> service.confirmEmailChange(7L, "wrong"));
+
+        assertThat(account.getSessionEpoch()).isEqualTo(before);
     }
 }

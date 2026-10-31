@@ -31,7 +31,7 @@ public final class JwtAccountTokenIssuer implements AccountTokenIssuer {
     }
 
     @Override
-    public AccountToken issue(long accountId) {
+    public AccountToken issue(long accountId, int epoch) {
         Instant issuedAt = clock.instant();
         Instant expiresAt = issuedAt.plus(timeToLive);
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -41,6 +41,7 @@ public final class JwtAccountTokenIssuer implements AccountTokenIssuer {
                 .expiresAt(expiresAt)
                 .id(UUID.randomUUID().toString())
                 .claim("scope", SCOPE)
+                .claim("epoch", epoch)
                 .build();
         String value = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
         return new AccountToken(value, expiresAt);

@@ -38,6 +38,15 @@ describe("SetPasswordForm", () => {
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/account");
   });
 
+  it("says that other sessions on the account have ended, so a reset after a worry is known to have worked", async () => {
+    vi.mocked(setPassword).mockResolvedValue({ status: "done" });
+    render(<SetPasswordForm token="abc123" />);
+
+    submit();
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/signed out everywhere/i);
+  });
+
   it("offers a new link when this one has stopped working", async () => {
     vi.mocked(setPassword).mockResolvedValue({ status: "link-expired" });
     render(<SetPasswordForm token="abc123" />);

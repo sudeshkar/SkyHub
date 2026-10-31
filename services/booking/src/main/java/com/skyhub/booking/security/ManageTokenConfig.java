@@ -1,6 +1,8 @@
 package com.skyhub.booking.security;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.skyhub.booking.application.AccountMetrics;
+import com.skyhub.booking.application.AccountSessions;
 import com.skyhub.booking.application.AccountTokenIssuer;
 import com.skyhub.booking.application.ManageTokenIssuer;
 import com.skyhub.booking.application.StaffTokenIssuer;
@@ -13,6 +15,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -52,10 +57,15 @@ public class ManageTokenConfig {
     }
 
     static JwtDecoder decoder(SecretKey key, Clock clock) {
+        return decoder(key, clock, jwt -> OAuth2TokenValidatorResult.success());
+    }
+
+    /** {@code extra} runs after the signature, expiry and issuer checks: here, whether an account session was ended (ADR-0041). */
+    static JwtDecoder decoder(SecretKey key, Clock clock, OAuth2TokenValidator<Jwt> extra) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
         JwtTimestampValidator timestamps = new JwtTimestampValidator(CLOCK_SKEW);
         timestamps.setClock(clock);
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(timestamps, new JwtIssuerValidator(ISSUER)));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(timestamps, new JwtIssuerValidator(ISSUER), extra));
         return decoder;
     }
 
@@ -70,8 +80,8 @@ public class ManageTokenConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey manageTokenKey, Clock clock) {
-        return decoder(manageTokenKey, clock);
+    JwtDecoder jwtDecoder(SecretKey manageTokenKey, Clock clock, AccountSessions sessions, AccountMetrics metrics) {
+        return decoder(manageTokenKey, clock, new RevokedSessionValidator(sessions, metrics));
     }
 
     @Bean

@@ -44,6 +44,7 @@ class AccountServiceTest {
         }
     };
     private AccountService service;
+    private int issuedEpoch = -1;
 
     @BeforeEach
     void setUp() {
@@ -60,7 +61,10 @@ class AccountServiceTest {
 
     private AccountService at(Instant now) {
         return new AccountService(accounts, email -> "idx:" + email.strip().toLowerCase(), passwords,
-                id -> new AccountToken("token-" + id, now.plus(Duration.ofMinutes(30))), events, Clock.fixed(now, ZoneOffset.UTC),
+                (id, epoch) -> {
+                    issuedEpoch = epoch;
+                    return new AccountToken("token-" + id, now.plus(Duration.ofMinutes(30)));
+                }, events, Clock.fixed(now, ZoneOffset.UTC),
                 new AccountMetrics(registry), TransactionOperations.withoutTransaction(), () -> "raw-token");
     }
 
@@ -217,5 +221,30 @@ class AccountServiceTest {
 
     private static long anyLong() {
         return org.mockito.ArgumentMatchers.anyLong();
+    }
+
+    // ---- sessions (ADR-0041) --------------------------------------------------------------------------------------------
+
+    @Test
+    void should_issue_the_token_under_the_epoch_the_account_has_now() {
+        TravellerAccount account = active("correct horse battery");
+        ReflectionTestUtils.setField(account, "sessionEpoch", 4);
+        when(accounts.findForUpdateByEmailIndex("idx:priya@example.com")).thenReturn(Optional.of(account));
+
+        service.login("priya@example.com", "correct horse battery");
+
+        assertThat(issuedEpoch).isEqualTo(4);
+    }
+
+    @Test
+    void should_end_every_open_session_when_a_password_is_chosen_with_a_link() {
+        TravellerAccount account = TravellerAccount.unverified(new ContactEmail("priya@example.com"), "idx", NOW.minusSeconds(60));
+        account.issueLink(Sha256.hex("raw-token"), NOW.minusSeconds(60));
+        when(accounts.findForUpdateByLinkTokenHash(Sha256.hex("raw-token"))).thenReturn(Optional.of(account));
+        int before = account.getSessionEpoch();
+
+        service.setPassword("raw-token", "a long enough passphrase");
+
+        assertThat(account.getSessionEpoch()).isEqualTo(before + 1);
     }
 }

@@ -32,6 +32,11 @@ public class AccountMetrics {
         count("skyhub.account.passwords", "Passwords chosen with an emailed link, by outcome", outcome);
     }
 
+    /** {@code revoked}: an account token refused because the account's credentials changed after it was issued (ADR-0041). */
+    public void session(String outcome) {
+        count("skyhub.account.sessions", "Account sessions refused, by outcome", outcome);
+    }
+
     /** requested, throttled, taken (the new address has an account), password_refused, confirmed, invalid_link (ADR-0039). */
     public void emailChange(String outcome) {
         count("skyhub.account.email.changes", "Changes of an account's address, by outcome", outcome);
