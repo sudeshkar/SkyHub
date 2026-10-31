@@ -257,7 +257,7 @@ class MyBookingsIntegrationTest {
 
         assertThat(all).containsExactlyInAnyOrder(longGone, yesterday, leavesToday, nextMonth, cancelledFuture);
         assertThat(upcoming).containsExactly(leavesToday, nextMonth);   // a flight today counts until the day ends; soonest first (ADR-0044)
-        assertThat(past).containsExactlyInAnyOrder(longGone, yesterday, cancelledFuture);   // cancelled bookings are not upcoming
+        assertThat(past).containsExactly(cancelledFuture, yesterday, longGone);   // cancelled bookings are not upcoming; the last flight first (ADR-0051)
         assertThat(locators(bearer, null)).isEqualTo(all);   // no filter is all bookings
     }
 
@@ -289,14 +289,14 @@ class MyBookingsIntegrationTest {
         String index = cipher.blindIndex(email);
 
         List<String> seen = new java.util.ArrayList<>();
-        com.skyhub.booking.application.BookingCursor after = null;
+        com.skyhub.booking.application.PastCursor after = null;
         while (true) {
-            var page = byAddress.newestAfter(index, com.skyhub.booking.application.BookingFilter.PAST, today, after, 3);   // pages of two
+            var page = byAddress.pastMostRecent(index, today, after, 3);   // pages of two
             page.stream().limit(2).forEach(b -> seen.add(b.locator()));
             if (page.size() <= 2) {
                 break;
             }
-            after = new com.skyhub.booking.application.BookingCursor(page.get(1).createdAt(), page.get(1).locator());
+            after = new com.skyhub.booking.application.PastCursor(page.get(1).segments().getLast().departureDate(), page.get(1).locator());
         }
 
         assertThat(seen).hasSize(3).doesNotHaveDuplicates();
@@ -385,6 +385,88 @@ class MyBookingsIntegrationTest {
         var dates = seen.stream().map(l -> jdbc.queryForObject("SELECT min(departure_date) FROM pnr_segment s JOIN pnr p ON p.id = s.pnr_id WHERE p.locator = ?",
                 java.sql.Date.class, l)).toList();
         assertThat(dates).isSorted();
+    }
+
+    @Test
+    void should_list_past_trips_most_recently_flown_first_whatever_order_they_were_booked_in() throws Exception {
+        String email = "recent.first@example.com";
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        String longAgo = book(email, today.minusDays(200).toString(), "19A");    // booked first, flew first
+        String lastWeek = book(email, today.minusDays(7).toString(), "19B");
+        String lastYearButBookedLast = book(email, today.minusDays(60).toString(), "19C");
+        String bearer = signedIn(email);
+
+        assertThat(locators(bearer, "past")).containsExactly(lastWeek, lastYearButBookedLast, longAgo);
+        assertThat(locators(bearer, "all")).containsExactly(lastYearButBookedLast, lastWeek, longAgo);   // all stays newest booked first
+    }
+
+    @Test
+    void should_position_a_past_trip_by_the_last_flight_on_it_and_break_ties_by_reference() throws Exception {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        String email = "recent.twoflights@example.com";
+        // An outbound 40 days ago and a return 30 days ago has been flown since the return: it sits after a trip flown 20 days ago.
+        String body = """
+                {"paymentToken":"tok_visa","contactEmail":"%s",
+                 "segments":[{"flightNumber":"SK501","departureDate":"%s"},{"flightNumber":"SK901","departureDate":"%s"}],
+                 "passengers":[{"firstName":"Priya","lastName":"Perera","seats":["20A","20A"]}]}""".formatted(email, today.minusDays(40), today.minusDays(30));
+        String there = JsonPath.read(mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.locator");
+        String twenty = book(email, today.minusDays(20).toString(), "20B");
+        String tieA = book(email, today.minusDays(50).toString(), "20C");
+        String tieB = book(email, today.minusDays(50).toString(), "20D");
+        String bearer = signedIn(email);
+
+        List<String> past = locators(bearer, "past");
+
+        assertThat(past.subList(0, 2)).containsExactly(twenty, there);
+        assertThat(past.subList(2, 4)).containsExactly(tieA.compareTo(tieB) > 0 ? tieA : tieB, tieA.compareTo(tieB) > 0 ? tieB : tieA);   // ties: reference, high to low
+    }
+
+    @Test
+    void should_walk_the_past_list_in_pages_seeing_each_trip_once_even_with_the_same_last_date() throws Exception {
+        String email = "recent.pages@example.com";
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        List<String> made = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            made.add(book(email, today.minusDays(70 + i / 2).toString(), "21" + "ABCDE".charAt(i)));   // two share a date at each step
+        }
+        String index = cipher.blindIndex(email);
+
+        List<String> seen = new java.util.ArrayList<>();
+        com.skyhub.booking.application.PastCursor after = null;
+        int pages = 0;
+        while (true) {
+            var page = byAddress.pastMostRecent(index, today, after, 3);
+            page.stream().limit(2).forEach(b -> seen.add(b.locator()));
+            pages++;
+            if (page.size() <= 2) {
+                break;
+            }
+            var last = page.get(1);
+            after = new com.skyhub.booking.application.PastCursor(last.segments().stream().map(s -> s.departureDate()).max(java.util.Comparator.naturalOrder()).orElseThrow(),
+                    last.locator());
+        }
+
+        assertThat(pages).isEqualTo(3);
+        assertThat(seen).hasSize(5).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(made);
+        var dates = seen.stream().map(l -> jdbc.queryForObject("SELECT max(departure_date) FROM pnr_segment s JOIN pnr p ON p.id = s.pnr_id WHERE p.locator = ?",
+                java.sql.Date.class, l)).toList();
+        assertThat(dates).isSortedAccordingTo(java.util.Comparator.reverseOrder());
+    }
+
+    @Test
+    void should_refuse_a_past_cursor_outside_the_past_list_over_http() throws Exception {
+        String bearer = signedIn("recent.mixup@example.com");
+        String past = new com.skyhub.booking.application.PastCursor(java.time.LocalDate.now().minusDays(5), "ABC234").encode();
+        String newest = new com.skyhub.booking.application.BookingCursor(java.time.Instant.now(), "ABC234").encode();
+
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("cursor", past).header("Authorization", bearer)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("when", "upcoming").param("cursor", past).header("Authorization", bearer))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("when", "past").param("cursor", newest).header("Authorization", bearer))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("when", "past").param("cursor", past).header("Authorization", bearer))
+                .andExpect(status().isOk());
     }
 
     @Test

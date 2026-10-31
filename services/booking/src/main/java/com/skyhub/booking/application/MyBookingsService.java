@@ -54,6 +54,9 @@ public class MyBookingsService {
         if (filter == BookingFilter.UPCOMING) {
             return listUpcoming(accountId, UpcomingCursor.decodeOrNull(cursor), today);   // a cursor of the other order is refused here
         }
+        if (filter == BookingFilter.PAST) {
+            return listPast(accountId, PastCursor.decodeOrNull(cursor), today);
+        }
         BookingCursor after = BookingCursor.decodeOrNull(cursor);   // refused before anything is read
         // One more than the limit is how we know there are more, without counting them all.
         List<BookingSummary> found = bookings.newestAfter(indexOf(accountId), filter, today, after, LIMIT + 1);
@@ -79,6 +82,20 @@ public class MyBookingsService {
         LocalDate nextFlight = last.segments().stream().map(PnrView.SegmentView::departureDate).filter(d -> !d.isBefore(today))
                 .min(Comparator.naturalOrder()).orElseThrow();
         return new BookingList(page, new UpcomingCursor(nextFlight, last.locator()).encode());
+    }
+
+    /** Past trips, the one flown most recently first (ADR-0051): its own order and its own kind of cursor. */
+    private BookingList listPast(long accountId, PastCursor after, LocalDate today) {
+        List<BookingSummary> found = bookings.pastMostRecent(indexOf(accountId), today, after, LIMIT + 1);
+        metrics.listed();
+        if (found.size() <= LIMIT) {
+            return new BookingList(found, null);
+        }
+        List<BookingSummary> page = found.subList(0, LIMIT);
+        BookingSummary last = page.getLast();
+        // The last flight on the booking: the value the query ordered by.
+        LocalDate lastFlight = last.segments().stream().map(PnrView.SegmentView::departureDate).max(Comparator.naturalOrder()).orElseThrow();
+        return new BookingList(page, new PastCursor(lastFlight, last.locator()).encode());
     }
 
     /** Someone else's booking and a reference that does not exist are indistinguishable to the caller. */

@@ -742,8 +742,9 @@ paths:
         cursor that this service did not make is a 400. `when` narrows the list (ADR-0042) without changing its order or its
         cursor: `upcoming` is a confirmed booking with a flight today or later (UTC), `past` is every other booking,
         including cancelled ones, and `all` (the default) is both. **`upcoming` is listed soonest flight first** (ADR-0044), by
-        the date of each booking's next flight; `all` and `past` are newest booked first. The two orders use different kinds of
-        cursor, so a cursor from one is a 400 for the other.
+        the date of each booking's next flight; **`past` is listed by the most recently flown first** (ADR-0051), by the date of
+        the last flight on each booking (a cancelled booking is positioned by the flights it would have had); `all` is newest
+        booked first. The three orders use different kinds of cursor, so a cursor from one is a 400 for the others.
       security:
         - accountToken: []
       parameters:

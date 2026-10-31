@@ -19,7 +19,8 @@ public interface BookingsByAddress {
 
     /**
      * The same, narrowed by {@code filter} (ADR-0042), where "upcoming" means a confirmed booking with a flight on or after {@code today}.
-     * The order and the cursor are unchanged. The cost is bounded by the traveller's own bookings, never by the system's.
+     * The order and the cursor are unchanged. {@code UPCOMING} and {@code PAST} have their own orders and are read with
+     * {@link #upcomingSoonest} and {@link #pastMostRecent}. The cost is bounded by the traveller's own bookings, never by the system's.
      */
     List<BookingSummary> newestAfter(String emailIndex, BookingFilter filter, java.time.LocalDate today, BookingCursor after, int limit);
 
@@ -29,6 +30,13 @@ public interface BookingsByAddress {
      * ties go to the reference. The cost grows with this traveller's own upcoming bookings, never with the system's.
      */
     List<BookingSummary> upcomingSoonest(String emailIndex, java.time.LocalDate today, UpcomingCursor after, int limit);
+
+    /**
+     * Every booking that is not upcoming (cancelled ones included), the one whose last flight was most recent first (ADR-0051),
+     * starting strictly after {@code after} (the first page when null). A booking is positioned by the date of its last flight; ties go
+     * to the higher reference. The cost grows with this traveller's own bookings, never with the system's.
+     */
+    List<BookingSummary> pastMostRecent(String emailIndex, java.time.LocalDate today, PastCursor after, int limit);
 
     /** Whether this booking was made with this address. False for an unknown reference. */
     boolean owns(String emailIndex, String locator);

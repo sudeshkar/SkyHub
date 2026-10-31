@@ -54,3 +54,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0048](0048-one-password-rule-and-the-72-byte-limit.md) | One password rule, and the 72-byte limit | Accepted |
 | [0049](0049-proving-the-real-chain-live.md) | Proving the real chain live (account and booking journeys) | Accepted |
 | [0050](0050-html-email-beside-the-text.md) | HTML email beside the plain text | Accepted |
+| [0051](0051-past-bookings-most-recently-flown-first.md) | Past bookings, most recently flown first | Accepted |

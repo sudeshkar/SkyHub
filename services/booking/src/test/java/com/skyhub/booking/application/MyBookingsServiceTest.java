@@ -154,7 +154,7 @@ class MyBookingsServiceTest {
     @Test
     void should_ask_for_the_filter_it_was_given_measured_from_todays_utc_date() {
         when(bookings.upcomingSoonest(INDEX, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("ABC234")));
-        when(bookings.newestAfter(INDEX, BookingFilter.PAST, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("DEF345")));
+        when(bookings.pastMostRecent(INDEX, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("DEF345")));
 
         assertThat(service.list(7L, null, "upcoming").bookings()).extracting(BookingSummary::locator).containsExactly("ABC234");
         assertThat(service.list(7L, null, "PAST").bookings()).extracting(BookingSummary::locator).containsExactly("DEF345");
@@ -163,9 +163,50 @@ class MyBookingsServiceTest {
     @Test
     void should_page_within_a_filter() {
         BookingCursor after = new BookingCursor(NOW.minusSeconds(60), "ABC234");
-        when(bookings.newestAfter(INDEX, BookingFilter.PAST, TODAY, after, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("DEF345")));
+        when(bookings.newestAfter(INDEX, BookingFilter.ALL, TODAY, after, MyBookingsService.LIMIT + 1)).thenReturn(List.of(summary("DEF345")));
 
-        assertThat(service.list(7L, after.encode(), "past").bookings()).extracting(BookingSummary::locator).containsExactly("DEF345");
+        assertThat(service.list(7L, after.encode(), "all").bookings()).extracting(BookingSummary::locator).containsExactly("DEF345");
+    }
+
+    // ---- past, most recently flown first (ADR-0051) -----------------------------------------------------------------------
+
+    @Test
+    void should_page_the_past_list_from_the_position_it_was_given_in_its_own_order() {
+        PastCursor after = new PastCursor(LocalDate.parse("2026-09-01"), "ABC234");
+        when(bookings.pastMostRecent(INDEX, TODAY, after, MyBookingsService.LIMIT + 1)).thenReturn(List.of(flyingOn("DEF345", "2026-08-05")));
+
+        var list = service.list(7L, after.encode(), "past");
+
+        assertThat(list.bookings()).extracting(BookingSummary::locator).containsExactly("DEF345");
+        assertThat(list.nextCursor()).isNull();
+    }
+
+    @Test
+    void should_start_the_next_past_page_after_the_last_flight_of_the_last_booking_shown() {
+        List<BookingSummary> found = new ArrayList<>(IntStream.rangeClosed(1, MyBookingsService.LIMIT + 1)
+                .mapToObj(i -> flyingOn("P%05d".formatted(i), "2026-06-01", "2026-09-0" + (1 + i % 9))).toList());   // the return flight is the last one flown
+        when(bookings.pastMostRecent(INDEX, TODAY, null, MyBookingsService.LIMIT + 1)).thenReturn(found);
+
+        var list = service.list(7L, null, "past");
+
+        assertThat(list.bookings()).hasSize(MyBookingsService.LIMIT);
+        BookingSummary last = list.bookings().getLast();
+        PastCursor next = PastCursor.decode(list.nextCursor());
+        assertThat(next.locator()).isEqualTo(last.locator());
+        assertThat(next.lastFlight()).isEqualTo(last.segments().get(1).departureDate());   // the later of its flights, the value the query ordered by
+    }
+
+    @Test
+    void should_refuse_a_past_cursor_anywhere_but_the_past_list_and_the_other_cursors_there() {
+        String past = new PastCursor(LocalDate.parse("2026-09-01"), "ABC234").encode();
+        String newest = new BookingCursor(NOW, "ABC234").encode();
+        String soonest = new UpcomingCursor(LocalDate.parse("2026-12-01"), "ABC234").encode();
+
+        assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class).isThrownBy(() -> service.list(7L, past, null));
+        assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class).isThrownBy(() -> service.list(7L, past, "upcoming"));
+        assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class).isThrownBy(() -> service.list(7L, newest, "past"));
+        assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class).isThrownBy(() -> service.list(7L, soonest, "past"));
+        org.mockito.Mockito.verifyNoInteractions(bookings);
     }
 
     @Test
@@ -215,7 +256,6 @@ class MyBookingsServiceTest {
 
         assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class).isThrownBy(() -> service.list(7L, newestFirst, "upcoming"));
         assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class).isThrownBy(() -> service.list(7L, soonestFirst, null));
-        assertThatExceptionOfType(com.skyhub.booking.domain.InvalidBookingException.class).isThrownBy(() -> service.list(7L, soonestFirst, "past"));
         org.mockito.Mockito.verifyNoInteractions(bookings);
     }
 }
