@@ -1,9 +1,11 @@
 package com.skyhub.booking.persistence;
 
+import com.skyhub.booking.application.BookingCursor;
 import com.skyhub.booking.application.BookingsByAddress;
 import com.skyhub.booking.application.view.BookingSummary;
 import com.skyhub.booking.application.view.PnrView.SegmentView;
 import com.skyhub.booking.domain.PnrStatus;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,11 +32,16 @@ class JdbcBookingsByAddress implements BookingsByAddress {
     }
 
     @Override
-    public List<BookingSummary> newest(String emailIndex, int limit) {
-        List<Row> rows = jdbc.query("SELECT id, locator, status, created_at FROM pnr WHERE contact_email_index = ? "
-                        + "ORDER BY created_at DESC, id DESC LIMIT ?",
+    public List<BookingSummary> newestAfter(String emailIndex, BookingCursor after, int limit) {
+        // Keyset paging (ADR-0038): the page starts at a position in the index, so a page far back costs the same as the first.
+        // The reference breaks ties between bookings made in the same instant, so none is skipped or shown twice.
+        String start = after == null ? "" : "AND (created_at, locator) < (?, ?) ";
+        Object[] arguments = after == null ? new Object[] {emailIndex, limit}
+                : new Object[] {emailIndex, Timestamp.from(after.createdAt()), after.locator(), limit};
+        List<Row> rows = jdbc.query("SELECT id, locator, status, created_at FROM pnr WHERE contact_email_index = ? " + start
+                        + "ORDER BY created_at DESC, locator DESC LIMIT ?",
                 (rs, n) -> new Row(rs.getLong(1), rs.getString(2), PnrStatus.valueOf(rs.getString(3)),
-                        rs.getTimestamp(4).toInstant()), emailIndex, limit);
+                        rs.getTimestamp(4).toInstant()), arguments);
         if (rows.isEmpty()) {
             return List.of();
         }

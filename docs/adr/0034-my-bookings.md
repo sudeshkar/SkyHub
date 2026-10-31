@@ -34,6 +34,6 @@ Accounts exist (ADR-0033) but show nothing. A guest finds one booking by its ref
 - Negative: **the index is a keyed hash of the address, so the same address always gives the same value.** Anyone who can read the database can see which bookings share an address, though not what it is, and cannot compute it without the key. That is the trade for being able to look up at all.
 - Negative: **a booking made for someone else with your address is shown to you.** The address on the booking, not the passenger, decides. That matches how the confirmation email is already sent.
 - Negative: a traveller cannot yet change their address, so their bookings stay with the old one. Saved passengers are also later.
-- Negative: only the newest 50 are listed; paging is not built.
+- Negative: only the newest 50 are listed; paging is not built. (Added later: ADR-0038.)
 - Negative: the address is matched ignoring case but not dots or `+tags` (as in ADR-0033).
 - Negative: the backfill decrypts each old address once, on the first start after the upgrade. It is bounded by batches, but a very large table makes that start slower.

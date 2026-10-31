@@ -17,7 +17,9 @@ const PROBLEMS: Record<string, string> = {
   wait: "Too many attempts. Please wait a minute and try again.",
 };
 
-export default function AccountPage({ searchParams }: { searchParams: Promise<{ problem?: string }> }) {
+type AccountSearchParams = Promise<{ problem?: string; cursor?: string }>;
+
+export default function AccountPage({ searchParams }: { searchParams: AccountSearchParams }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="font-display text-3xl">Your account</h1>
@@ -29,7 +31,7 @@ export default function AccountPage({ searchParams }: { searchParams: Promise<{ 
 }
 
 /** Reads the session cookie, so it must render per request (hence the Suspense boundary above). */
-async function AccountContent({ searchParams }: { searchParams: Promise<{ problem?: string }> }) {
+async function AccountContent({ searchParams }: { searchParams: AccountSearchParams }) {
   const session = await readAccountSession();
   if (!session) {
     return (
@@ -61,7 +63,7 @@ async function AccountContent({ searchParams }: { searchParams: Promise<{ proble
           </button>
         </form>
       </div>
-      <MyBookingsSection token={session.token} problem={(await searchParams).problem} />
+      <MyBookingsSection token={session.token} {...(await searchParams)} />
       <p className="mt-8 text-sm text-muted">
         Booked with a different address? Use <Link href="/manage" className="underline">Manage booking</Link> with its reference and your last name.
       </p>
@@ -69,14 +71,18 @@ async function AccountContent({ searchParams }: { searchParams: Promise<{ proble
   );
 }
 
-async function MyBookingsSection({ token, problem }: { token: string; problem: string | undefined }) {
-  const result = await listMyBookings(token);
+async function MyBookingsSection({ token, problem, cursor }: { token: string; problem?: string; cursor?: string }) {
+  const result = await listMyBookings(token, cursor);
   return (
     <section aria-labelledby="my-bookings">
       <h2 id="my-bookings" className="font-display text-xl">Your bookings</h2>
       {problem && PROBLEMS[problem] ? <p role="alert" className="mt-2 text-sm text-danger">{PROBLEMS[problem]}</p> : null}
       {result.kind === "bookings" ? (
-        <MyBookings bookings={result.bookings} truncated={result.truncated} />
+        <MyBookings bookings={result.bookings} nextCursor={result.nextCursor} firstPage={!cursor} />
+      ) : result.kind === "bad-cursor" ? (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          That page of bookings could not be found. <Link href="/account" className="underline">Newest bookings</Link>
+        </p>
       ) : (
         <p role="alert" className="mt-2 text-sm text-danger">
           {result.kind === "unauthorized" ? "Your session has ended. Please sign in again." : "Your bookings could not be loaded right now. Please try again."}

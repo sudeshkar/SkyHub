@@ -59,19 +59,46 @@ class MyBookingsControllerTest {
 
     @Test
     void should_list_the_accounts_bookings_without_names_seats_or_addresses_and_never_cache_them() throws Exception {
-        when(myBookings.list(7L)).thenReturn(new BookingList(List.of(new BookingSummary("ABC234", PnrStatus.CONFIRMED,
-                List.of(new PnrView.SegmentView("SK001", LocalDate.parse("2026-12-01"))), 2, CREATED)), true));
+        when(myBookings.list(7L, null)).thenReturn(new BookingList(List.of(new BookingSummary("ABC234", PnrStatus.CONFIRMED,
+                List.of(new PnrView.SegmentView("SK001", LocalDate.parse("2026-12-01"))), 2, CREATED)), "next-page-cursor"));
 
         mvc.perform(get("/api/v1/accounts/me/bookings").header("Authorization", account()))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.truncated").value(true))
+                .andExpect(jsonPath("$.nextCursor").value("next-page-cursor"))
                 .andExpect(jsonPath("$.bookings[0].locator").value("ABC234"))
                 .andExpect(jsonPath("$.bookings[0].status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.bookings[0].segments[0].flightNumber").value("SK001"))
                 .andExpect(jsonPath("$.bookings[0].passengerCount").value(2))
                 .andExpect(jsonPath("$.bookings[0].passengers").doesNotExist())
                 .andExpect(jsonPath("$.bookings[0].contactEmail").doesNotExist());
+    }
+
+    @Test
+    void should_pass_the_cursor_on_and_say_there_is_no_next_page_on_the_last_one() throws Exception {
+        when(myBookings.list(7L, "the-cursor")).thenReturn(new BookingList(List.of(), null));
+
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("cursor", "the-cursor").header("Authorization", account()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.truncated").value(false))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
+    }
+
+    @Test
+    void should_answer_400_for_a_cursor_the_service_did_not_make() throws Exception {
+        when(myBookings.list(7L, "forged")).thenThrow(new com.skyhub.booking.domain.InvalidBookingException("That page of bookings is not valid"));
+
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("cursor", "forged").header("Authorization", account()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("That page of bookings is not valid"));
+    }
+
+    @Test
+    void should_refuse_an_absurdly_long_cursor_before_the_service_is_asked() throws Exception {
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("cursor", "x".repeat(500)).header("Authorization", account()))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(myBookings);
     }
 
     @Test
@@ -99,7 +126,7 @@ class MyBookingsControllerTest {
 
     @Test
     void should_refuse_a_token_for_an_account_that_no_longer_exists() throws Exception {
-        when(myBookings.list(7L)).thenThrow(new AccountLoginFailedException());
+        when(myBookings.list(7L, null)).thenThrow(new AccountLoginFailedException());
 
         mvc.perform(get("/api/v1/accounts/me/bookings").header("Authorization", account())).andExpect(status().isUnauthorized());
     }

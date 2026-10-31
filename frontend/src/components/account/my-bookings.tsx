@@ -1,13 +1,21 @@
+import Link from "next/link";
 import { openMyBooking } from "@/app/account/my-bookings-actions";
 import type { MyBooking } from "@/lib/api/booking";
 import { formatSearchDate } from "@/lib/format";
 
-/** The traveller's bookings, newest first. Opening one is a form post, so no reference or token appears in an address. */
-export function MyBookings({ bookings, truncated }: { bookings: MyBooking[]; truncated: boolean }) {
+/**
+ * One page of the traveller's bookings, newest first (ADR-0038). Opening one is a form post, so no reference or token appears in an
+ * address; the only thing in the address is the page cursor, which holds a time and the reference of a booking already shown.
+ */
+export function MyBookings({ bookings, nextCursor, firstPage }: { bookings: MyBooking[]; nextCursor: string | null; firstPage: boolean }) {
   if (bookings.length === 0) {
-    return (
+    return firstPage ? (
       <p className="mt-2 text-sm text-muted">
         You have no bookings yet. Bookings made with this email address appear here, including ones made before you signed up.
+      </p>
+    ) : (
+      <p className="mt-2 text-sm text-muted">
+        There are no older bookings. <Link href="/account" className="underline">Newest bookings</Link>
       </p>
     );
   }
@@ -38,7 +46,10 @@ export function MyBookings({ bookings, truncated }: { bookings: MyBooking[]; tru
           </li>
         ))}
       </ul>
-      {truncated ? <p className="mt-2 text-sm text-muted">Showing your newest 50 bookings.</p> : null}
+      <nav aria-label="Pages of bookings" className="mt-3 flex flex-wrap gap-4 text-sm">
+        {firstPage ? null : <Link href="/account" className="underline">Newest bookings</Link>}
+        {nextCursor ? <Link href={`/account?cursor=${encodeURIComponent(nextCursor)}`} className="underline">Older bookings</Link> : null}
+      </nav>
     </>
   );
 }

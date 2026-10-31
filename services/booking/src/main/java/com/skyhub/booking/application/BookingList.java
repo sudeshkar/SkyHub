@@ -3,6 +3,11 @@ package com.skyhub.booking.application;
 import com.skyhub.booking.application.view.BookingSummary;
 import java.util.List;
 
-/** The newest bookings of a traveller; {@code truncated} says there are older ones that were not returned. */
-public record BookingList(List<BookingSummary> bookings, boolean truncated) {
+/** One page of a traveller's bookings, newest first. {@code nextCursor} is null on the last page (ADR-0038). */
+public record BookingList(List<BookingSummary> bookings, String nextCursor) {
+
+    /** There are older bookings than the ones returned. */
+    public boolean truncated() {
+        return nextCursor != null;
+    }
 }
