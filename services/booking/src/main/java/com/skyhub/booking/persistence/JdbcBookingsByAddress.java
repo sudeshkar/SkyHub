@@ -3,6 +3,7 @@ package com.skyhub.booking.persistence;
 import com.skyhub.booking.application.BookingCursor;
 import com.skyhub.booking.application.BookingFilter;
 import com.skyhub.booking.application.BookingsByAddress;
+import com.skyhub.booking.application.UpcomingCursor;
 import com.skyhub.booking.application.view.BookingSummary;
 import com.skyhub.booking.application.view.PnrView.SegmentView;
 import com.skyhub.booking.domain.PnrStatus;
@@ -46,10 +47,7 @@ class JdbcBookingsByAddress implements BookingsByAddress {
         arguments.add(emailIndex);
         StringBuilder where = new StringBuilder("contact_email_index = ? ");
         switch (filter) {
-            case UPCOMING -> {
-                where.append("AND ").append(UPCOMING).append(' ');
-                arguments.add(java.sql.Date.valueOf(today));
-            }
+            case UPCOMING -> throw new IllegalArgumentException("Upcoming bookings are listed soonest first: use upcomingSoonest");
             case PAST -> {
                 where.append("AND NOT ").append(UPCOMING).append(' ');
                 arguments.add(java.sql.Date.valueOf(today));
@@ -67,6 +65,38 @@ class JdbcBookingsByAddress implements BookingsByAddress {
                         + "ORDER BY created_at DESC, locator DESC LIMIT ?",
                 (rs, n) -> new Row(rs.getLong(1), rs.getString(2), PnrStatus.valueOf(rs.getString(3)),
                         rs.getTimestamp(4).toInstant()), arguments.toArray());
+        return summaries(rows);
+    }
+
+    /**
+     * Soonest next flight first (ADR-0044). The next flight date is computed per booking, so no index can serve the order: the query
+     * computes it for this traveller's confirmed bookings, keeps those that have one, and returns the page after the cursor in
+     * (next date, reference) order. Bounded by one traveller's own bookings.
+     */
+    @Override
+    public List<BookingSummary> upcomingSoonest(String emailIndex, LocalDate today, UpcomingCursor after, int limit) {
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(java.sql.Date.valueOf(today));
+        arguments.add(emailIndex);
+        String start = "";
+        if (after != null) {
+            start = "AND (next_date, locator) > (?, ?) ";
+            arguments.add(java.sql.Date.valueOf(after.nextDeparture()));
+            arguments.add(after.locator());
+        }
+        arguments.add(limit);
+        List<Row> rows = jdbc.query("SELECT id, locator, status, created_at FROM ("
+                        + "SELECT p.id, p.locator, p.status, p.created_at, "
+                        + "(SELECT min(s.departure_date) FROM pnr_segment s WHERE s.pnr_id = p.id AND s.departure_date >= ?) AS next_date "
+                        + "FROM pnr p WHERE p.contact_email_index = ? AND p.status = 'CONFIRMED') t "
+                        + "WHERE next_date IS NOT NULL " + start + "ORDER BY next_date, locator LIMIT ?",
+                (rs, n) -> new Row(rs.getLong(1), rs.getString(2), PnrStatus.valueOf(rs.getString(3)),
+                        rs.getTimestamp(4).toInstant()), arguments.toArray());
+        return summaries(rows);
+    }
+
+    /** The flights and passenger counts of a page of bookings, in two statements however long the page is. */
+    private List<BookingSummary> summaries(List<Row> rows) {
         if (rows.isEmpty()) {
             return List.of();
         }

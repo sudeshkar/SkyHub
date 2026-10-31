@@ -45,6 +45,10 @@ export function MyBookings({ bookings, nextCursor, firstPage, when = "all" }: {
       ))}
     </nav>
   );
+  const upcoming = when === "upcoming";
+  // Upcoming is listed by flight date, so its paging words are about trips, not about when they were booked (ADR-0044).
+  const newestLabel = upcoming ? "Soonest trips" : "Newest bookings";
+  const olderLabel = upcoming ? "Later trips" : "Older bookings";
   if (bookings.length === 0) {
     return (
       <>
@@ -59,7 +63,7 @@ export function MyBookings({ bookings, nextCursor, firstPage, when = "all" }: {
           </p>
         ) : (
           <p className="mt-2 text-sm text-muted">
-            There are no older bookings. <Link href={accountHref(when)} className="underline">Newest bookings</Link>
+            There are no {upcoming ? "later trips" : "older bookings"}. <Link href={accountHref(when)} className="underline">{newestLabel}</Link>
           </p>
         )}
       </>
@@ -68,6 +72,7 @@ export function MyBookings({ bookings, nextCursor, firstPage, when = "all" }: {
   return (
     <>
       {filters}
+      {upcoming && <p className="mt-2 text-sm text-muted">Soonest flight first.</p>}
       <ul className="mt-3 divide-y divide-sand rounded-lg border border-sand bg-white">
         {bookings.map((booking) => (
           <li key={booking.locator} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
@@ -94,8 +99,8 @@ export function MyBookings({ bookings, nextCursor, firstPage, when = "all" }: {
         ))}
       </ul>
       <nav aria-label="Pages of bookings" className="mt-3 flex flex-wrap gap-4 text-sm">
-        {firstPage ? null : <Link href={accountHref(when)} className="underline">Newest bookings</Link>}
-        {nextCursor ? <Link href={accountHref(when, nextCursor)} className="underline">Older bookings</Link> : null}
+        {firstPage ? null : <Link href={accountHref(when)} className="underline">{newestLabel}</Link>}
+        {nextCursor ? <Link href={accountHref(when, nextCursor)} className="underline">{olderLabel}</Link> : null}
       </nav>
     </>
   );

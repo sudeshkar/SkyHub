@@ -23,6 +23,13 @@ public interface BookingsByAddress {
      */
     List<BookingSummary> newestAfter(String emailIndex, BookingFilter filter, java.time.LocalDate today, BookingCursor after, int limit);
 
+    /**
+     * Confirmed bookings with a flight on or after {@code today}, soonest next flight first (ADR-0044), starting strictly after
+     * {@code after} (the first page when null). A booking is positioned by its next flight date, the earliest that is today or later;
+     * ties go to the reference. The cost grows with this traveller's own upcoming bookings, never with the system's.
+     */
+    List<BookingSummary> upcomingSoonest(String emailIndex, java.time.LocalDate today, UpcomingCursor after, int limit);
+
     /** Whether this booking was made with this address. False for an unknown reference. */
     boolean owns(String emailIndex, String locator);
 }

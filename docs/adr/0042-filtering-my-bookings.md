@@ -28,7 +28,7 @@
 - Positive: no new index, column or table, and paging behaves exactly as before.
 - Positive: the traveller's own bookings only; no new way to reach anyone else's.
 - Negative: **a filter that matches few of a traveller's many bookings reads past the ones that do not.** The query walks the traveller's bookings in order until it has a page, so asking for "upcoming" when you have five hundred old bookings and two coming reads about five hundred rows (of that traveller only, never of the system). That is still bounded by their own history, which is small, and each page stops as soon as it is full.
-- Negative: **upcoming trips are listed by when they were booked, not when they fly.** A trip booked long ago for next week can be on page three. Sorting by flight date is the next step and needs its own index and a different cursor.
+- Negative (ended by ADR-0044, which lists upcoming trips soonest first): **upcoming trips are listed by when they were booked, not when they fly.** A trip booked long ago for next week can be on page three. Sorting by flight date is the next step and needs its own index and a different cursor.
 - Negative: a booking with several flights is "upcoming" until its **last** flight is behind it, even if the first one has gone.
 - Negative: a flight that left earlier today still counts as upcoming until midnight UTC, and there is no time zone for the traveller.
 - Negative: there is no filter by flight, route or status beyond this.
