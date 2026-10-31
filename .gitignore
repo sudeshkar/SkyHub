@@ -30,3 +30,7 @@ graphify-out/
 # Playwright
 frontend/test-results/
 frontend/playwright-report/
+
+# Python bytecode
+__pycache__/
+*.pyc

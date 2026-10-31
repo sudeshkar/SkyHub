@@ -7,7 +7,23 @@ after a change to accounts, events, the notification service or the keys they sh
 They need only Python 3 (standard library), Docker, and the services running. The account journey and the failure path need booking and
 notification; the booking journey also needs the flight search service. None of them needs the website.
 
-## Set up
+## The one-command way
+
+```bash
+python tools/live-check/stack.py check
+```
+
+Starts postgres, kafka and mailpit (only the ones not already running), creates the throwaway database `booking_live`, makes fresh
+keys, starts flight search, booking and notification, runs the account journey, the booking journey, and the failure path (including the
+restart of notification with a mismatched key and then the right one), and **always** tears everything down, even when a check fails.
+It refuses to start if the ports are taken, never touches the development database, and only stops containers it started itself
+(ADR-0053). It needs a JDK (`JAVA_HOME` or on the path), Docker and Python 3; allow about ten minutes the first time (it builds). Logs
+are in `skyhub-live-stack/` in your temp folder. `stack.py up`, `status` and `down` run the stack by hand; the logic is tested with
+`python tools/live-check/test_stack.py`. The POSIX process handling has not been run; Windows has.
+
+The rest of this page is the same thing done by hand, and what each script checks.
+
+## Set up by hand
 
 ```bash
 docker compose up -d postgres kafka mailpit          # from the repository root

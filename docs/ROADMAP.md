@@ -65,6 +65,7 @@ How a slice goes, every time:
 | 46 | Every email also goes out as HTML, derived from its plain text in one place, escaped, with no remote content | ADR-0050 |
 | 47 | Past bookings listed by the last flight, most recently flown first, with their own cursor kind | ADR-0051 |
 | 48 | Replay, skip and un-skip must say who is running them; recorded with each skip and in the logs (self-declared: the port has no login) | ADR-0052 |
+| 49 | `stack.py check`: one command starts a throwaway stack, runs every live check including the park-and-recover restart, and tears it down | ADR-0053 |
 
 ## Next slices (pick one at a time; each is independent)
 
