@@ -7,9 +7,11 @@ import {
   cancelBooking,
   changeSeat,
   checkInFlight,
+  checkOutFlight,
   closeSession,
   loadSeatMap,
   type CheckInActionResult,
+  type CheckOutActionResult,
   type ManageActionResult,
 } from "@/app/manage/actions";
 import type { BoardingPass, Disruption, Pnr, SeatMap as SeatMapData } from "@/lib/api/booking";
@@ -60,6 +62,24 @@ function checkInFailure(result: Exclude<CheckInActionResult, { kind: "ok" }>): s
   }
 }
 
+/** Plain-language message when check-out did not happen. */
+function checkOutFailure(result: Exclude<CheckOutActionResult, { kind: "ok" }>): string {
+  switch (result.kind) {
+    case "closed":
+    case "cancelled":
+    case "rejected":
+      return result.detail;
+    case "unauthorized":
+      return "Your session has ended. Enter your booking details again to continue.";
+    case "rate-limited":
+      return `Too many requests. Please wait ${result.retryAfterSeconds} seconds and try again.`;
+    case "not-found":
+      return "We couldn't find that booking any more.";
+    default:
+      return "We couldn't reach the booking service, so you are still checked in. Please try again.";
+  }
+}
+
 /** `boardingPasses` maps a flight's position in the booking to its passes, for flights already checked in. */
 export function ManageView({
   pnr,
@@ -101,6 +121,23 @@ export function ManageView({
         return;
       }
       setNotice({ tone: "error", text: checkInFailure(result) });
+      if (result.kind === "unauthorized") router.refresh(); // the page now shows the lookup form
+    });
+  }
+
+  function checkOut(segment: number) {
+    setNotice(null);
+    startTransition(async () => {
+      const result = await checkOutFlight(segment);
+      if (result.kind === "ok") {
+        setPasses((current) => Object.fromEntries(Object.entries(current).filter(([index]) => Number(index) !== segment)));
+        setNotice({
+          tone: "ok",
+          text: `Checked out of ${pnr.segments[segment].flightNumber}. Its boarding passes no longer apply; you can change seats and check in again.`,
+        });
+        return;
+      }
+      setNotice({ tone: "error", text: checkOutFailure(result) });
       if (result.kind === "unauthorized") router.refresh(); // the page now shows the lookup form
     });
   }
@@ -201,7 +238,20 @@ export function ManageView({
                   {segment.flightNumber} <span className="text-muted">· {segment.departureDate}</span>
                 </h2>
                 {passes[s] ? (
-                  <p className="text-sm font-semibold text-copper">Checked in</p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm font-semibold text-copper">Checked in</p>
+                    {!cancelled && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => checkOut(s)}
+                        aria-label={`Check out of ${segment.flightNumber}`}
+                        className="text-sm text-copper underline hover:text-copper-strong disabled:opacity-50"
+                      >
+                        Check out
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   !cancelled &&
                   !flightCancelled && (

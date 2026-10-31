@@ -242,4 +242,104 @@ class CheckInServiceTest {
         assertThat(result.passes()).extracting(BoardingPass::sequence).containsExactly(3, 4);
         assertThat(count("replayed")).isEqualTo(1);
     }
+
+    // ---- checking out (ADR-0055) -------------------------------------------------------------------------------------
+
+    /** The table, the way delete-by-flight would leave it. */
+    private void deletingRemovesFromStored() {
+        when(checkIns.deleteByLocatorAndSegmentIndex(anyString(), anyInt())).thenAnswer(call -> {
+            long before = stored.size();
+            stored.removeIf(c -> c.getLocator().equals(call.getArgument(0)) && c.getSegmentIndex() == (int) call.getArgument(1));
+            return before - stored.size();
+        });
+    }
+
+    @Test
+    void should_remove_the_check_in_of_the_whole_party_on_that_flight_only() {
+        deletingRemovesFromStored();
+        service.checkIn("ABC234", 0);
+        service.checkIn("ABC234", 1);
+
+        boolean removed = service.checkOut("ABC234", 0);
+
+        assertThat(removed).isTrue();
+        assertThat(stored).extracting(CheckIn::getSegmentIndex).containsOnly(1);   // the other flight is still checked in
+        assertThat(count("checked_out")).isEqualTo(1);
+    }
+
+    @Test
+    void should_no_longer_show_boarding_passes_for_a_flight_that_was_checked_out() {
+        deletingRemovesFromStored();
+        service.checkIn("ABC234", 0);
+
+        service.checkOut("ABC234", 0);
+
+        assertThatExceptionOfType(NotCheckedInException.class).isThrownBy(() -> service.boardingPasses("ABC234", 0));
+    }
+
+    @Test
+    void should_give_new_boarding_numbers_when_checking_in_again() {
+        deletingRemovesFromStored();
+        when(sequence.reserve(eq("SK501"), eq(DATE), eq(2))).thenReturn(7, 20);
+        assertThat(service.checkIn("ABC234", 0).passes()).extracting(BoardingPass::sequence).containsExactly(7, 8);
+        service.checkOut("ABC234", 0);
+
+        CheckInResult again = service.checkIn("ABC234", 0);
+
+        assertThat(again.created()).isTrue();
+        assertThat(again.passes()).extracting(BoardingPass::sequence).containsExactly(20, 21);   // never the numbers of the old passes
+    }
+
+    @Test
+    void should_say_nothing_changed_when_the_flight_was_not_checked_in() {
+        deletingRemovesFromStored();
+
+        assertThat(service.checkOut("ABC234", 0)).isFalse();
+        assertThat(count("checked_out")).isZero();
+    }
+
+    @Test
+    void should_refuse_once_check_in_has_closed_and_leave_the_check_in_alone() {
+        deletingRemovesFromStored();
+        service.checkIn("ABC234", 0);
+        departure = Optional.of(NOW.plus(Duration.ofMinutes(30)));   // 30 minutes to go: past the 60 minute cut-off
+
+        assertThatExceptionOfType(CheckInClosedException.class).isThrownBy(() -> service.checkOut("ABC234", 0)).withMessageContaining("closed");
+
+        assertThat(stored).hasSize(2);
+        assertThat(count("refused")).isEqualTo(1);
+    }
+
+    @Test
+    void should_use_the_revised_time_of_a_delayed_flight() {
+        deletingRemovesFromStored();
+        service.checkIn("ABC234", 0);
+        departure = Optional.of(NOW.plus(Duration.ofMinutes(30)));   // on the timetable it is too late ...
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE))
+                .thenReturn(Optional.of(Disruption.delayed("SK501", DATE, NOW.plus(Duration.ofHours(4)), "Late aircraft", NOW)));   // ... but it was delayed
+
+        assertThat(service.checkOut("ABC234", 0)).isTrue();
+    }
+
+    @Test
+    void should_let_a_traveller_check_out_of_a_cancelled_flight_so_the_booking_can_be_moved() {
+        deletingRemovesFromStored();
+        service.checkIn("ABC234", 0);
+        when(disruptions.findByFlightNumberAndDepartureDate("SK501", DATE))
+                .thenReturn(Optional.of(Disruption.cancelled("SK501", DATE, "Aircraft grounded", NOW)));
+
+        assertThat(service.checkOut("ABC234", 0)).isTrue();   // a rebooking is refused while checked in (ADR-0022)
+    }
+
+    @Test
+    void should_refuse_a_cancelled_booking_an_unknown_reference_and_a_flight_the_booking_does_not_have() {
+        deletingRemovesFromStored();
+        when(pnrs.findByLocator("ZZZ999")).thenReturn(Optional.empty());
+
+        assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.checkOut("ZZZ999", 0));
+        assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.checkOut("ABC234", 2));
+        assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.checkOut("ABC234", -1));
+        pnr.cancel();
+        assertThatExceptionOfType(BookingCancelledException.class).isThrownBy(() -> service.checkOut("ABC234", 0));
+    }
 }

@@ -43,4 +43,19 @@ class CheckInWindowTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> new CheckInWindow(Duration.ofMinutes(30), Duration.ofMinutes(60)));
     }
+
+    // ---- checking out (ADR-0055): allowed until check-in closes ----------------------------------------------------------
+
+    @Test
+    void should_allow_checking_out_at_any_time_until_check_in_closes() {
+        assertThatCode(() -> window.requireNotClosed(DEPARTURE, DEPARTURE.minus(Duration.ofHours(30)))).doesNotThrowAnyException();
+        assertThatCode(() -> window.requireNotClosed(DEPARTURE, DEPARTURE.minus(Duration.ofMinutes(60).plusSeconds(1)))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void should_refuse_checking_out_once_check_in_has_closed() {
+        assertThatExceptionOfType(CheckInClosedException.class)
+                .isThrownBy(() -> window.requireNotClosed(DEPARTURE, DEPARTURE.minus(Duration.ofMinutes(60))))
+                .withMessageContaining("closed");
+    }
 }

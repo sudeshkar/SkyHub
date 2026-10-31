@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class CheckInMetrics {
 
     public enum Outcome {
-        CHECKED_IN, REPLAYED, REFUSED;
+        CHECKED_IN, REPLAYED, REFUSED, CHECKED_OUT;
 
         String tag() {
             return name().toLowerCase();

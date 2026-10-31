@@ -621,7 +621,14 @@ export interface paths {
         get: operations["getBoardingPasses"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Check the whole party out of one flight, so its seats can be changed again
+         * @description Undoes the check-in of one flight (ADR-0055). Allowed until check-in closes, 60 minutes before departure (the revised time
+         *     if the flight was delayed), and always for a cancelled flight. The boarding passes stop being shown, and checking in again gives
+         *     the party new boarding numbers. Passes already issued are signed and are not revoked; there is no gate system here to refuse
+         *     them. Idempotent: a flight that is not checked in is also 204.
+         */
+        delete: operations["checkOut"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1915,6 +1922,41 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    checkOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locator: components["parameters"]["Locator"];
+                segmentIndex: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The flight is not checked in now */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["PnrNotFound"];
+            /** @description Check-in has closed, or the booking is cancelled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            503: components["responses"]["ScheduleUnavailable"];
         };
     };
 }

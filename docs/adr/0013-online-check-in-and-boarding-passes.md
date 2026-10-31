@@ -32,4 +32,4 @@ Option 2, with an atomic counter.
 - Positive: unique numbering and idempotency are enforced by the database, not by hoping requests do not overlap.
 - Negative: boarding numbers can have gaps (a rolled-back check-in still consumed its block). Gaps are harmless; duplicates would not be.
 - Negative: a symmetric key must be shared with every gate verifier. Moving to an asymmetric signature is the follow-up.
-- Follow-up: per-passenger check-in, check-out to allow seat changes, a QR/PDF417 image and wallet pass, a "check-in opens" email.
+- Follow-up: per-passenger check-in, check-out to allow seat changes (done, ADR-0055), a QR/PDF417 image and wallet pass, a "check-in opens" email.

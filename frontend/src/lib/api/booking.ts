@@ -228,6 +228,44 @@ export async function checkIn(locator: string, token: string, segmentIndex: numb
   return passesOutcome(response, [200, 201]);
 }
 
+export type CheckOutOutcome =
+  | { kind: "ok" } // the flight is not checked in now (it also was not, if it never was)
+  | { kind: "closed"; detail: string } // check-in has closed: the passes are what the gate works from
+  | { kind: "cancelled"; detail: string }
+  | { kind: "unauthorized" }
+  | { kind: "not-found" }
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+/** Checks the whole party out of one flight (ADR-0055), so its seats can be changed again. Repeating it is harmless. */
+export async function checkOut(locator: string, token: string, segmentIndex: number): Promise<CheckOutOutcome> {
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins/${segmentIndex}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  switch (response.status) {
+    case 204:
+      return { kind: "ok" };
+    case 401:
+    case 403:
+      return { kind: "unauthorized" };
+    case 404:
+      return { kind: "not-found" };
+    case 409: {
+      const problem = (await response.json().catch(() => null)) as Problem | null;
+      const detail = problem?.detail ?? "You can't check out right now.";
+      return problem?.title === "Booking cancelled" ? { kind: "cancelled", detail } : { kind: "closed", detail };
+    }
+    case 400:
+    case 422:
+      return { kind: "rejected", detail: await problemDetail(response, "Please check your details.") };
+    default:
+      return { kind: "unavailable" };
+  }
+}
+
 /** "not-found" here means the flight is not checked in (or the booking is gone). */
 export async function getBoardingPasses(locator: string, token: string, segmentIndex: number): Promise<CheckInOutcome> {
   const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins/${segmentIndex}`, {
