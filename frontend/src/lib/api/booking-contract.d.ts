@@ -465,7 +465,9 @@ export interface paths {
          * @description Up to 50 bookings whose contact address is the account's address (ADR-0034), newest first. Summaries hold
          *     no names, seats or addresses. When there are older bookings, `nextCursor` is set and `truncated` is true: send
          *     `nextCursor` back as `cursor` for the next page (ADR-0038). Every page costs the same however far back it is. A
-         *     cursor that this service did not make is a 400.
+         *     cursor that this service did not make is a 400. `when` narrows the list (ADR-0042) without changing its order or its
+         *     cursor: `upcoming` is a confirmed booking with a flight today or later (UTC), `past` is every other booking,
+         *     including cancelled ones, and `all` (the default) is both.
          */
         get: operations["listMyBookings"];
         put?: never;
@@ -1627,6 +1629,8 @@ export interface operations {
             query?: {
                 /** @description The `nextCursor` of the previous page. Opaque, so do not build one. */
                 cursor?: string;
+                /** @description Which bookings to list: all (the default), upcoming, or past (which includes cancelled bookings). Anything else is a 400. */
+                when?: string;
             };
             header?: never;
             path?: never;

@@ -400,8 +400,11 @@ export type MyBookingsOutcome =
   | { kind: "unavailable" };
 
 /** One page of the bookings made with the signed-in traveller's address, newest first (ADR-0034, ADR-0038). */
-export async function listMyBookings(token: string, cursor?: string): Promise<MyBookingsOutcome> {
-  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+export async function listMyBookings(token: string, cursor?: string, when?: "upcoming" | "past"): Promise<MyBookingsOutcome> {
+  const params = new URLSearchParams();
+  if (cursor) params.set("cursor", cursor);
+  if (when) params.set("when", when);
+  const query = params.size > 0 ? `?${params}` : "";
   const response = await call(`/api/v1/accounts/me/bookings${query}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
   if (!response) return { kind: "unavailable" };
   if (response.ok) {

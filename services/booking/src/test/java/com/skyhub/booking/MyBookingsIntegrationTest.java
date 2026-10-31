@@ -237,4 +237,84 @@ class MyBookingsIntegrationTest {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return "Bearer " + JsonPath.<String>read(response, "$.accessToken");
     }
+
+    @Test
+    void should_split_bookings_into_upcoming_and_past_by_flight_date_and_status() throws Exception {
+        String email = "filters.traveller@example.com";
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        String longGone = book(email, today.minusDays(40).toString(), "12D");
+        String yesterday = book(email, today.minusDays(1).toString(), "12E");
+        String leavesToday = book(email, today.toString(), "12F");
+        String nextMonth = book(email, today.plusDays(30).toString(), "13A");
+        String cancelledFuture = book(email, today.plusDays(45).toString(), "13B");
+        mvc.perform(post("/api/v1/pnrs/{l}/cancellation", cancelledFuture).header("Authorization", manageToken(cancelledFuture)))
+                .andExpect(status().isOk());
+        String bearer = signedIn(email);
+
+        List<String> all = locators(bearer, "all");
+        List<String> upcoming = locators(bearer, "upcoming");
+        List<String> past = locators(bearer, "past");
+
+        assertThat(all).containsExactlyInAnyOrder(longGone, yesterday, leavesToday, nextMonth, cancelledFuture);
+        assertThat(upcoming).containsExactlyInAnyOrder(leavesToday, nextMonth);   // a flight today counts until the day ends
+        assertThat(past).containsExactlyInAnyOrder(longGone, yesterday, cancelledFuture);   // cancelled bookings are not upcoming
+        assertThat(locators(bearer, null)).isEqualTo(all);   // no filter is all bookings
+    }
+
+    @Test
+    void should_keep_a_booking_upcoming_until_its_last_flight_has_gone() throws Exception {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        String body = """
+                {"paymentToken":"tok_visa","contactEmail":"filters.twoflights@example.com",
+                 "segments":[{"flightNumber":"SK501","departureDate":"%s"},{"flightNumber":"SK901","departureDate":"%s"}],
+                 "passengers":[{"firstName":"Priya","lastName":"Perera","seats":["14A","14A"]}]}""".formatted(today.minusDays(2), today.plusDays(3));
+        String locator = JsonPath.read(mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.locator");
+
+        String bearer = signedIn("filters.twoflights@example.com");
+
+        assertThat(locators(bearer, "upcoming")).containsExactly(locator);   // the first flight has gone, the second has not
+        assertThat(locators(bearer, "past")).isEmpty();
+    }
+
+    @Test
+    void should_page_within_a_filter_without_skipping_or_repeating() throws Exception {
+        String email = "filters.pages@example.com";
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        List<String> future = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            future.add(book(email, today.plusDays(20 + i).toString(), "15A"));
+            book(email, today.minusDays(20 + i).toString(), "15B");   // old bookings in between, so the filter has to read past them
+        }
+        String index = cipher.blindIndex(email);
+
+        List<String> seen = new java.util.ArrayList<>();
+        com.skyhub.booking.application.BookingCursor after = null;
+        while (true) {
+            var page = byAddress.newestAfter(index, com.skyhub.booking.application.BookingFilter.UPCOMING, today, after, 3);   // pages of two
+            page.stream().limit(2).forEach(b -> seen.add(b.locator()));
+            if (page.size() <= 2) {
+                break;
+            }
+            after = new com.skyhub.booking.application.BookingCursor(page.get(1).createdAt(), page.get(1).locator());
+        }
+
+        assertThat(seen).hasSize(3).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(future);
+    }
+
+    @Test
+    void should_refuse_a_filter_it_does_not_know_over_http() throws Exception {
+        String bearer = signedIn("filters.bad@example.com");
+
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("when", "soon").header("Authorization", bearer)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/accounts/me/bookings").param("when", "").header("Authorization", bearer)).andExpect(status().isOk());
+    }
+
+    private List<String> locators(String bearer, String when) throws Exception {
+        var request = get("/api/v1/accounts/me/bookings").header("Authorization", bearer);
+        if (when != null) {
+            request = request.param("when", when);
+        }
+        return JsonPath.read(mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.bookings[*].locator");
+    }
 }

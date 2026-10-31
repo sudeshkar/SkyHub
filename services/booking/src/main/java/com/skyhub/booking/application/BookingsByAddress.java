@@ -13,7 +13,15 @@ public interface BookingsByAddress {
      * At most {@code limit} bookings, newest first, starting strictly after {@code after} (the first page when null). Cost depends
      * on {@code limit}, not on how many bookings exist or how far back the page is (ADR-0038).
      */
-    List<BookingSummary> newestAfter(String emailIndex, BookingCursor after, int limit);
+    default List<BookingSummary> newestAfter(String emailIndex, BookingCursor after, int limit) {
+        return newestAfter(emailIndex, BookingFilter.ALL, java.time.LocalDate.EPOCH, after, limit);
+    }
+
+    /**
+     * The same, narrowed by {@code filter} (ADR-0042), where "upcoming" means a confirmed booking with a flight on or after {@code today}.
+     * The order and the cursor are unchanged. The cost is bounded by the traveller's own bookings, never by the system's.
+     */
+    List<BookingSummary> newestAfter(String emailIndex, BookingFilter filter, java.time.LocalDate today, BookingCursor after, int limit);
 
     /** Whether this booking was made with this address. False for an unknown reference. */
     boolean owns(String emailIndex, String locator);

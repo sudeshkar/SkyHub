@@ -718,7 +718,9 @@ paths:
         Up to 50 bookings whose contact address is the account's address (ADR-0034), newest first. Summaries hold
         no names, seats or addresses. When there are older bookings, `nextCursor` is set and `truncated` is true: send
         `nextCursor` back as `cursor` for the next page (ADR-0038). Every page costs the same however far back it is. A
-        cursor that this service did not make is a 400.
+        cursor that this service did not make is a 400. `when` narrows the list (ADR-0042) without changing its order or its
+        cursor: `upcoming` is a confirmed booking with a flight today or later (UTC), `past` is every other booking,
+        including cancelled ones, and `all` (the default) is both.
       security:
         - accountToken: []
       parameters:
@@ -729,6 +731,13 @@ paths:
           schema:
             type: string
             maxLength: 200
+        - name: when
+          in: query
+          required: false
+          description: 'Which bookings to list: all (the default), upcoming, or past (which includes cancelled bookings). Anything else is a 400.'
+          schema:
+            type: string
+            maxLength: 20
       responses:
         '200':
           description: One page of bookings

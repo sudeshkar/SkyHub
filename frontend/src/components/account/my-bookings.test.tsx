@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { MyBooking } from "@/lib/api/booking";
-import { MyBookings } from "./my-bookings";
+import { MyBookings, parseBookingsFilter } from "./my-bookings";
 
 vi.mock("@/app/account/my-bookings-actions", () => ({ openMyBooking: vi.fn() }));
 
@@ -31,7 +31,7 @@ describe("MyBookings", () => {
   it("says plainly when a booking is cancelled", () => {
     render(<MyBookings bookings={[{ ...ONE, status: "CANCELLED" }]} nextCursor={null} firstPage />);
 
-    expect(screen.getByText(/cancelled/i)).toBeInTheDocument();
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();   // the badge, not the "Past and cancelled" filter link
   });
 
   it("says one passenger, not 1 passengers", () => {
@@ -74,5 +74,53 @@ describe("MyBookings", () => {
     expect(screen.getByText(/no older bookings/i)).toBeInTheDocument();
     expect(screen.queryByText(/no bookings yet/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /newest bookings/i })).toBeInTheDocument();
+  });
+});
+
+describe("MyBookings filter (ADR-0042)", () => {
+  it("offers all, upcoming, and past and cancelled bookings, and marks the one being shown", () => {
+    render(<MyBookings bookings={[ONE]} nextCursor={null} firstPage when="upcoming" />);
+
+    const nav = screen.getByRole("navigation", { name: /which bookings/i });
+    expect(within(nav).getByRole("link", { name: "All" })).toHaveAttribute("href", "/account");
+    expect(within(nav).getByRole("link", { name: "Upcoming" })).toHaveAttribute("href", "/account?when=upcoming");
+    expect(within(nav).getByRole("link", { name: "Past and cancelled" })).toHaveAttribute("href", "/account?when=past");
+    expect(within(nav).getByRole("link", { name: "Upcoming" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "All" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("shows all bookings when no filter is given", () => {
+    render(<MyBookings bookings={[ONE]} nextCursor={null} firstPage />);
+
+    expect(screen.getByRole("link", { name: "All" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("keeps the filter when going to older bookings and back to the newest", () => {
+    const { unmount } = render(<MyBookings bookings={[ONE]} nextCursor="a-b_c" firstPage when="upcoming" />);
+    expect(screen.getByRole("link", { name: /older bookings/i })).toHaveAttribute("href", "/account?cursor=a-b_c&when=upcoming");
+    unmount();
+
+    render(<MyBookings bookings={[ONE]} nextCursor={null} firstPage={false} when="past" />);
+    expect(screen.getByRole("link", { name: /newest bookings/i })).toHaveAttribute("href", "/account?when=past");
+  });
+
+  it("keeps the filter links on an empty list and says what is empty, not that there are no bookings at all", () => {
+    const { unmount } = render(<MyBookings bookings={[]} nextCursor={null} firstPage when="upcoming" />);
+    expect(screen.getByText(/no upcoming bookings/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no bookings yet/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "All" })).toBeInTheDocument();
+    unmount();
+
+    render(<MyBookings bookings={[]} nextCursor={null} firstPage when="past" />);
+    expect(screen.getByText(/no past or cancelled bookings/i)).toBeInTheDocument();
+  });
+
+  it("reads the filter from the address and ignores anything that is not one of the three", () => {
+    expect(parseBookingsFilter("upcoming")).toBe("upcoming");
+    expect(parseBookingsFilter("past")).toBe("past");
+    expect(parseBookingsFilter("all")).toBe("all");
+    for (const odd of [undefined, "", "soon", "UPCOMING", ["upcoming", "past"]]) {
+      expect(parseBookingsFilter(odd as string | string[] | undefined)).toBe("all");
+    }
   });
 });

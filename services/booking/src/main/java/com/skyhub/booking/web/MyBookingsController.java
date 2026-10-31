@@ -29,8 +29,8 @@ public class MyBookingsController implements MyBookingsApi {
     }
 
     @Override
-    public ResponseEntity<MyBookingsDto> listMyBookings(String cursor) {
-        BookingList list = myBookings.list(accountId(), cursor);
+    public ResponseEntity<MyBookingsDto> listMyBookings(String cursor, String when) {
+        BookingList list = myBookings.list(accountId(), cursor, when);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(new MyBookingsDto(list.bookings().stream().map(MyBookingsController::toDto).toList(), list.truncated())
                         .nextCursor(list.nextCursor()));
