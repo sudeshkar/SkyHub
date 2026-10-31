@@ -3,6 +3,7 @@ package com.skyhub.booking.persistence;
 import com.skyhub.booking.application.BookingCursor;
 import com.skyhub.booking.application.BookingFilter;
 import com.skyhub.booking.application.BookingsByAddress;
+import com.skyhub.booking.application.PastCursor;
 import com.skyhub.booking.application.UpcomingCursor;
 import com.skyhub.booking.application.view.BookingSummary;
 import com.skyhub.booking.application.view.PnrView.SegmentView;
@@ -34,10 +35,6 @@ class JdbcBookingsByAddress implements BookingsByAddress {
     private record Row(long id, String locator, PnrStatus status, Instant createdAt) {
     }
 
-    /** A confirmed booking with a flight today or later (ADR-0042). */
-    private static final String UPCOMING = "(status = 'CONFIRMED' AND EXISTS (SELECT 1 FROM pnr_segment s WHERE s.pnr_id = pnr.id "
-            + "AND s.departure_date >= ?))";
-
     @Override
     public List<BookingSummary> newestAfter(String emailIndex, BookingFilter filter, LocalDate today, BookingCursor after, int limit) {
         // Keyset paging (ADR-0038): the page starts at a position in the index, so a page far back costs the same as the first.
@@ -48,10 +45,7 @@ class JdbcBookingsByAddress implements BookingsByAddress {
         StringBuilder where = new StringBuilder("contact_email_index = ? ");
         switch (filter) {
             case UPCOMING -> throw new IllegalArgumentException("Upcoming bookings are listed soonest first: use upcomingSoonest");
-            case PAST -> {
-                where.append("AND NOT ").append(UPCOMING).append(' ');
-                arguments.add(java.sql.Date.valueOf(today));
-            }
+            case PAST -> throw new IllegalArgumentException("Past bookings are listed by the last flight: use pastMostRecent");
             case ALL -> {
             }
         }
@@ -90,6 +84,33 @@ class JdbcBookingsByAddress implements BookingsByAddress {
                         + "(SELECT min(s.departure_date) FROM pnr_segment s WHERE s.pnr_id = p.id AND s.departure_date >= ?) AS next_date "
                         + "FROM pnr p WHERE p.contact_email_index = ? AND p.status = 'CONFIRMED') t "
                         + "WHERE next_date IS NOT NULL " + start + "ORDER BY next_date, locator LIMIT ?",
+                (rs, n) -> new Row(rs.getLong(1), rs.getString(2), PnrStatus.valueOf(rs.getString(3)),
+                        rs.getTimestamp(4).toInstant()), arguments.toArray());
+        return summaries(rows);
+    }
+
+    /**
+     * Most recently flown first (ADR-0051). The date of the last flight is computed per booking, so no index can serve the order: the
+     * query computes it for this traveller's bookings that are not upcoming and returns the page after the cursor in (last date
+     * descending, reference descending) order. Bounded by one traveller's own bookings.
+     */
+    @Override
+    public List<BookingSummary> pastMostRecent(String emailIndex, LocalDate today, PastCursor after, int limit) {
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(emailIndex);
+        arguments.add(java.sql.Date.valueOf(today));
+        String start = "";
+        if (after != null) {
+            start = "WHERE (last_date, locator) < (?, ?) ";
+            arguments.add(java.sql.Date.valueOf(after.lastFlight()));
+            arguments.add(after.locator());
+        }
+        arguments.add(limit);
+        List<Row> rows = jdbc.query("SELECT id, locator, status, created_at FROM ("
+                        + "SELECT p.id, p.locator, p.status, p.created_at, "
+                        + "COALESCE((SELECT max(s.departure_date) FROM pnr_segment s WHERE s.pnr_id = p.id), DATE '1970-01-01') AS last_date "
+                        + "FROM pnr p WHERE p.contact_email_index = ? AND NOT (p.status = 'CONFIRMED' AND EXISTS "
+                        + "(SELECT 1 FROM pnr_segment u WHERE u.pnr_id = p.id AND u.departure_date >= ?))) t " + start + "ORDER BY last_date DESC, locator DESC LIMIT ?",
                 (rs, n) -> new Row(rs.getLong(1), rs.getString(2), PnrStatus.valueOf(rs.getString(3)),
                         rs.getTimestamp(4).toInstant()), arguments.toArray());
         return summaries(rows);
