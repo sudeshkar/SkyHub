@@ -24,15 +24,24 @@ function initials(passenger: Passenger, index: number): string {
   return letters || `P${index + 1}`;
 }
 
-export function BookingWizard({
-  segments,
-  seatMaps,
-  passengerCount,
-}: {
+type WizardProps = {
   segments: Segment[];
   seatMaps: SeatMapData[];
   passengerCount: number;
-}) {
+};
+
+/**
+ * The booking page is one page for every search, so a link, Back or Forward to a booking for other flights or another number of
+ * passengers shows the same component with new props. What the traveller chose (seats, names, a hold) belongs to one booking and
+ * is sized for it, so it starts afresh whenever the booking changes: keeping it crashed the page, with seats for one passenger and
+ * a second one to choose for. A re-render of the same booking (new objects, same flights and count) keeps everything.
+ */
+export function BookingWizard(props: WizardProps) {
+  const booking = `${props.passengerCount}:${props.segments.map((s) => `${s.flightNumber}_${s.departureDate}`).join(",")}`;
+  return <Wizard key={booking} {...props} />;
+}
+
+function Wizard({ segments, seatMaps, passengerCount }: WizardProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("seats");
   const [segmentIndex, setSegmentIndex] = useState(0);
