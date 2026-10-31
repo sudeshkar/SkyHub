@@ -10,7 +10,7 @@ const COOKIE_PATH = "/ops";
 const MAX_SECONDS = 30 * 60;
 const USERNAME = /^[a-z][a-z0-9._-]{2,39}$/;
 
-export type StaffRole = "OPS" | "ADMIN";
+export type StaffRole = "OPS" | "ADMIN" | "GATE";
 export type StaffSession = { username: string; role: StaffRole; token: string };
 
 /** Reads the cookie value defensively: anything malformed counts as "no session". */

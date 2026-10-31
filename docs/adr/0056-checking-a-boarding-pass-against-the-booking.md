@@ -15,7 +15,7 @@ A boarding pass carries a signed barcode (ADR-0013), and `signer.verify` says on
 
 ## Decision
 
-**Option 3.** `POST /api/v1/ops/boarding-passes/verification` with `{barcode}`, for staff (both roles; there is no gate-agent role yet).
+**Option 3.** `POST /api/v1/ops/boarding-passes/verification` with `{barcode}`, for staff (every role; ADR-0060 adds a `GATE` role that can do only this).
 
 A pass is **good** only if it is signed by us **and** is exactly the pass that would be issued for that booking now (same passenger, flight, seat and boarding number). Otherwise it is refused with one reason:
 
@@ -40,5 +40,5 @@ A pass is **good** only if it is signed by us **and** is exactly the pass that w
 - Positive: it is correct by construction: whatever the booking says now is what is valid, including cases nobody thought of.
 - Negative: **a gate must be online** (it asks the service). An offline scanner can only check the signature, with the old weakness. Nothing here makes a scanner do either; there is no gate system in this repository.
 - Negative: a looked-up check costs a few queries per scan. Nothing limits the rate of a staff token; the scale of a real gate (many scanners) has not been measured.
-- Negative: only staff roles exist, so any staff member can ask. A gate-agent role with nothing else would be the least privilege; it is a one-line change in `StaffRole` when the role exists.
-- Not done: boarding (marking a passenger as boarded) and a second scan of the same pass. A pass can be shown as valid any number of times.
+- Negative: any staff member can ask. The `GATE` role of ADR-0060 is the least privilege for it.
+- Not done here: boarding (marking a passenger as boarded) and refusing a second scan of the same pass. ADR-0060 does both.

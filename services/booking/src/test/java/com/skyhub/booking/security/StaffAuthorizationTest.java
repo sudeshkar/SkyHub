@@ -74,6 +74,28 @@ class StaffAuthorizationTest {
     }
 
     @Test
+    void should_let_a_gate_agent_check_and_board_a_pass_and_do_nothing_else() {
+        Authentication gate = authenticate(staffTokens.issue("gate.one", StaffRole.GATE).value());
+
+        assertThat(granted(StaffAuthorization.verifiesBoardingPasses(), gate)).isTrue();
+        assertThat(granted(StaffAuthorization.boardsPassengers(), gate)).isTrue();
+        assertThat(granted(StaffAuthorization.viewsAffectedBookings(), gate)).isFalse();
+        assertThat(granted(StaffAuthorization.rebooks(), gate)).isFalse();
+        assertThat(granted(StaffAuthorization.recordsDisruptions(), gate)).isFalse();
+        assertThat(granted(StaffAuthorization.createsStaff(), gate)).isFalse();
+    }
+
+    @Test
+    void should_let_operations_board_passengers_but_not_a_traveller_or_nobody() {
+        Authentication ops = authenticate(staffTokens.issue("priya.ops", StaffRole.OPS).value());
+        Authentication traveller = authenticate(manageTokens.issue("ABC234", 0).value());
+
+        assertThat(granted(StaffAuthorization.boardsPassengers(), ops)).isTrue();
+        assertThat(granted(StaffAuthorization.boardsPassengers(), traveller)).isFalse();
+        assertThat(granted(StaffAuthorization.boardsPassengers(), null)).isFalse();
+    }
+
+    @Test
     void should_let_an_admin_do_both() {
         Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
 

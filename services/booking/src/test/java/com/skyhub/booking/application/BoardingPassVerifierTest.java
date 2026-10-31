@@ -43,6 +43,7 @@ class BoardingPassVerifierTest {
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final HmacBoardingPassSigner signer = new HmacBoardingPassSigner("0123456789abcdef0123456789abcdef".getBytes());
     private final List<CheckIn> stored = new ArrayList<>();
+    private final FakeBoardedPassengers boarded = new FakeBoardedPassengers();
     private Pnr pnr;
     private BoardingPassVerifier verifier;
 
@@ -58,7 +59,7 @@ class BoardingPassVerifierTest {
                 .thenAnswer(call -> stored.stream()
                         .filter(c -> c.getLocator().equals(call.getArgument(0)) && c.getSegmentIndex() == (int) call.getArgument(1)).toList());
         when(disruptions.findByFlightNumberAndDepartureDate(anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(Optional.empty());
-        verifier = new BoardingPassVerifier(pnrs, checkIns, disruptions, signer, new BoardingPassMetrics(registry));
+        verifier = new BoardingPassVerifier(pnrs, checkIns, disruptions, boarded, signer, new BoardingPassMetrics(registry));
     }
 
     /** Checks passenger {@code p} in on flight 0 with this boarding number, and returns the barcode printed for them. */
@@ -191,5 +192,27 @@ class BoardingPassVerifierTest {
         String barcode = signer.sign(BoardingPassPayload.of("SOMEONE/ELSE", "ABC234", "SK501", DATE, "11D", 7));
 
         assertThat(verifier.verify(barcode).reason()).isEqualTo(Reason.SUPERSEDED);
+    }
+
+    @Test
+    void should_say_already_boarded_for_a_passenger_who_has_boarded_and_not_for_the_others() {
+        String priya = checkedIn(0, 7);
+        String raj = checkedIn(1, 8);
+        boarded.board("ABC234", 0, 0, "gate.one", NOW);
+
+        var verdict = verifier.verify(priya);
+
+        assertThat(verdict.valid()).isFalse();
+        assertThat(verdict.reason()).isEqualTo(Reason.ALREADY_BOARDED);
+        assertThat(verdict.pass()).isNull();
+        assertThat(verifier.verify(raj).valid()).isTrue();
+    }
+
+    @Test
+    void should_report_where_in_the_booking_the_flight_is_so_the_passenger_can_be_boarded() {
+        var verdict = verifier.verify(checkedIn(1, 8));
+
+        assertThat(verdict.segmentIndex()).isEqualTo(0);
+        assertThat(verdict.pass().passengerIndex()).isEqualTo(1);
     }
 }

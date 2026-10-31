@@ -86,4 +86,20 @@ class StaffAccountTest {
         assertThat(StaffRole.ADMIN.mayRecordDisruptions()).isTrue();
         assertThat(StaffRole.ADMIN.mayCreateStaff()).isTrue();
     }
+
+    @Test
+    void should_give_a_gate_agent_the_gate_and_nothing_else() {
+        assertThat(StaffRole.GATE.mayVerifyBoardingPasses()).isTrue();
+        assertThat(StaffRole.GATE.mayBoardPassengers()).isTrue();
+        assertThat(StaffRole.GATE.mayViewAffectedBookings()).isFalse();
+        assertThat(StaffRole.GATE.mayRebook()).isFalse();
+        assertThat(StaffRole.GATE.mayRecordDisruptions()).isFalse();
+        assertThat(StaffRole.GATE.mayCreateStaff()).isFalse();
+    }
+
+    @Test
+    void should_let_operations_and_administrators_board_passengers_too() {
+        assertThat(StaffRole.OPS.mayBoardPassengers()).isTrue();
+        assertThat(StaffRole.ADMIN.mayBoardPassengers()).isTrue();
+    }
 }

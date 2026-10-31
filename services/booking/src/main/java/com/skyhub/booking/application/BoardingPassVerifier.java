@@ -40,37 +40,46 @@ public class BoardingPassVerifier {
         /** The flight is not checked in: never was, or checked out (ADR-0055), or the flight is not on the booking. */
         NOT_CHECKED_IN,
         /** A different pass is current: a new seat or a new check-in since. */
-        SUPERSEDED;
+        SUPERSEDED,
+        /** The pass is good but the passenger has already boarded (ADR-0060). */
+        ALREADY_BOARDED;
 
         String tag() {
             return name().toLowerCase(Locale.ROOT);
         }
     }
 
-    /** {@code pass} is set only for a good pass. */
-    public record Verdict(boolean valid, Reason reason, BoardingPass pass) {
-        static Verdict good(BoardingPass pass) {
-            return new Verdict(true, null, pass);
+    /** {@code pass} and {@code segmentIndex} (the flight's place on the booking) are set only for a good pass; otherwise -1. */
+    public record Verdict(boolean valid, Reason reason, BoardingPass pass, int segmentIndex) {
+        static Verdict good(BoardingPass pass, int segmentIndex) {
+            return new Verdict(true, null, pass, segmentIndex);
         }
 
         static Verdict refused(Reason reason) {
-            return new Verdict(false, reason, null);
+            return new Verdict(false, reason, null, -1);
         }
     }
 
     private final PnrRepository pnrs;
     private final CheckInRepository checkIns;
     private final DisruptionRepository disruptions;
+    private final BoardedPassengers boarded;
     private final BoardingPassSigner signer;
     private final BoardingPassMetrics metrics;
 
-    public BoardingPassVerifier(PnrRepository pnrs, CheckInRepository checkIns, DisruptionRepository disruptions, BoardingPassSigner signer,
-                                BoardingPassMetrics metrics) {
+    public BoardingPassVerifier(PnrRepository pnrs, CheckInRepository checkIns, DisruptionRepository disruptions, BoardedPassengers boarded,
+                                BoardingPassSigner signer, BoardingPassMetrics metrics) {
         this.pnrs = pnrs;
         this.checkIns = checkIns;
         this.disruptions = disruptions;
+        this.boarded = boarded;
         this.signer = signer;
         this.metrics = metrics;
+    }
+
+    /** Asks the question without counting or logging it, for the caller that acts on the answer (ADR-0060). */
+    Verdict check(String barcode) {
+        return decide(barcode);
     }
 
     public Verdict verify(String barcode) {
@@ -117,7 +126,8 @@ public class BoardingPassVerifier {
             BoardingPass current = currentPass(pnr, flight, row, barcode);
             if (BoardingPassPayload.of(current.passengerName(), current.locator(), current.flightNumber(), current.departureDate(),
                     current.seatNumber(), current.sequence()).equals(asked.payload())) {
-                return Verdict.good(current);
+                return boarded.isBoarded(asked.locator(), segmentIndex, row.getPassengerIndex())
+                        ? Verdict.refused(Reason.ALREADY_BOARDED) : Verdict.good(current, segmentIndex);
             }
         }
         return Verdict.refused(thatPassengerIsNotIn(pnr, rows, asked) ? Reason.NOT_CHECKED_IN : Reason.SUPERSEDED);

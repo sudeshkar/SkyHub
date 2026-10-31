@@ -10,6 +10,7 @@ import com.skyhub.booking.domain.InvalidAccountException;
 import com.skyhub.booking.application.rebooking.RebookingRefusedException;
 import com.skyhub.booking.application.StaffUsernameTakenException;
 import com.skyhub.booking.domain.InvalidStaffAccountException;
+import com.skyhub.booking.domain.AlreadyBoardedException;
 import com.skyhub.booking.domain.AlreadyCheckedInException;
 import com.skyhub.booking.domain.BookingCancelledException;
 import com.skyhub.booking.domain.CheckInClosedException;
@@ -119,6 +120,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AlreadyCheckedInException.class)
     ProblemDetail handleAlreadyCheckedIn(AlreadyCheckedInException ex) {
         return problem(HttpStatus.CONFLICT, "Already checked in", ex.getMessage());
+    }
+
+    @ExceptionHandler(AlreadyBoardedException.class)
+    ProblemDetail handleAlreadyBoarded(AlreadyBoardedException ex) {
+        return problem(HttpStatus.CONFLICT, "Already boarded", ex.getMessage());
     }
 
     @ExceptionHandler(NotCheckedInException.class)

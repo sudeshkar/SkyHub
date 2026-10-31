@@ -6,12 +6,14 @@ import com.skyhub.booking.api.model.BoardingPassVerificationRequestDto;
 import com.skyhub.booking.api.model.BoardingPassesDto;
 import com.skyhub.booking.api.model.CheckInRequestDto;
 import com.skyhub.booking.application.BoardingPassVerifier;
+import com.skyhub.booking.application.BoardingService;
 import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.CheckInService;
 import java.util.List;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -23,10 +25,12 @@ public class CheckInController implements CheckInApi {
 
     private final CheckInService checkIn;
     private final BoardingPassVerifier verifier;
+    private final BoardingService boarding;
 
-    public CheckInController(CheckInService checkIn, BoardingPassVerifier verifier) {
+    public CheckInController(CheckInService checkIn, BoardingPassVerifier verifier, BoardingService boarding) {
         this.checkIn = checkIn;
         this.verifier = verifier;
+        this.boarding = boarding;
     }
 
     @Override
@@ -52,6 +56,14 @@ public class CheckInController implements CheckInApi {
     @Override
     public ResponseEntity<BoardingPassVerificationDto> verifyBoardingPass(BoardingPassVerificationRequestDto request) {
         BoardingPassVerifier.Verdict verdict = verifier.verify(request.getBarcode());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(BookingDtoMapper.toDto(verdict));
+    }
+
+    /** A staff action (SecurityConfig): whoever holds the token is the person at the gate and is recorded as having scanned the pass (ADR-0060). */
+    @Override
+    public ResponseEntity<BoardingPassVerificationDto> boardPassenger(BoardingPassVerificationRequestDto request) {
+        String by = SecurityContextHolder.getContext().getAuthentication().getName();
+        BoardingPassVerifier.Verdict verdict = boarding.board(request.getBarcode(), by);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(BookingDtoMapper.toDto(verdict));
     }
 
