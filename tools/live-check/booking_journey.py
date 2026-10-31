@@ -154,6 +154,83 @@ check("and the token that gives is an ordinary booking token (200)", status == 2
 status, staff = call("POST", f"{BOOKING}/api/v1/ops/sessions", {"username": STAFF[0], "password": STAFF[1]})
 check("staff sign in (201)", status == 201, status)
 OPS = staff["accessToken"] if status == 201 else None
+
+# ---- 5a. check-in one passenger at a time, and the gate (ADR-0055, ADR-0056, ADR-0058) -------------------------------------------------------
+# Its own booking, on the first flight, so nothing the journey cancels or moves later gets in the way. stack.py starts booking with a check-in
+# window wide enough for these flights; a real window is 24 hours (ADR-0059).
+FIRST_CANCELLED = False
+FRESH_BARCODE = None
+LOC2 = None
+
+
+def gate(barcode, token=None):
+    return call("POST", f"{BOOKING}/api/v1/ops/boarding-passes/verification", {"barcode": barcode}, token=token or OPS)
+
+
+def who(answer):
+    return [p["passengerIndex"] for p in answer["passes"]] if isinstance(answer, dict) and "passes" in answer else None
+
+
+free = random.sample(free_economy(FIRST["flightNumber"], day(FIRST)), 3)
+status, made = call("POST", f"{BOOKING}/api/v1/pnrs",
+                    {"paymentToken": "tok_visa", "contactEmail": f"live.checkin.{run}@example.com", "segments": [SEGMENTS[0]],
+                     "passengers": [{"firstName": "Mira", "lastName": "Perera", "seats": [free[0]]}, {"firstName": "Ravi", "lastName": "Perera", "seats": [free[1]]}]},
+                    headers={"Idempotency-Key": str(uuid.uuid4())})
+if check("a second booking of two passengers is made on the first flight for the check-in story (201)", status == 201, (status, made)):
+    LOC2 = made["locator"]
+    mira_seat, other = free[0], free[2]
+    _, opened2 = call("POST", f"{BOOKING}/api/v1/pnrs/{LOC2}/sessions", {"lastName": "Perera"})
+    T2 = opened2["accessToken"]
+    CI = f"{BOOKING}/api/v1/pnrs/{LOC2}/check-ins"
+    SEATS = f"{BOOKING}/api/v1/pnrs/{LOC2}/seat-assignments"
+
+    status, got = call("POST", CI, {"segmentIndex": 0, "passengerIndexes": [1]}, token=T2)
+    if check("check-in is open, and one passenger can be checked in alone (201)", status == 201 and who(got) == [1], (status, got)):
+        ravi = got["passes"][0]
+        status, _ = call("PUT", SEATS, {"passengerIndex": 1, "segmentIndex": 0, "seatNumber": other}, token=T2)
+        check("the checked-in passenger's seat is frozen (409)", status == 409, status)
+        status, _ = call("PUT", SEATS, {"passengerIndex": 0, "segmentIndex": 0, "seatNumber": other}, token=T2)
+        check("the other passenger can still change seat (200)", status == 200, status)
+        status, verdict = gate(ravi["barcode"])
+        check("the gate accepts the pass of the passenger who is in",
+              status == 200 and verdict.get("valid") is True and verdict["pass"]["passengerIndex"] == 1, (status, verdict))
+
+        status, rest = call("POST", CI, {"segmentIndex": 0}, token=T2)
+        check("checking in the rest adds the other passenger and keeps the first one's number (201)",
+              status == 201 and who(rest) == [0, 1] and rest["passes"][1]["sequence"] == ravi["sequence"], (status, rest))
+        mira = rest["passes"][0] if status == 201 else None
+        status, _ = call("POST", CI, {"segmentIndex": 0}, token=T2)
+        check("asking again changes nothing (200)", status == 200, status)
+
+        status, _ = call("DELETE", CI + "/0?passengerIndex=0", token=T2)
+        check("one passenger checks out (204)", status == 204, status)
+        status, left = call("GET", CI + "/0", token=T2)
+        check("only the other passenger's pass is left", status == 200 and who(left) == [1], (status, left))
+        if mira:
+            status, verdict = gate(mira["barcode"])
+            check("the gate refuses the pass of the passenger who checked out, though its signature is genuine, and says nothing about them",
+                  status == 200 and verdict.get("valid") is False and verdict.get("reason") == "NOT_CHECKED_IN" and verdict.get("pass") is None, (status, verdict))
+            status, verdict = gate(mira["barcode"].replace(other, "1A"))
+            check("a pass that was changed is refused as not signed by us", verdict.get("reason") == "BAD_SIGNATURE", verdict)
+        status, verdict = gate(ravi["barcode"])
+        check("the passenger who stayed in is still accepted", verdict.get("valid") is True, verdict)
+        status, _ = gate(ravi["barcode"], token=T2)
+        check("a traveller's booking token cannot use the gate check (403)", status == 403, status)
+        status, _ = gate(ravi["barcode"], token="not-a-token")
+        check("and neither can anyone without a staff token (401)", status == 401, status)
+
+        status, _ = call("PUT", SEATS, {"passengerIndex": 0, "segmentIndex": 0, "seatNumber": mira_seat}, token=T2)
+        check("the passenger who checked out moves back to the seat they had (200)", status == 200, status)
+        status, _ = call("DELETE", CI + "/0", token=T2)
+        check("everyone checks out (204)", status == 204, status)
+        status, again = call("POST", CI, {"segmentIndex": 0}, token=T2)
+        check("checking in again numbers everyone afresh (201)", status == 201 and who(again) == [0, 1], (status, again))
+        if status == 201:
+            FRESH_BARCODE = again["passes"][0]["barcode"]
+            status, verdict = gate(ravi["barcode"])
+            check("the pass from before is refused now that there are new ones", verdict.get("valid") is False and verdict.get("reason") == "SUPERSEDED", verdict)
+            status, verdict = gate(FRESH_BARCODE)
+            check("and the new pass is accepted", verdict.get("valid") is True, verdict)
 status, affected = call("GET", f"{BOOKING}/api/v1/ops/flights/{SECOND['flightNumber']}/departures/{day(SECOND)}/bookings", token=OPS)
 check("the booking is among those on the second flight", status == 200 and LOCATOR in [i["locator"] for i in affected["items"]], status)
 status, _ = call("POST", f"{BOOKING}/api/v1/ops/disruptions",
@@ -197,8 +274,9 @@ if late_enough:
     check("asking again changes nothing (UNCHANGED), so a dropped connection is safe to repeat", again["results"][0]["outcome"] == "UNCHANGED", again)
 
     # the connection rule, live: cancel the FIRST flight too, and try to move it to a flight that lands after the onward one leaves
-    call("POST", f"{BOOKING}/api/v1/ops/disruptions",
-         {"flightNumber": FIRST["flightNumber"], "departureDate": day(FIRST), "type": "CANCELLED", "reason": "Live check"}, token=OPS)
+    status, _ = call("POST", f"{BOOKING}/api/v1/ops/disruptions",
+                     {"flightNumber": FIRST["flightNumber"], "departureDate": day(FIRST), "type": "CANCELLED", "reason": "Live check"}, token=OPS)
+    FIRST_CANCELLED = status == 200
     # Two days on: it lands after the onward flight (the next day's) has already left, so no connection can be made.
     two_days = (datetime.date.fromisoformat(day(FIRST)) + datetime.timedelta(days=2)).isoformat()
     too_late = [i["legs"][0] for i in search("CMB", "DXB", two_days) if len(i["legs"]) == 1]
@@ -222,5 +300,16 @@ check("the seats were released", seat_map(FIRST["flightNumber"], day(FIRST)).get
 status, upcoming = call("GET", f"{BOOKING}/api/v1/accounts/me/bookings?when=upcoming", token=ACCOUNT)
 status2, past = call("GET", f"{BOOKING}/api/v1/accounts/me/bookings?when=past", token=ACCOUNT)
 check("the cancelled booking moves from upcoming to past", upcoming["bookings"] == [] and [b["locator"] for b in past["bookings"]] == [LOCATOR])
+
+# ---- 7b. the second booking's pass, now that its flight (maybe) and then the booking are cancelled -----------------------------------------
+if FRESH_BARCODE:
+    if FIRST_CANCELLED:
+        status, verdict = gate(FRESH_BARCODE)
+        check("the gate refuses the pass of a flight that staff have since cancelled", verdict.get("valid") is False and verdict.get("reason") == "FLIGHT_CANCELLED", verdict)
+    status, again = call("POST", f"{BOOKING}/api/v1/pnrs/{LOC2}/sessions", {"lastName": "Perera"})
+    status, _ = call("POST", f"{BOOKING}/api/v1/pnrs/{LOC2}/cancellation", token=again["accessToken"])
+    check("the second booking is cancelled (200)", status == 200, status)
+    status, verdict = gate(FRESH_BARCODE)
+    check("the gate refuses the pass of the cancelled booking", verdict.get("valid") is False and verdict.get("reason") == "BOOKING_CANCELLED", verdict)
 
 finish()

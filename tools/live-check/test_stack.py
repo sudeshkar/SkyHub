@@ -57,6 +57,27 @@ class WhatEachServiceIsGiven(unittest.TestCase):
             stack.service_env("website", self.keys)
 
 
+class WhatSettingsEachServiceIsStartedWith(unittest.TestCase):
+    def test_booking_gets_a_check_in_window_wide_enough_for_the_seed_flights(self):
+        args = stack.service_args("booking")
+
+        self.assertEqual(args, ["-Dspring-boot.run.arguments=--skyhub.booking.check-in.opens-before=PT2400H"])
+
+    def test_the_wide_window_is_a_live_check_setting_that_never_touches_the_closing_time(self):
+        joined = " ".join(stack.service_args("booking"))
+
+        self.assertIn("opens-before", joined)
+        self.assertNotIn("closes-before", joined)   # a flight about to leave still cannot be checked in to
+
+    def test_the_other_services_need_no_extra_settings(self):
+        self.assertEqual(stack.service_args("notification"), [])
+        self.assertEqual(stack.service_args("flight-search"), [])
+
+    def test_an_unknown_service_is_refused(self):
+        with self.assertRaises(ValueError):
+            stack.service_args("website")
+
+
 class WhatMayBeRemoved(unittest.TestCase):
     def test_only_the_throwaway_database_is_ever_dropped(self):
         self.assertEqual(stack.drop_database_sql(), 'DROP DATABASE IF EXISTS booking_live WITH (FORCE);')
