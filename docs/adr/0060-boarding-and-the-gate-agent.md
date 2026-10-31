@@ -29,5 +29,5 @@ A staff member could check whether a scanned pass is still good (ADR-0056), but 
 - Negative: **there is no time rule on boarding.** A good pass can be boarded at any time before departure and after; real gates open and close boarding, and this does not. It is the next thing to decide, with the flight's actual boarding times.
 - Negative: **boarding cannot be undone.** A wrong scan has no correction short of the database. An "un-board" would need its own authority.
 - Negative: **it needs the gate to be online**, like the check (ADR-0056).
-- Negative: the ops website was built for operations staff; a gate agent who signs into it sees a page whose actions are all refused. Nothing in the website works the gate yet.
+- Negative: the ops website was built for operations staff. It turned out that it could not even hold the `GATE` role: its session parser rejected it, so a gate agent was treated as signed out. ADR-0062 fixes that and adds the gate screen.
 - Not done: boarding by a standby or a passenger without a pass, and boarding more than one segment of a trip in one scan.

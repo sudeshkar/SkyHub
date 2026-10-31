@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProposals } from "@/lib/api/agent";
-import { openStaffSession, rebookFlights, recordDisruption as recordCall, withdrawDisruption as withdrawCall } from "@/lib/api/booking";
+import {
+  boardPassenger,
+  openStaffSession,
+  rebookFlights,
+  recordDisruption as recordCall,
+  verifyBoardingPass,
+  withdrawDisruption as withdrawCall,
+} from "@/lib/api/booking";
 import { rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
-import { loadProposals, logOut, moveBookings, recordDisruption, staffLogin, withdrawDisruption } from "./actions";
+import { gateScan, loadProposals, logOut, moveBookings, recordDisruption, staffLogin, withdrawDisruption } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: { staffLogin: {}, manage: {} }, rateLimit: vi.fn() }));
 vi.mock("@/lib/staff-session", () => ({
@@ -13,6 +20,7 @@ vi.mock("@/lib/staff-session", () => ({
 }));
 vi.mock("@/lib/api/booking", () => ({
   openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlights: vi.fn(), withdrawDisruption: vi.fn(),
+  verifyBoardingPass: vi.fn(), boardPassenger: vi.fn(),
 }));
 vi.mock("@/lib/api/agent", () => ({ getProposals: vi.fn() }));
 // redirect() works by throwing; the real one is not available outside a request.
@@ -351,5 +359,84 @@ describe("withdrawDisruption", () => {
     expect(await withdrawDisruption({ status: "idle" }, form(request))).toMatchObject({
       status: "error", message: expect.stringContaining("not responding"),
     });
+  });
+});
+
+describe("gateScan (ADR-0062)", () => {
+  const BARCODE = "M1PERERA/PRIYA ABC234 SK501 2026-11-02 11D 0007.signature";
+  const PASS = { passengerName: "PERERA/PRIYA", passengerIndex: 0, locator: "ABC234", flightNumber: "SK501", departureDate: "2026-11-02", seatNumber: "11D", sequence: 7, barcode: BARCODE };
+  const gate = { username: "gate.one", role: "GATE" as const, token: "t".repeat(40) };
+
+  beforeEach(() => vi.mocked(readStaffSession).mockResolvedValue(gate));
+
+  it("checks the pass with the staff token and shows only what the gate needs", async () => {
+    vi.mocked(verifyBoardingPass).mockResolvedValue({ kind: "good", pass: PASS });
+
+    const result = await gateScan({ status: "idle" }, form({ barcode: ` ${BARCODE} `, intent: "check" }));
+
+    expect(verifyBoardingPass).toHaveBeenCalledWith(gate.token, BARCODE);
+    expect(boardPassenger).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      status: "good", intent: "check",
+      pass: { passengerName: "PERERA/PRIYA", flightNumber: "SK501", departureDate: "2026-11-02", seatNumber: "11D", sequence: 7 },
+    });
+    expect(JSON.stringify(result)).not.toContain("ABC234"); // neither the barcode nor the reference is sent back to the browser
+  });
+
+  it("boards the passenger only when asked to", async () => {
+    vi.mocked(boardPassenger).mockResolvedValue({ kind: "good", pass: PASS });
+
+    const result = await gateScan({ status: "idle" }, form({ barcode: BARCODE, intent: "board" }));
+
+    expect(boardPassenger).toHaveBeenCalledWith(gate.token, BARCODE);
+    expect(verifyBoardingPass).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: "good", intent: "board" });
+  });
+
+  it("passes the reason a pass was refused through and nothing else", async () => {
+    vi.mocked(boardPassenger).mockResolvedValue({ kind: "refused", reason: "ALREADY_BOARDED" });
+
+    expect(await gateScan({ status: "idle" }, form({ barcode: BARCODE, intent: "board" }))).toEqual({ status: "refused", reason: "ALREADY_BOARDED" });
+  });
+
+  it("never boards on anything but an explicit board request", async () => {
+    vi.mocked(verifyBoardingPass).mockResolvedValue({ kind: "good", pass: PASS });
+
+    await gateScan({ status: "idle" }, form({ barcode: BARCODE }));              // no intent
+    await gateScan({ status: "idle" }, form({ barcode: BARCODE, intent: "x" })); // an unknown intent
+
+    expect(boardPassenger).not.toHaveBeenCalled();
+    expect(verifyBoardingPass).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not call the service for nothing, or for something far longer than a pass", async () => {
+    expect((await gateScan({ status: "idle" }, form({ barcode: "   ", intent: "board" }))).status).toBe("error");
+    expect((await gateScan({ status: "idle" }, form({ barcode: "x".repeat(301), intent: "board" }))).status).toBe("error");
+    expect(boardPassenger).not.toHaveBeenCalled();
+    expect(verifyBoardingPass).not.toHaveBeenCalled();
+  });
+
+  it("needs a signed-in person and drops a token the service no longer accepts", async () => {
+    vi.mocked(readStaffSession).mockResolvedValue(null);
+    expect(await gateScan({ status: "idle" }, form({ barcode: BARCODE, intent: "board" }))).toEqual({ status: "signed-out" });
+    expect(boardPassenger).not.toHaveBeenCalled();
+
+    vi.mocked(readStaffSession).mockResolvedValue(gate);
+    vi.mocked(boardPassenger).mockResolvedValue({ kind: "unauthorized" });
+    expect(await gateScan({ status: "idle" }, form({ barcode: BARCODE, intent: "board" }))).toEqual({ status: "signed-out" });
+    expect(clearStaffSession).toHaveBeenCalled();
+  });
+
+  it("says so when the booking service does not answer, without claiming anyone boarded", async () => {
+    vi.mocked(boardPassenger).mockResolvedValue({ kind: "unavailable" });
+
+    expect(await gateScan({ status: "idle" }, form({ barcode: BARCODE, intent: "board" }))).toMatchObject({ status: "error", message: expect.stringContaining("not responding") });
+  });
+
+  it("is rate limited", async () => {
+    vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 7 });
+
+    expect(await gateScan({ status: "idle" }, form({ barcode: BARCODE, intent: "board" }))).toMatchObject({ status: "error", message: expect.stringContaining("7 seconds") });
+    expect(boardPassenger).not.toHaveBeenCalled();
   });
 });

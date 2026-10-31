@@ -26,4 +26,4 @@ The existing `ops-disruption` spec had gone stale: the ops page gained a second 
 - Negative: **still run by hand, not in CI.** It needs the whole stack, Redis, the website and a browser, and about a minute once they are up.
 - Negative: the rate limiter makes repeated runs fail until its counters are cleared; the specs do not clear them themselves.
 - Negative: the browser is Chromium only, desktop size only.
-- Not covered: the gate (no screen exists), the ops approval flow (needs the model agent; that spec is skipped without it), and the website on a phone.
+- Not covered: the ops approval flow (needs the model agent; that spec is skipped without it), and the website on a phone.
