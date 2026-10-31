@@ -8,40 +8,11 @@ import re
 import sys
 import tempfile
 import time
-import urllib.error
-import urllib.request
+import urllib.parse
 
-BOOKING = os.environ.get("BOOKING_URL", "http://localhost:8082")
-MAILPIT = os.environ.get("MAILPIT_URL", "http://localhost:8025")
-NOTIFICATION_MGMT = os.environ.get("NOTIFICATION_MGMT_URL", "http://localhost:9083")
+from _live import BOOKING, MAILPIT, NOTIFICATION_MGMT, call, check, finish, mails_to
+
 STATE = os.path.join(tempfile.gettempdir(), "skyhub-live-failure.json")   # remembers the parked request between the two phases
-results = []
-
-
-def check(name, ok, detail=""):
-    results.append(ok)
-    print(("PASS " if ok else "FAIL ") + name + (f"  [{detail}]" if detail and not ok else ""))
-
-
-def call(method, url, body=None):
-    data = None if body is None else json.dumps(body).encode()
-    request = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            raw = response.read().decode()
-            return response.status, (json.loads(raw) if raw else None)
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode()
-        try:
-            return e.code, json.loads(raw)
-        except ValueError:
-            return e.code, raw
-
-
-def mail_to(address):
-    _, listing = call("GET", f"{MAILPIT}/api/v1/search?query=" + urllib.request.quote(f"to:{address}"))
-    return (listing or {}).get("messages", [])
-
 
 if sys.argv[1] == "park":
     address = f"live.parked.{int(time.time())}@example.com"
@@ -58,7 +29,7 @@ if sys.argv[1] == "park":
             break
         time.sleep(3)
     check("the link event was refused and PARKED on the dead-letter topic", parked is not None)
-    check("no email was sent for it", len(mail_to(address)) == 0, mail_to(address))
+    check("no email was sent for it", len(mails_to(address)) == 0, mails_to(address))
     if parked:
         text = json.dumps(parked)
         check("the parked listing says why without the address or any token", address not in text and "v1:" not in text, text)
@@ -66,13 +37,13 @@ if sys.argv[1] == "park":
     json.dump({"address": address}, open(STATE, "w"))
 else:
     address = json.load(open(STATE))["address"]
-    check("before the replay there is still no email for the parked request", len(mail_to(address)) == 0)
+    check("before the replay there is still no email for the parked request", len(mails_to(address)) == 0)
     status, replay = call("POST", NOTIFICATION_MGMT + "/actuator/deadletters", {"limit": 500})
     check("the replay tool puts parked messages back (200)", status == 200 and replay.get("replayed", 0) >= 1, (status, replay))
     end = time.time() + 60
     mail = None
     while time.time() < end and not mail:
-        found = mail_to(address)
+        found = mails_to(address)
         if found:
             _, mail = call("GET", f"{MAILPIT}/api/v1/message/{found[0]['ID']}")
         time.sleep(1)
@@ -81,11 +52,9 @@ else:
         token = re.search(r"set-password\?token=([A-Za-z0-9_%.\-]+)", mail["Text"])
         check("it carries a real token", bool(token))
         status, _ = call("POST", BOOKING + "/api/v1/accounts/passwords",
-                         {"token": urllib.request.unquote(token.group(1)), "password": "a long enough passphrase"})
+                         {"token": urllib.parse.unquote(token.group(1)), "password": "a long enough passphrase"})
         check("and the traveller can use it to choose a password (204)", status == 204, status)
     status, replay = call("POST", NOTIFICATION_MGMT + "/actuator/deadletters", {"limit": 500})
     check("a second replay takes nothing more", status == 200 and replay.get("replayed") == 0, (status, replay))
 
-print()
-print(f"{sum(results)} of {len(results)} checks passed")
-sys.exit(0 if all(results) else 1)
+finish()

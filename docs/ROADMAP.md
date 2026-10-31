@@ -61,6 +61,7 @@ How a slice goes, every time:
 | 42 | "Sign out everywhere": one action that ends every session of the account, without changing the password | ADR-0047 |
 | 43 | One password rule for staff and travellers (12 characters at least, 72 bytes at most), fixing a 500 for passwords BCrypt cannot store | ADR-0048 |
 | 44 | A repeatable live check of the account journey through the real chain (booking, Kafka, notification, Mailpit), and the fix for the one defect its first run found | ADR-0049 |
+| 45 | The live check extended to the booking journey: search, seats, hold, payment, confirmation, an account, a cancelled flight, a rebooking that keeps the connection, a cancellation and refund (43 checks, no product defect found) | ADR-0049 |
 
 ## Next slices (pick one at a time; each is independent)
 
