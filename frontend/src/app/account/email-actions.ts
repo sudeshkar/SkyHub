@@ -75,6 +75,7 @@ export async function confirmEmailChange(_previous: ConfirmEmailState, form: For
   const outcome = await confirmAccountEmailChange(session.token, token);
   switch (outcome.kind) {
     case "changed":
+      await clearAccountSession(); // changing the address ended every session, this one included (ADR-0041): the cookie is no use now
       return { status: "done" };
     case "invalid-link":
       return { status: "link-invalid" };

@@ -24,7 +24,8 @@ describe("ConfirmEmailForm", () => {
   it("says what confirming does before the person presses the button", () => {
     render(<ConfirmEmailForm token="t" />);
 
-    expect(screen.getByText(/sign in with the new address/i)).toBeInTheDocument();
+    expect(screen.getByText(/sign in again with the new address/i)).toBeInTheDocument();
+    expect(screen.getByText(/every session on this account, including this one, will end/i)).toBeInTheDocument();
     expect(screen.getByText(/bookings made with the old address/i)).toBeInTheDocument();
   });
 
@@ -36,7 +37,8 @@ describe("ConfirmEmailForm", () => {
 
     const notice = await screen.findByRole("status");
     expect(notice).toHaveTextContent(/new email address is saved/i);
-    expect(screen.getByRole("link", { name: /your account/i })).toHaveAttribute("href", "/account");
+    expect(notice).toHaveTextContent(/signed out/i);
+    expect(screen.getByRole("link", { name: /sign in/i })).toHaveAttribute("href", "/account");
   });
 
   it("says a wrong, used or expired link has stopped working and how to get another", async () => {

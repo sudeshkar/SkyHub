@@ -37,5 +37,5 @@ An account's address is its identity: it is what signs a traveller in, what a pa
 - Negative: **a failed password here counts toward the same lock as sign-in** but is not in the failed-sign-in alert (`skyhub_account_logins_total`), so a burst of wrong passwords against this endpoint is only visible in its own counter.
 - Negative: bookings made with the old address disappear from the list, and there is no way to bring them along. They can still be opened with their reference and last name.
 - Negative: one pending change at a time; asking again replaces it.
-- Negative: sessions already issued stay valid after the change (they name the account, not the address), up to 30 minutes, as with every token.
+- Negative: sessions already issued stay valid after the change (they name the account, not the address), up to 30 minutes, as with every token. (Ended by the change since ADR-0041.)
 - Follow-up: tell the old address; revoke sessions on a change; fold the lock logic shared with staff accounts into one class.

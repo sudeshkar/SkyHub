@@ -52,17 +52,18 @@ class AccountEmailChangeIntegrationTest {
         String token = latestToken("account.email-change-link", "mover.new@example.com");
         confirm(bearer, token).andExpect(status().isNoContent());
 
-        mvc.perform(get("/api/v1/accounts/me").header("Authorization", bearer))
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", bearer)).andExpect(status().isUnauthorized());   // ADR-0041: that session ended
+        String fresh = signInBearer("mover.new@example.com");
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", fresh))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("mover.new@example.com"));
-        signIn("mover.new@example.com", PASSWORD).andExpect(status().isCreated());
         signIn("mover.old@example.com", PASSWORD).andExpect(status().isUnauthorized());   // the old address no longer opens the account
 
         String newBooking = book("mover.new@example.com", "2028-03-02");
-        String list = mvc.perform(get("/api/v1/accounts/me/bookings").header("Authorization", bearer))
+        String list = mvc.perform(get("/api/v1/accounts/me/bookings").header("Authorization", fresh))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(list, "$.bookings[*].locator")).containsExactly(newBooking);
         assertThat(list).doesNotContain(oldBooking);
-        mvc.perform(post("/api/v1/accounts/me/bookings/{l}/sessions", oldBooking).header("Authorization", bearer)).andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/accounts/me/bookings/{l}/sessions", oldBooking).header("Authorization", fresh)).andExpect(status().isNotFound());
     }
 
     @Test
@@ -153,7 +154,8 @@ class AccountEmailChangeIntegrationTest {
 
         confirm(bearer, token).andExpect(status().isNoContent());
 
-        confirm(bearer, token).andExpect(status().isBadRequest());
+        confirm(bearer, token).andExpect(status().isUnauthorized());                          // the session that used it has ended (ADR-0041)
+        confirm(signInBearer("once.new@example.com"), token).andExpect(status().isBadRequest());   // and from a fresh one it is simply used
     }
 
     @Test
@@ -181,6 +183,11 @@ class AccountEmailChangeIntegrationTest {
 
     private org.springframework.test.web.servlet.ResultActions confirm(String bearer, String token) throws Exception {
         return mvc.perform(body("/api/v1/accounts/me/email-change/confirmation", "{\"token\":\"%s\"}".formatted(token)).header("Authorization", bearer));
+    }
+
+    private String signInBearer(String email) throws Exception {
+        String response = signIn(email, PASSWORD).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return "Bearer " + JsonPath.<String>read(response, "$.accessToken");
     }
 
     private org.springframework.test.web.servlet.ResultActions signIn(String email, String password) throws Exception {
@@ -233,7 +240,7 @@ class AccountEmailChangeIntegrationTest {
         assertThat(eventsFor("account.email-changed", "notice.old@example.com")).isZero();   // a refused change tells nobody
 
         confirm(bearer, token).andExpect(status().isNoContent());
-        confirm(bearer, token).andExpect(status().isBadRequest());   // used: no second notice
+        confirm(signInBearer("notice.new@example.com"), token).andExpect(status().isBadRequest());   // used: no second notice
 
         assertThat(eventsFor("account.email-changed", "notice.old@example.com")).isEqualTo(1);
         assertThat(eventsFor("account.email-changed", "notice.new@example.com")).isZero();   // never to the new address

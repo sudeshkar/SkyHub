@@ -16,7 +16,8 @@ export function ConfirmEmailForm({ token }: { token: string }) {
       <section role="status" className="max-w-md border-l-4 border-copper bg-white px-4 py-3">
         <p className="font-semibold">Your new email address is saved.</p>
         <p className="mt-2 text-sm">
-          Sign in with it from now on. <Link href="/account" className="underline">Your account</Link> now lists the bookings made with it.
+          For your safety you have been signed out everywhere. <Link href="/account" className="underline">Sign in</Link> again with the
+          new address; the account will then list the bookings made with it.
         </p>
       </section>
     );
@@ -27,9 +28,9 @@ export function ConfirmEmailForm({ token }: { token: string }) {
       <h2 className="font-display text-xl">Confirm your new email address</h2>
       <input type="hidden" name="token" value={token} />
       <p className="text-sm text-muted">
-        This moves the account you are signed in to onto the address this link was sent to. You will sign in with the new address, and
-        the account will list the bookings made with it instead of bookings made with the old address (those can still be opened with
-        their reference and last name).
+        This moves the account you are signed in to onto the address this link was sent to. Every session on this account, including
+        this one, will end, and you will sign in again with the new address. The account will then list the bookings made with it
+        instead of bookings made with the old address (those can still be opened with their reference and last name).
       </p>
       <button type="submit" disabled={pending} className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60">
         {pending ? "Confirming…" : "Confirm the change"}

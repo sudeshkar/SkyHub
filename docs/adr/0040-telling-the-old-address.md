@@ -30,5 +30,5 @@ Changing the account's address (ADR-0039) needs the password, a signed-in sessio
 - Negative: **it only informs.** The owner cannot undo the change themselves; they depend on support, and the runbook says what a developer does (a database change). Self-service recovery is a design of its own (option 2) and is not built.
 - Negative: **an address that has since been given to someone else** gets a notice about an account that is not theirs. It says only that an account at that address moved and a masked new address, so it leaks little, but it is noise to them.
 - Negative: **a notice that is not delivered** (the mailbox is gone, or mail is down past the retries) is parked like any other (ADR-0032); the change has already happened.
-- Negative: sessions already issued stay valid for up to 30 minutes after a change, so an attacker already inside is not stopped by this. That is the next follow-up (revoking sessions).
+- Negative: sessions already issued stay valid for up to 30 minutes after a change, so an attacker already inside is not stopped by this. (Ended by the change since ADR-0041.)
 - Follow-up: revoke sessions on an address change; a way for the owner to recover the account; a shared lock class for staff and traveller accounts.

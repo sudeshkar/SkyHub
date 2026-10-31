@@ -90,6 +90,22 @@ describe("confirmEmailChange", () => {
     expect(confirmAccountEmailChange).toHaveBeenCalledWith(TOKEN, "abc");
   });
 
+  it("drops the session cookie once the account has moved, since that session has just ended (ADR-0041)", async () => {
+    vi.mocked(confirmAccountEmailChange).mockResolvedValue({ kind: "changed" });
+
+    await confirmEmailChange({ status: "idle" }, form({ token: "abc" }));
+
+    expect(clearAccountSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the session cookie when the link did not work, since nothing ended", async () => {
+    vi.mocked(confirmAccountEmailChange).mockResolvedValue({ kind: "invalid-link" });
+
+    await confirmEmailChange({ status: "idle" }, form({ token: "old" }));
+
+    expect(clearAccountSession).not.toHaveBeenCalled();
+  });
+
   it("asks a person who is not signed in to sign in first, without spending the link", async () => {
     vi.mocked(readAccountSession).mockResolvedValue(null);
 
