@@ -49,3 +49,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0043](0043-grouping-proposals-on-the-operations-page.md) | Grouping and finding proposals on the operations page | Accepted |
 | [0044](0044-upcoming-bookings-soonest-first.md) | Upcoming bookings, soonest flight first | Accepted |
 | [0045](0045-one-login-lock-and-password-gate.md) | One login lock and one password gate for staff and traveller accounts | Accepted |
+| [0046](0046-sealing-link-tokens-on-the-topic.md) | Sealing one-time link tokens on the topic | Accepted |

@@ -226,7 +226,7 @@ class MyBookingsIntegrationTest {
         for (String payload : jdbc.queryForList("SELECT payload FROM outbox_event WHERE event_type = 'account.password-link' ORDER BY seq DESC LIMIT 50", String.class)) {
             var event = json.readTree(cipher.decrypt(payload));
             if (email.equalsIgnoreCase(event.get("contactEmail").asString())) {
-                token = event.get("token").asString();
+                token = TestLinkTokens.tokenOf(event);
                 break;
             }
         }

@@ -37,17 +37,19 @@ public class NotificationService {
     private final Clock clock;
     private final TransactionOperations transactions;
     private final NotificationMetrics metrics;
+    private final LinkTokenOpener tokens;
     private final String siteUrl;
 
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
-                               TransactionOperations transactions, NotificationMetrics metrics) {
-        this(sent, email, clock, transactions, metrics, "http://localhost:3000");
+                               TransactionOperations transactions, NotificationMetrics metrics, LinkTokenOpener tokens) {
+        this(sent, email, clock, transactions, metrics, tokens, "http://localhost:3000");
     }
 
     @Autowired
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
-                               TransactionOperations transactions, NotificationMetrics metrics,
+                               TransactionOperations transactions, NotificationMetrics metrics, LinkTokenOpener tokens,
                                @Value("${skyhub.notifications.site-url:http://localhost:3000}") String siteUrl) {
+        this.tokens = tokens;
         this.siteUrl = siteUrl;
         this.sent = sent;
         this.email = email;
@@ -69,7 +71,9 @@ public class NotificationService {
     }
 
     public void passwordLink(AccountPasswordLinkEvent event) {
-        deliver(event, EmailComposer.passwordLink(event, siteUrl));
+        // Opened only to build the link (ADR-0046): a token that does not open fails the event before anything is sent or recorded.
+        String token = tokens.open(event.sealedToken(), event.type(), event.contactEmail());
+        deliver(event, EmailComposer.passwordLink(event, token, siteUrl));
     }
 
     public void emailChanged(AccountEmailChangedEvent event) {
@@ -77,7 +81,8 @@ public class NotificationService {
     }
 
     public void emailChangeLink(AccountEmailChangeLinkEvent event) {
-        deliver(event, EmailComposer.emailChangeLink(event, siteUrl));
+        String token = tokens.open(event.sealedToken(), event.type(), event.contactEmail());
+        deliver(event, EmailComposer.emailChangeLink(event, token, siteUrl));
     }
 
     public void refundCompleted(BookingRefundCompletedEvent event) {

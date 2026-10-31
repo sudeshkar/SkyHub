@@ -6,10 +6,10 @@ import java.util.UUID;
 /**
  * "Send this link to the NEW address of an account" (ADR-0039, contract: api-specs/events/account-email-change-link.v1.example.json).
  * {@code contactEmail} is the new address, the one that has to prove it can be read. It belongs to no booking, so it has no
- * reference. The token is a secret: it never appears in {@link #toString()}, and neither does the address.
+ * reference. The token arrives sealed (ADR-0046) and is opened only to build the link. It never appears in {@link #toString()}, and neither does the address.
  */
 public record AccountEmailChangeLinkEvent(UUID eventId, String type, int version, Instant occurredAt, String contactEmail,
-                                          String token, Instant expiresAt) implements NotificationEvent {
+                                          String sealedToken, Instant expiresAt) implements NotificationEvent {
 
     public static final String TYPE = "account.email-change-link";
 

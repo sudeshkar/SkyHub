@@ -33,7 +33,7 @@ An account's address is its identity: it is what signs a traveller in, what a pa
 - Positive: an address cannot be claimed without being read, so the bookings of someone else's address stay theirs.
 - Positive: no new credential, no new table: five columns on the account.
 - Negative: **the old address is not told.** A person who loses control of an account is not warned at the old address that it moved. That needs a second event and email, and is the next step; the password and the new mailbox are what stand in for it now. (Added later: ADR-0040.)
-- Negative: **the one-time token passes through Kafka,** as the account link's does (ADR-0033), and sits in the topic for its retention period.
+- Negative (ended by ADR-0046): **the one-time token passes through Kafka,** as the account link's does (ADR-0033), and sits in the topic for its retention period.
 - Negative: **a failed password here counts toward the same lock as sign-in** but is not in the failed-sign-in alert (`skyhub_account_logins_total`), so a burst of wrong passwords against this endpoint is only visible in its own counter.
 - Negative: bookings made with the old address disappear from the list, and there is no way to bring them along. They can still be opened with their reference and last name.
 - Negative: one pending change at a time; asking again replaces it.

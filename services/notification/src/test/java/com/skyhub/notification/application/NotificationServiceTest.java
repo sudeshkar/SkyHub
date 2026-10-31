@@ -47,6 +47,9 @@ class NotificationServiceTest {
     @Mock
     private EmailSender email;
 
+    @Mock
+    private LinkTokenOpener opener;
+
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private NotificationService service;
     private BookingConfirmedEvent event;
@@ -54,7 +57,7 @@ class NotificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new NotificationService(sent, email, Clock.fixed(NOW, ZoneOffset.UTC),
-                TransactionOperations.withoutTransaction(), new NotificationMetrics(registry));
+                TransactionOperations.withoutTransaction(), new NotificationMetrics(registry), opener);
         event = new BookingConfirmedEvent(EVENT_ID, "booking.confirmed", 1, Instant.parse("2026-10-30T10:00:00Z"),
                 "ABC234", "priya@example.com", List.of(new BookingConfirmedEvent.Passenger("Priya", "Perera")),
                 List.of(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2))),
@@ -95,9 +98,10 @@ class NotificationServiceTest {
 
     @Test
     void should_send_the_password_link_with_the_site_address_and_record_it_without_a_booking_reference() {
+        when(opener.open("v1:sealed", "account.password-link", "priya@example.com")).thenReturn("abc");
         service.passwordLink(new com.skyhub.notification.domain.AccountPasswordLinkEvent(
                 UUID.fromString("2b6d8f10-4c93-4a57-9e21-8f0a1c3d5e77"), "account.password-link", 1,
-                Instant.parse("2026-10-30T10:00:00Z"), "priya@example.com", "SIGN_UP", "abc", Instant.parse("2026-10-30T11:00:00Z")));
+                Instant.parse("2026-10-30T10:00:00Z"), "priya@example.com", "SIGN_UP", "v1:sealed", Instant.parse("2026-10-30T11:00:00Z")));
 
         ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
         verify(email).send(message.capture());
@@ -236,9 +240,10 @@ class NotificationServiceTest {
 
     @Test
     void should_send_the_email_change_link_to_the_new_address_and_record_it_without_a_booking_reference() {
+        when(opener.open("v1:sealed", "account.email-change-link", "priya.new@example.com")).thenReturn("abc");
         service.emailChangeLink(new com.skyhub.notification.domain.AccountEmailChangeLinkEvent(
                 UUID.fromString("6c1e9a52-7d3b-4f08-b4a6-2e9f0d8c3a14"), "account.email-change-link", 1,
-                Instant.parse("2026-11-01T10:00:00Z"), "priya.new@example.com", "abc", Instant.parse("2026-11-01T11:00:00Z")));
+                Instant.parse("2026-11-01T10:00:00Z"), "priya.new@example.com", "v1:sealed", Instant.parse("2026-11-01T11:00:00Z")));
 
         ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
         verify(email).send(message.capture());
@@ -263,5 +268,34 @@ class NotificationServiceTest {
         verify(sent).saveAndFlush(row.capture());
         assertThat(row.getValue().getLocator()).isNull();
         assertThat(row.getValue().getType()).isEqualTo("account.email-changed");
+    }
+
+    @Test
+    void should_open_the_token_for_the_type_and_address_of_the_event_and_never_log_or_record_it() {
+        when(opener.open("v1:sealed", "account.password-link", "priya@example.com")).thenReturn("the-plain-token");
+
+        service.passwordLink(new com.skyhub.notification.domain.AccountPasswordLinkEvent(
+                UUID.fromString("2b6d8f10-4c93-4a57-9e21-8f0a1c3d5e77"), "account.password-link", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "priya@example.com", "SIGN_UP", "v1:sealed", Instant.parse("2026-10-30T11:00:00Z")));
+
+        verify(opener).open("v1:sealed", "account.password-link", "priya@example.com");
+        ArgumentCaptor<SentNotification> row = ArgumentCaptor.forClass(SentNotification.class);
+        verify(sent).saveAndFlush(row.capture());
+        assertThat(row.getValue().toString()).doesNotContain("the-plain-token");
+        assertThat(row.getValue().getRecipient()).doesNotContain("the-plain-token");
+    }
+
+    @Test
+    void should_send_nothing_and_record_nothing_when_the_token_does_not_open_so_the_event_is_retried_then_parked() {
+        when(opener.open("v1:sealed", "account.password-link", "priya@example.com"))
+                .thenThrow(new com.skyhub.notification.domain.InvalidEventException("The link token could not be opened"));
+
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(com.skyhub.notification.domain.InvalidEventException.class)
+                .isThrownBy(() -> service.passwordLink(new com.skyhub.notification.domain.AccountPasswordLinkEvent(
+                        UUID.fromString("2b6d8f10-4c93-4a57-9e21-8f0a1c3d5e77"), "account.password-link", 1,
+                        Instant.parse("2026-10-30T10:00:00Z"), "priya@example.com", "SIGN_UP", "v1:sealed", Instant.parse("2026-10-30T11:00:00Z"))));
+
+        org.mockito.Mockito.verifyNoInteractions(email);
+        org.mockito.Mockito.verify(sent, org.mockito.Mockito.never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
     }
 }

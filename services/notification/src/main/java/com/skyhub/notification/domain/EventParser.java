@@ -63,7 +63,7 @@ public final class EventParser {
             case AccountPasswordLinkEvent e -> {
                 require(AccountPasswordLinkEvent.TYPE.equals(e.type()), "wrong type");
                 require("SIGN_UP".equals(e.purpose()) || "RESET".equals(e.purpose()), "unknown purpose");
-                require(notBlank(e.token()) && e.expiresAt() != null, "no token");
+                require(notBlank(e.sealedToken()) && e.expiresAt() != null, "no token");
             }
             case AccountEmailChangedEvent e -> {
                 require(AccountEmailChangedEvent.TYPE.equals(e.type()), "wrong type");
@@ -71,7 +71,7 @@ public final class EventParser {
             }
             case AccountEmailChangeLinkEvent e -> {
                 require(AccountEmailChangeLinkEvent.TYPE.equals(e.type()), "wrong type");
-                require(notBlank(e.token()) && e.expiresAt() != null, "no token");
+                require(notBlank(e.sealedToken()) && e.expiresAt() != null, "no token");
             }
             case BookingRefundCompletedEvent e -> {
                 require(BookingRefundCompletedEvent.TYPE.equals(e.type()), "wrong type");
