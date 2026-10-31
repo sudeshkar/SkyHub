@@ -23,7 +23,7 @@ Option 2, with an atomic counter.
 - **Whole party per flight.** `POST /pnrs/{locator}/check-ins` with `{segmentIndex}` checks in every passenger on that flight at once. Repeating it returns the same passes (idempotent): nothing is renumbered. A unique key on (locator, segment, passenger) makes this safe even under a double-click race.
 - **Boarding sequence.** One row per flight and date holds the next number; a single `INSERT … ON CONFLICT DO UPDATE … RETURNING` reserves a block for the whole party. No read-then-write, so concurrent check-ins cannot receive the same number, and no lock is held beyond that statement.
 - **Signed barcode.** A pass carries a compact text payload (name, locator, route, flight, date, seat, sequence) followed by an HMAC-SHA256 signature made with `SKYHUB_BOARDING_KEY`. A gate holding the key can verify a pass offline; changing any field breaks the signature. `BoardingPassSigner` is a port, so a real BCBP/PDF417 encoder or an asymmetric signature (gates would then need only a public key) can replace it without touching the use case.
-- **Seats are frozen once checked in.** A seat change for a flight that is checked in is refused (409); the traveller would have to be checked out first, which is out of scope. Cancelling still works and invalidates the passes: they are only returned for an active booking.
+- **Seats are frozen once checked in** (per passenger since ADR-0058). A seat change for a flight that is checked in is refused (409); the traveller would have to be checked out first, which is out of scope. Cancelling still works and invalidates the passes: they are only returned for an active booking.
 - **Access.** Both endpoints need the booking's manage token (ADR-0011).
 
 ## Consequences

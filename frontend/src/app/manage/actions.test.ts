@@ -177,7 +177,7 @@ describe("changeSeat", () => {
 describe("checkInFlight", () => {
   const PASSES = [
     {
-      passengerName: "PERERA/PRIYA", locator: "YUFHBD", flightNumber: "SK501", departureDate: "2026-11-02",
+      passengerName: "PERERA/PRIYA", passengerIndex: 0, locator: "YUFHBD", flightNumber: "SK501", departureDate: "2026-11-02",
       seatNumber: "11D", sequence: 7, barcode: "signed",
     },
   ];
@@ -188,7 +188,7 @@ describe("checkInFlight", () => {
     vi.mocked(checkInCall).mockResolvedValue({ kind: "ok", passes: PASSES, created: true });
 
     expect(await checkInFlight(0)).toEqual({ kind: "ok", passes: PASSES, created: true });
-    expect(checkInCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 0);
+    expect(checkInCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 0, undefined);
   });
 
   it.each([[-1], [4], [1.5], [Number.NaN]])("rejects flight index %s without calling the API", async (index) => {
@@ -228,7 +228,7 @@ describe("checkOutFlight (ADR-0055)", () => {
     vi.mocked(checkOutCall).mockResolvedValue({ kind: "ok" });
 
     expect(await checkOutFlight(1)).toEqual({ kind: "ok" });
-    expect(checkOutCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 1);
+    expect(checkOutCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 1, undefined);
   });
 
   it.each([[-1], [4], [1.5], [Number.NaN]])("rejects flight index %s without calling the API", async (index) => {
@@ -257,6 +257,41 @@ describe("checkOutFlight (ADR-0055)", () => {
     vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 9 });
 
     expect(await checkOutFlight(0)).toEqual({ kind: "rate-limited", retryAfterSeconds: 9 });
+    expect(checkOutCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("per passenger (ADR-0058)", () => {
+  beforeEach(() => vi.mocked(readSession).mockResolvedValue(SESSION));
+
+  it("checks in only the passengers named and says so to the service", async () => {
+    vi.mocked(checkInCall).mockResolvedValue({ kind: "ok", passes: [], created: true });
+
+    await checkInFlight(0, [1]);
+
+    expect(checkInCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 0, [1]);
+  });
+
+  it("checks in everyone when nobody is named", async () => {
+    vi.mocked(checkInCall).mockResolvedValue({ kind: "ok", passes: [], created: true });
+
+    await checkInFlight(0);
+
+    expect(checkInCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 0, undefined);
+  });
+
+  it("checks out only the passengers named", async () => {
+    vi.mocked(checkOutCall).mockResolvedValue({ kind: "ok" });
+
+    await checkOutFlight(0, [0, 1]);
+
+    expect(checkOutCall).toHaveBeenCalledWith("YUFHBD", SESSION.token, 0, [0, 1]);
+  });
+
+  it.each([[[-1]], [[9]], [[1.5]], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]])("rejects the passengers %j without calling the service", async (who) => {
+    expect((await checkInFlight(0, who)).kind).toBe("rejected");
+    expect((await checkOutFlight(0, who)).kind).toBe("rejected");
+    expect(checkInCall).not.toHaveBeenCalled();
     expect(checkOutCall).not.toHaveBeenCalled();
   });
 });

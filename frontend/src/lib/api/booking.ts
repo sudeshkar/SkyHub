@@ -217,12 +217,15 @@ async function passesOutcome(response: Response | null, okStatuses: number[]): P
   }
 }
 
-/** Checks in every passenger on one flight. Repeating it returns the same passes. */
-export async function checkIn(locator: string, token: string, segmentIndex: number): Promise<CheckInOutcome> {
+/**
+ * Checks in the named passengers on one flight, or everyone not yet in when none are named (ADR-0058). Repeating it returns the same
+ * passes. The answer holds the passes of everyone who is checked in on the flight afterwards.
+ */
+export async function checkIn(locator: string, token: string, segmentIndex: number, passengerIndexes?: number[]): Promise<CheckInOutcome> {
   const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ segmentIndex }),
+    body: JSON.stringify(passengerIndexes && passengerIndexes.length > 0 ? { segmentIndex, passengerIndexes } : { segmentIndex }),
     cache: "no-store",
   });
   return passesOutcome(response, [200, 201]);
@@ -255,9 +258,13 @@ export type CheckOutOutcome =
   | { kind: "rejected"; detail: string }
   | { kind: "unavailable" };
 
-/** Checks the whole party out of one flight (ADR-0055), so its seats can be changed again. Repeating it is harmless. */
-export async function checkOut(locator: string, token: string, segmentIndex: number): Promise<CheckOutOutcome> {
-  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins/${segmentIndex}`, {
+/**
+ * Checks the named passengers out of one flight, or everyone who is in when none are named (ADR-0055, ADR-0058), so their seats can be
+ * changed again. Repeating it is harmless.
+ */
+export async function checkOut(locator: string, token: string, segmentIndex: number, passengerIndexes?: number[]): Promise<CheckOutOutcome> {
+  const who = (passengerIndexes ?? []).map((index) => `passengerIndex=${index}`).join("&");
+  const response = await call(`/api/v1/pnrs/${encodeURIComponent(locator)}/check-ins/${segmentIndex}${who ? `?${who}` : ""}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",

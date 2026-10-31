@@ -120,7 +120,24 @@ public class BoardingPassVerifier {
                 return Verdict.good(current);
             }
         }
-        return Verdict.refused(Reason.SUPERSEDED);
+        return Verdict.refused(thatPassengerIsNotIn(pnr, rows, asked) ? Reason.NOT_CHECKED_IN : Reason.SUPERSEDED);
+    }
+
+    /** Someone with the name on the pass is on the booking, and none of them is checked in on this flight: checked out, or not yet in. */
+    private static boolean thatPassengerIsNotIn(Pnr pnr, List<CheckIn> rows, BoardingPassPayload.Parsed asked) {
+        boolean onBooking = false;
+        for (int i = 0; i < pnr.getPassengers().size(); i++) {
+            PnrPassenger p = pnr.getPassengers().get(i);
+            String name = (p.getLastName() + "/" + p.getFirstName()).toUpperCase(Locale.ROOT);
+            if (name.equals(asked.name())) {
+                onBooking = true;
+                int index = i;
+                if (rows.stream().anyMatch(row -> row.getPassengerIndex() == index)) {
+                    return false;
+                }
+            }
+        }
+        return onBooking;
     }
 
     private static int segmentOf(Pnr pnr, BoardingPassPayload.Parsed asked) {
@@ -137,6 +154,6 @@ public class BoardingPassVerifier {
         PnrPassenger passenger = pnr.getPassengers().get(row.getPassengerIndex());
         String name = (passenger.getLastName() + "/" + passenger.getFirstName()).toUpperCase(Locale.ROOT);
         String seat = pnr.seatOf(row.getPassengerIndex(), row.getSegmentIndex());
-        return new BoardingPass(name, pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat, row.getBoardingSequence(), barcode);
+        return new BoardingPass(name, row.getPassengerIndex(), pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat, row.getBoardingSequence(), barcode);
     }
 }

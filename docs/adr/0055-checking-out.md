@@ -32,4 +32,4 @@ Once a flight is checked in (ADR-0013), its seats are frozen: the boarding passe
 - Negative: **a pass that was already issued is not revoked.** It is signed (ADR-0013) and a gate that only checks the signature would still accept it, with the old seat and number. There is no gate system in this repository and no revocation list, so nothing refuses it. This has to be solved at the gate (check the booking, not only the signature) before this is used in a real airport; it is the reason check-out closes with check-in. ADR-0056 adds that check.
 - Negative: check-out is a delete. The record that someone checked in and out is in the logs (`Checked out`) and the metric, not in a table.
 - Negative: a traveller can check in and out repeatedly, each time consuming boarding numbers; the sequence has gaps. The website limits requests like any other manage action.
-- Not done: per-passenger check-in and check-out (the party moves together), and a QR/PDF417 image of the pass.
+- Not done: a QR/PDF417 image of the pass. (Per-passenger check-in and check-out: ADR-0058.)

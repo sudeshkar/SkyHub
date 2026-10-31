@@ -62,14 +62,25 @@ public class CheckInService {
         this.metrics = metrics;
     }
 
+    /** Checks in everyone on the booking who is not yet in. */
     public CheckInResult checkIn(String locator, int segmentIndex) {
+        return checkIn(locator, segmentIndex, List.of());
+    }
+
+    /**
+     * Checks in the named passengers on one flight, or everyone not yet in when none are named (ADR-0058). A passenger who is already in
+     * is left as they are and is not renumbered; only the newly checked-in get boarding numbers, in one block. The answer holds the
+     * passes of everyone who is checked in on the flight afterwards.
+     */
+    public CheckInResult checkIn(String locator, int segmentIndex, List<Integer> passengerIndexes) {
         Pnr pnr = pnrs.findByLocator(locator).orElseThrow(CheckInService::notFound);
         pnr.requireActive();
         PnrSegment flight = flightAt(pnr, segmentIndex);
+        List<Integer> wanted = passengersAsked(pnr, passengerIndexes);
 
         // Checking in twice is not an error and must not renumber anyone, even after the window has closed.
         List<CheckIn> existing = rows(locator, segmentIndex);
-        if (!existing.isEmpty()) {
+        if (allIn(existing, wanted)) {
             return replay(pnr, flight, existing);
         }
 
@@ -82,40 +93,65 @@ public class CheckInService {
         }
 
         try {
-            List<CheckIn> created = transactions.execute(status -> create(locator, segmentIndex, flight));
+            List<CheckIn> created = transactions.execute(status -> create(locator, segmentIndex, flight, wanted));
             metrics.record(Outcome.CHECKED_IN);
             log.atInfo()
                     .addKeyValue("pnr.locator", locator)
                     .addKeyValue("flight", flight.flightNumber())
                     .addKeyValue("check_in.passengers", created.size())
                     .log("Checked in");
-            return new CheckInResult(passes(pnr, flight, created), true);
+            return new CheckInResult(passes(pnr, flight, rows(locator, segmentIndex)), true);
         } catch (DataIntegrityViolationException lostRace) {
-            // Another request checked this flight in first. The unique key stopped ours and rolled back its numbers.
+            // Another request checked one of these in first. The unique key stopped ours and rolled back its numbers.
             List<CheckIn> winners = rows(locator, segmentIndex);
-            if (winners.isEmpty()) {
+            if (!allIn(winners, wanted)) {
                 throw lostRace;
             }
             return replay(pnr, flight, winners);
         }
     }
 
-    /**
-     * Takes the whole party off a flight's check-in (ADR-0055), so its seats can be changed again. Allowed until check-in closes, by the
-     * revised time if the flight was delayed; a cancelled flight can always be checked out of, since a booking that is checked in cannot
-     * be moved to another flight (ADR-0022). The old passes stop being shown, and checking in again numbers the party afresh.
-     *
-     * @return true if a check-in was removed, false if the flight was not checked in (so asking twice is harmless)
-     */
+    /** The passengers a request means, once each and in booking order: the named ones, or everyone when none are named. */
+    private static List<Integer> passengersAsked(Pnr pnr, List<Integer> named) {
+        int party = pnr.getPassengers().size();
+        if (named == null || named.isEmpty()) {
+            return IntStream.range(0, party).boxed().toList();
+        }
+        for (int index : named) {
+            if (index < 0 || index >= party) {
+                throw new InvalidBookingException("This booking has no passenger " + index);
+            }
+        }
+        return named.stream().distinct().sorted().toList();
+    }
+
+    private static boolean allIn(List<CheckIn> rows, List<Integer> wanted) {
+        return rows.stream().map(CheckIn::getPassengerIndex).collect(java.util.stream.Collectors.toSet()).containsAll(wanted);
+    }
+
+    /** Checks out everyone who is checked in on the flight. */
     public boolean checkOut(String locator, int segmentIndex) {
+        return checkOut(locator, segmentIndex, List.of());
+    }
+
+    /**
+     * Takes the named passengers off a flight's check-in, or everyone when none are named (ADR-0055, ADR-0058), so their seats can be
+     * changed again. Allowed until check-in closes, by the revised time if the flight was delayed; a cancelled flight can always be checked
+     * out of, since a booking that is checked in cannot be moved to another flight (ADR-0022). Their old passes stop being shown, and
+     * checking in again numbers them afresh. Passengers who are not checked in are left alone.
+     *
+     * @return true if a check-in was removed, false if none of them was checked in (so asking twice is harmless)
+     */
+    public boolean checkOut(String locator, int segmentIndex, List<Integer> passengerIndexes) {
         Pnr pnr = pnrs.findByLocator(locator).orElseThrow(CheckInService::notFound);
         pnr.requireActive();
         PnrSegment flight = flightAt(pnr, segmentIndex);
-        if (rows(locator, segmentIndex).isEmpty()) {
+        List<Integer> named = passengersAsked(pnr, passengerIndexes);
+        if (rows(locator, segmentIndex).stream().noneMatch(row -> named.contains(row.getPassengerIndex()))) {
             return false;
         }
         requireCheckInNotClosedFor(flight);
-        Long removed = transactions.execute(status -> checkIns.deleteByLocatorAndSegmentIndex(locator, segmentIndex));
+        Long removed = transactions.execute(status -> checkIns.deleteByLocatorAndSegmentIndexAndPassengerIndexIn(locator, segmentIndex, named));
         if (removed == null || removed == 0) {
             return false;   // another request got there first
         }
@@ -171,15 +207,17 @@ public class CheckInService {
         return new CheckInResult(passes(pnr, flight, existing), false);
     }
 
-    private List<CheckIn> create(String locator, int segmentIndex, PnrSegment flight) {
+    private List<CheckIn> create(String locator, int segmentIndex, PnrSegment flight, List<Integer> wanted) {
         // Look again inside the transaction: the booking may have been cancelled since we first read it.
         Pnr pnr = pnrs.findByLocator(locator).orElseThrow(CheckInService::notFound);
         pnr.requireActive();
-        int party = pnr.getPassengers().size();
-        int first = sequence.reserve(flight.flightNumber(), flight.departureDate(), party);
+        java.util.Set<Integer> already = rows(locator, segmentIndex).stream().map(CheckIn::getPassengerIndex)
+                .collect(java.util.stream.Collectors.toSet());
+        List<Integer> toCheckIn = wanted.stream().filter(p -> !already.contains(p)).toList();
+        int first = sequence.reserve(flight.flightNumber(), flight.departureDate(), toCheckIn.size());
         Instant now = clock.instant();
-        List<CheckIn> rows = IntStream.range(0, party)
-                .mapToObj(p -> CheckIn.of(locator, segmentIndex, p, first + p, now))
+        List<CheckIn> rows = IntStream.range(0, toCheckIn.size())
+                .mapToObj(i -> CheckIn.of(locator, segmentIndex, toCheckIn.get(i), first + i, now))
                 .toList();
         return checkIns.saveAllAndFlush(rows);
     }
@@ -203,7 +241,7 @@ public class CheckInService {
         String seat = pnr.seatOf(row.getPassengerIndex(), row.getSegmentIndex());
         String payload = BoardingPassPayload.of(
                 name, pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat, row.getBoardingSequence());
-        return new BoardingPass(name, pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat,
+        return new BoardingPass(name, row.getPassengerIndex(), pnr.getLocator(), flight.flightNumber(), flight.departureDate(), seat,
                 row.getBoardingSequence(), signer.sign(payload));
     }
 

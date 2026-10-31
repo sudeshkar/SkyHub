@@ -72,7 +72,7 @@ class CheckInServiceTest {
         when(checkIns.findByLocatorAndSegmentIndexOrderByPassengerIndexAsc(anyString(), anyInt()))
                 .thenAnswer(call -> stored.stream()
                         .filter(c -> c.getLocator().equals(call.getArgument(0)) && c.getSegmentIndex() == (int) call.getArgument(1))
-                        .toList());
+                        .sorted(java.util.Comparator.comparingInt(CheckIn::getPassengerIndex)).toList());
         when(checkIns.saveAllAndFlush(any())).thenAnswer(call -> {
             List<CheckIn> rows = new ArrayList<>();
             call.<Iterable<CheckIn>>getArgument(0).forEach(rows::add);
@@ -247,9 +247,11 @@ class CheckInServiceTest {
 
     /** The table, the way delete-by-flight would leave it. */
     private void deletingRemovesFromStored() {
-        when(checkIns.deleteByLocatorAndSegmentIndex(anyString(), anyInt())).thenAnswer(call -> {
+        when(checkIns.deleteByLocatorAndSegmentIndexAndPassengerIndexIn(anyString(), anyInt(), any())).thenAnswer(call -> {
+            java.util.Collection<Integer> who = call.getArgument(2);
             long before = stored.size();
-            stored.removeIf(c -> c.getLocator().equals(call.getArgument(0)) && c.getSegmentIndex() == (int) call.getArgument(1));
+            stored.removeIf(c -> c.getLocator().equals(call.getArgument(0)) && c.getSegmentIndex() == (int) call.getArgument(1)
+                    && who.contains(c.getPassengerIndex()));
             return before - stored.size();
         });
     }
@@ -341,5 +343,98 @@ class CheckInServiceTest {
         assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.checkOut("ABC234", -1));
         pnr.cancel();
         assertThatExceptionOfType(BookingCancelledException.class).isThrownBy(() -> service.checkOut("ABC234", 0));
+    }
+
+    // ---- one passenger at a time (ADR-0058) ----------------------------------------------------------------------------
+
+    @Test
+    void should_check_in_only_the_passengers_asked_for_and_number_only_them() {
+        when(sequence.reserve(eq("SK501"), eq(DATE), eq(1))).thenReturn(7);
+
+        CheckInResult result = service.checkIn("ABC234", 0, List.of(1));
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.passes()).extracting(BoardingPass::passengerName).containsExactly("PERERA/RAJ");
+        assertThat(result.passes()).extracting(BoardingPass::passengerIndex).containsExactly(1);
+        assertThat(result.passes()).extracting(BoardingPass::sequence).containsExactly(7);
+        assertThat(stored).extracting(CheckIn::getPassengerIndex).containsExactly(1);
+    }
+
+    @Test
+    void should_check_in_the_rest_later_without_renumbering_anyone_and_return_everyone_who_is_in() {
+        when(sequence.reserve(eq("SK501"), eq(DATE), eq(1))).thenReturn(7, 30);
+        service.checkIn("ABC234", 0, List.of(1));
+
+        CheckInResult rest = service.checkIn("ABC234", 0, List.of());   // nobody named: everyone who is not yet in
+
+        assertThat(rest.created()).isTrue();
+        assertThat(rest.passes()).extracting(BoardingPass::passengerIndex).containsExactly(0, 1);
+        assertThat(rest.passes()).extracting(BoardingPass::sequence).containsExactly(30, 7);   // Raj keeps 7
+        assertThat(stored).hasSize(2);
+    }
+
+    @Test
+    void should_return_the_same_passes_for_someone_already_in_even_after_the_window_closed() {
+        when(sequence.reserve(eq("SK501"), eq(DATE), eq(1))).thenReturn(7);
+        service.checkIn("ABC234", 0, List.of(1));
+        departure = Optional.of(NOW.plus(Duration.ofMinutes(30)));   // check-in has closed since
+
+        CheckInResult again = service.checkIn("ABC234", 0, List.of(1));
+
+        assertThat(again.created()).isFalse();
+        assertThat(again.passes()).extracting(BoardingPass::sequence).containsExactly(7);
+        verify(sequence, org.mockito.Mockito.times(1)).reserve(anyString(), any(), anyInt());
+    }
+
+    @Test
+    void should_refuse_a_new_check_in_once_the_window_has_closed_even_if_someone_else_is_in() {
+        when(sequence.reserve(eq("SK501"), eq(DATE), eq(1))).thenReturn(7);
+        service.checkIn("ABC234", 0, List.of(1));
+        departure = Optional.of(NOW.plus(Duration.ofMinutes(30)));
+
+        assertThatExceptionOfType(CheckInClosedException.class).isThrownBy(() -> service.checkIn("ABC234", 0, List.of(0)));
+
+        assertThat(stored).extracting(CheckIn::getPassengerIndex).containsExactly(1);
+    }
+
+    @Test
+    void should_ask_for_each_passenger_once_and_refuse_someone_who_is_not_on_the_booking() {
+        when(sequence.reserve(eq("SK501"), eq(DATE), eq(1))).thenReturn(7);
+
+        assertThat(service.checkIn("ABC234", 0, List.of(1, 1, 1)).passes()).hasSize(1);
+        for (int bad : new int[] {-1, 2, 99}) {
+            assertThatExceptionOfType(InvalidBookingException.class).as("passenger " + bad)
+                    .isThrownBy(() -> service.checkIn("ABC234", 0, List.of(bad))).withMessageContaining("passenger");
+        }
+    }
+
+    @Test
+    void should_check_out_only_the_passengers_asked_for() {
+        deletingRemovesFromStored();
+        service.checkIn("ABC234", 0);
+
+        boolean removed = service.checkOut("ABC234", 0, List.of(0));
+
+        assertThat(removed).isTrue();
+        assertThat(stored).extracting(CheckIn::getPassengerIndex).containsExactly(1);
+        assertThat(service.boardingPasses("ABC234", 0).passes()).extracting(BoardingPass::passengerIndex).containsExactly(1);
+        assertThat(count("checked_out")).isEqualTo(1);
+    }
+
+    @Test
+    void should_say_nothing_changed_when_the_passengers_asked_for_were_not_in() {
+        deletingRemovesFromStored();
+        when(sequence.reserve(eq("SK501"), eq(DATE), eq(1))).thenReturn(7);
+        service.checkIn("ABC234", 0, List.of(1));
+
+        assertThat(service.checkOut("ABC234", 0, List.of(0))).isFalse();
+        assertThat(stored).hasSize(1);
+    }
+
+    @Test
+    void should_refuse_checking_out_someone_who_is_not_on_the_booking() {
+        deletingRemovesFromStored();
+
+        assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.checkOut("ABC234", 0, List.of(5)));
     }
 }

@@ -378,4 +378,85 @@ class CheckInIntegrationTest {
         verify(barcode, "Bearer not-a-token").andExpect(status().isUnauthorized());
         verify(barcode, token).andExpect(status().isForbidden());   // the traveller's own booking token is not a staff token
     }
+
+    // ---- one passenger at a time (ADR-0058) -----------------------------------------------------------------------------
+
+    /** A booking of two passengers (Priya, Raj) on SK501, in seats 15D and 15E. */
+    private String bookTwo(String date) throws Exception {
+        String body = """
+                {"paymentToken":"tok_visa","contactEmail":"priya@example.com",
+                 "segments":[{"flightNumber":"SK501","departureDate":"%s"}],
+                 "passengers":[{"firstName":"Priya","lastName":"Perera","seats":["15D"]},{"firstName":"Raj","lastName":"Perera","seats":["15E"]}]}""".formatted(date);
+        return JsonPath.read(mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.locator");
+    }
+
+    private MockHttpServletRequestBuilder checkInWho(String locator, String token, String who) {
+        return post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0,\"passengerIndexes\":%s}".formatted(who));
+    }
+
+    @Test
+    void should_check_in_one_passenger_freeze_only_their_seat_and_leave_the_other_free_to_move() throws Exception {
+        String locator = bookTwo("2029-07-01");
+        String token = tokenFor(locator);
+
+        mvc.perform(checkInWho(locator, token, "[1]")).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.passes.length()").value(1))
+                .andExpect(jsonPath("$.passes[0].passengerName").value("PERERA/RAJ"))
+                .andExpect(jsonPath("$.passes[0].passengerIndex").value(1));
+
+        String moveRaj = "{\"passengerIndex\":1,\"segmentIndex\":0,\"seatNumber\":\"31C\"}";
+        String movePriya = "{\"passengerIndex\":0,\"segmentIndex\":0,\"seatNumber\":\"31D\"}";
+        mvc.perform(put("/api/v1/pnrs/{l}/seat-assignments", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON).content(moveRaj))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.title").value("Already checked in"));
+        mvc.perform(put("/api/v1/pnrs/{l}/seat-assignments", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON).content(movePriya))
+                .andExpect(status().isOk());   // Priya is not checked in
+    }
+
+    @Test
+    void should_check_in_the_rest_later_without_renumbering_and_show_everyone_who_is_in() throws Exception {
+        String locator = bookTwo("2029-07-02");
+        String token = tokenFor(locator);
+        int rajNumber = JsonPath.read(mvc.perform(checkInWho(locator, token, "[1]")).andReturn().getResponse().getContentAsString(), "$.passes[0].sequence");
+
+        String rest = mvc.perform(post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+
+        assertThat(JsonPath.<List<Integer>>read(rest, "$.passes[*].passengerIndex")).containsExactly(0, 1);
+        assertThat(JsonPath.<Integer>read(rest, "$.passes[1].sequence")).isEqualTo(rajNumber);   // Raj keeps his number
+        assertThat(JsonPath.<Integer>read(rest, "$.passes[0].sequence")).isNotEqualTo(rajNumber);
+        mvc.perform(post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0}")).andExpect(status().isOk());   // everyone is in already: the same passes
+    }
+
+    @Test
+    void should_check_out_one_passenger_and_refuse_only_their_pass_at_the_gate() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String locator = bookTwo("2029-07-03");
+        String token = tokenFor(locator);
+        String both = mvc.perform(post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String priyaPass = JsonPath.read(both, "$.passes[0].barcode");
+        String rajPass = JsonPath.read(both, "$.passes[1].barcode");
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/pnrs/{l}/check-ins/0", locator)
+                .param("passengerIndex", "0").header("Authorization", token)).andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/pnrs/{l}/check-ins/0", locator).header("Authorization", token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.passes.length()").value(1)).andExpect(jsonPath("$.passes[0].passengerIndex").value(1));
+        verify(priyaPass, ops).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.reason").value("NOT_CHECKED_IN"));
+        verify(rajPass, ops).andExpect(jsonPath("$.valid").value(true));
+    }
+
+    @Test
+    void should_refuse_a_passenger_who_is_not_on_the_booking() throws Exception {
+        String locator = bookTwo("2029-07-04");
+        String token = tokenFor(locator);
+
+        mvc.perform(checkInWho(locator, token, "[2]")).andExpect(status().isBadRequest());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/pnrs/{l}/check-ins/0", locator)
+                .param("passengerIndex", "2").header("Authorization", token)).andExpect(status().isBadRequest());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM check_in WHERE locator = ?", Integer.class, locator)).isZero();
+    }
 }

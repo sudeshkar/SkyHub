@@ -203,9 +203,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check in every passenger on one flight and get their boarding passes
-         * @description Open from 24 hours to 60 minutes before departure. Idempotent: checking in again returns the same
-         *     passes and does not renumber anyone. A flight that is checked in can no longer have its seats changed.
+         * Check in the party, or chosen passengers, on one flight and get their boarding passes
+         * @description Open from 24 hours to 60 minutes before departure. Everyone on the booking is checked in unless `passengerIndexes` names who
+         *     (ADR-0058). Idempotent: checking in again returns the same passes and does not renumber anyone, even after check-in has closed
+         *     (when everyone asked for is already in). The answer holds the passes of **everyone who is checked in on the flight** after the call,
+         *     not only those asked for, as `GET` does; it is 201 if the call checked in anyone new. A passenger who is checked in can no longer
+         *     have their seat changed; the others still can.
          */
         post: operations["checkIn"];
         delete?: never;
@@ -652,8 +655,9 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Check the whole party out of one flight, so its seats can be changed again
-         * @description Undoes the check-in of one flight (ADR-0055). Allowed until check-in closes, 60 minutes before departure (the revised time
+         * Check the party, or chosen passengers, out of one flight, so their seats can be changed again
+         * @description Undoes the check-in of one flight (ADR-0055). Everyone who is checked in is checked out unless `passengerIndex` names who
+         *     (ADR-0058); naming a passenger who is not checked in changes nothing for them. Allowed until check-in closes, 60 minutes before departure (the revised time
          *     if the flight was delayed), and always for a cancelled flight. The boarding passes stop being shown, and checking in again gives
          *     the party new boarding numbers. Passes already issued are signed and are not revoked; there is no gate system here to refuse
          *     them. Idempotent: a flight that is not checked in is also 204.
@@ -805,6 +809,11 @@ export interface components {
         };
         CheckInRequest: {
             segmentIndex: number;
+            /**
+             * @description Which passengers to check in, by their position on the booking (ADR-0058). Absent or empty means everyone who is not yet
+             *     checked in on this flight. A passenger who is already in is left as they are and is not renumbered.
+             */
+            passengerIndexes?: number[];
         };
         BoardingPass: {
             /**
@@ -812,6 +821,8 @@ export interface components {
              * @example PERERA/PRIYA
              */
             passengerName: string;
+            /** @description The passenger's position on the booking, so a screen can tell which passenger a pass belongs to (ADR-0058) */
+            passengerIndex: number;
             /** @example ABC234 */
             locator: string;
             flightNumber: components["schemas"]["FlightNumber"];
@@ -2019,7 +2030,9 @@ export interface operations {
     };
     checkOut: {
         parameters: {
-            query?: never;
+            query?: {
+                passengerIndex?: number[];
+            };
             header?: never;
             path: {
                 locator: components["parameters"]["Locator"];
@@ -2029,7 +2042,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The flight is not checked in now */
+            /** @description The passengers asked for are not checked in now */
             204: {
                 headers: {
                     [name: string]: unknown;
