@@ -407,6 +407,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Sign out everywhere
+         * @description Ends every open session of the signed-in account, including the one that asks (ADR-0047): each account token issued
+         *     before this is refused on its next request, and a fresh sign-in works at once. It needs no password, since it can only
+         *     make the account harder to use. The password, the address and bookings are untouched, and booking tokens already opened
+         *     from the account (ADR-0034) are separate credentials that expire on their own within 15 minutes.
+         */
+        delete: operations["endAllAccountSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/me/email-change": {
         parameters: {
             query?: never;
@@ -1563,6 +1586,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Account"];
                 };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    endAllAccountSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every session of the account has ended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

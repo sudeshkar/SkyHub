@@ -231,6 +231,20 @@ public class AccountService {
         log.atInfo().addKeyValue("account.id", accountId).log("Account moved to a new address");
     }
 
+    /**
+     * Ends every open session of the account, the caller's included (ADR-0047). It needs no password: it can only make the account
+     * harder to use, never easier to take. The password, the address and any lock are untouched.
+     */
+    public void signOutEverywhere(long accountId) {
+        tx.executeWithoutResult(status -> {
+            TravellerAccount account = accounts.findForUpdateById(accountId).orElseThrow(AccountLoginFailedException::new);
+            account.endAllSessions();
+            accounts.saveAndFlush(account);
+        });
+        metrics.session("signed_out_everywhere");
+        log.atInfo().addKeyValue("account.id", accountId).log("All sessions of an account ended at its owner's request");
+    }
+
     /** The account behind a token. A token for an account that no longer exists is refused like a failed sign-in. */
     public String emailOf(long accountId) {
         return accounts.findById(accountId).orElseThrow(AccountLoginFailedException::new).getEmail().value();

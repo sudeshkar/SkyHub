@@ -67,4 +67,31 @@ class TravellerAccountSessionsTest {
 
         assertThat(account.getSessionEpoch()).isEqualTo(issuedUnder + 2);
     }
+
+    @Test
+    void should_end_every_session_on_request_without_touching_anything_else_about_the_account() {
+        TravellerAccount account = account();
+        int before = account.getSessionEpoch();
+        for (int i = 0; i < TravellerAccount.MAX_FAILED_ATTEMPTS; i++) {
+            account.recordFailedLogin(NOW);   // a lock must survive it: signing out everywhere is not a way to clear one
+        }
+
+        account.endAllSessions();
+
+        assertThat(account.getSessionEpoch()).isEqualTo(before + 1);
+        assertThat(account.hasPassword()).isTrue();
+        assertThat(account.getEmail().value()).isEqualTo("priya@example.com");
+        assertThat(account.isLockedAt(NOW)).isTrue();
+    }
+
+    @Test
+    void should_end_the_sessions_again_each_time_it_is_asked() {
+        TravellerAccount account = account();
+        int before = account.getSessionEpoch();
+
+        account.endAllSessions();
+        account.endAllSessions();
+
+        assertThat(account.getSessionEpoch()).isEqualTo(before + 2);
+    }
 }

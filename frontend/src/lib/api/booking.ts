@@ -391,6 +391,20 @@ export async function confirmAccountEmailChange(token: string, linkToken: string
   return { kind: "unavailable" };
 }
 
+export type EndSessionsOutcome =
+  | { kind: "ended" } // every session of the account, this one included, is now refused
+  | { kind: "unauthorized" } // this session was already not accepted: there is nothing left to end
+  | { kind: "unavailable" };
+
+/** Signs the account out on every device (ADR-0047). It asks for no password: it can only make the account harder to use. */
+export async function endAllAccountSessions(token: string): Promise<EndSessionsOutcome> {
+  const response = await call("/api/v1/accounts/me/sessions", { method: "DELETE", headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 204) return { kind: "ended" };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
 export type MyBooking = components["schemas"]["BookingSummary"];
 
 export type MyBookingsOutcome =

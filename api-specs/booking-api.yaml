@@ -20,6 +20,7 @@ tags:
   - name: MyBookings
   - name: BulkRebooking
   - name: AccountEmail
+  - name: AccountSecurity
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -644,6 +645,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/accounts/me/sessions:
+    delete:
+      tags: [AccountSecurity]
+      operationId: endAllAccountSessions
+      summary: Sign out everywhere
+      description: |
+        Ends every open session of the signed-in account, including the one that asks (ADR-0047): each account token issued
+        before this is refused on its next request, and a fresh sign-in works at once. It needs no password, since it can only
+        make the account harder to use. The password, the address and bookings are untouched, and booking tokens already opened
+        from the account (ADR-0034) are separate credentials that expire on their own within 15 minutes.
+      security:
+        - accountToken: []
+      responses:
+        '204':
+          description: Every session of the account has ended
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

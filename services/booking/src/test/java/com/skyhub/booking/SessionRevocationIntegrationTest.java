@@ -1,8 +1,10 @@
 package com.skyhub.booking;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -150,12 +152,53 @@ class SessionRevocationIntegrationTest {
         return signIn(email, PASSWORD);
     }
 
-    private void book(String email, String date) throws Exception {
+    private String book(String email, String date) throws Exception {
         String bookingBody = """
                 {"paymentToken":"tok_visa","contactEmail":"%s",
                  "segments":[{"flightNumber":"SK501","departureDate":"%s"}],
                  "passengers":[{"firstName":"Priya","lastName":"Perera","seats":["11D"]}]}""".formatted(email, date);
-        mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON).content(bookingBody)).andExpect(status().isCreated());
+        return JsonPath.read(mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content(bookingBody)).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(), "$.locator");
+    }
+
+    @Test
+    void should_end_every_session_of_the_account_on_request_and_let_a_fresh_sign_in_through() throws Exception {
+        String here = signedIn("signout.all@example.com");
+        String elsewhere = signIn("signout.all@example.com", PASSWORD);   // the same person on another device
+        String bystander = signedIn("signout.bystander@example.com");
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", elsewhere)).andExpect(status().isOk());
+
+        mvc.perform(delete("/api/v1/accounts/me/sessions").header("Authorization", here))
+                .andExpect(status().isNoContent())
+                .andExpect(header().string("Cache-Control", "no-store"));
+
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", here)).andExpect(status().isUnauthorized());       // the one that asked
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", elsewhere)).andExpect(status().isUnauthorized());   // and the other device
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", bystander)).andExpect(status().isOk());            // nobody else
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", signIn("signout.all@example.com", PASSWORD)))
+                .andExpect(status().isOk());   // the password and the address are untouched: signing in again just works
+    }
+
+    @Test
+    void should_not_need_a_password_or_change_anything_but_the_sessions() throws Exception {
+        String bearer = signedIn("signout.nothing.else@example.com");
+
+        mvc.perform(delete("/api/v1/accounts/me/sessions").header("Authorization", bearer)).andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", signIn("signout.nothing.else@example.com", PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("signout.nothing.else@example.com"));
+    }
+
+    @Test
+    void should_refuse_it_without_an_account_token() throws Exception {
+        String bearer = signedIn("signout.auth@example.com");
+        String locator = book("signout.auth@example.com", "2028-05-01");
+        String manage = "Bearer " + JsonPath.<String>read(mvc.perform(post("/api/v1/pnrs/{l}/sessions", locator).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"lastName\":\"Perera\"}")).andReturn().getResponse().getContentAsString(), "$.accessToken");
+
+        mvc.perform(delete("/api/v1/accounts/me/sessions")).andExpect(status().isUnauthorized());
+        mvc.perform(delete("/api/v1/accounts/me/sessions").header("Authorization", manage)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", bearer)).andExpect(status().isOk());   // and nothing was ended
     }
 }

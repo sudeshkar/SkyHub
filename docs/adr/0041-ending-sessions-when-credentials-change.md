@@ -33,4 +33,4 @@ An account token is a signed, self-contained credential that lasts 30 minutes (A
 - Negative: **booking tokens already issued from an account stay valid for up to 15 minutes.** Opening a booking from the account (ADR-0034) gives an ordinary manage token for that one booking, which is independent of the account's session by design.
 - Negative: **a password link used by the owner ends their own other sessions,** including on a device they were happily using. That is the price of treating a reset as a possible compromise.
 - Negative: tokens issued before this change carry no claim and so count as epoch 0; if an account's epoch is later raised, they are revoked like the rest, which is intended.
-- Follow-up: a "sign out everywhere" action; a way for the owner to recover an account that was moved without them.
+- Follow-up: a "sign out everywhere" action (since ADR-0047); a way for the owner to recover an account that was moved without them.
