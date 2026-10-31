@@ -71,7 +71,7 @@ every email from Mailpit and the real Kafka topic. It checks, among others, that
 
 It exits non-zero if any check fails.
 
-## 2. The booking journey (50 checks)
+## 2. The booking journey (72 checks)
 
 ```bash
 python tools/live-check/booking_journey.py
@@ -83,6 +83,11 @@ Finds a real one-stop trip (CMB to LHR) in flight search, then books it through 
   same key (200, no second email), the same key for a different booking (422), the confirmation email, the seat map.
 - **As a guest:** a wrong last name (404, same as unknown), the right one in any case, a seat change, and **signing out of the booking** (a copied token and the earlier session are refused at once, a new session works; ADR-0057).
 - **As an account:** the traveller signs up *after* booking and Your bookings lists it (upcoming, not past) and opens it without the last name.
+- **Check-in and the gate:** a second booking of two passengers checks in **one passenger at a time**: only that passenger's seat freezes, the gate accepts their
+  pass, the rest check in and keep their numbers, one checks out and the gate refuses that pass (though its signature is genuine) and still accepts the other,
+  a changed pass is refused, a traveller's token and no token cannot use the gate, and checking in again numbers everyone afresh and refuses the old pass. After
+  staff cancel the flight, and then the booking, the gate refuses the pass for that reason (ADR-0055, 0056, 0058). `stack.py` starts booking with a check-in
+  window of 100 days so the seed flights can be checked in to (ADR-0059); a real window is 24 hours.
 - **Operations:** staff cancel the second flight; the traveller is emailed, the flight can no longer be sold (409), and **flight search, following
   the disruption topic, stops offering it**. A bulk rebooking moves the booking to the next day's flight (MOVED, a seat each, emailed), asking
   again is UNCHANGED, and a replacement that lands after the onward flight has gone is REFUSED naming the flight it would miss.
@@ -117,7 +122,7 @@ This one needs two runs of the notification service, which a script cannot resta
 ## What this does not cover
 
 - The website (pages, forms, cookies): run `npm run e2e` in `frontend/` for the browser flows that exist.
-- Check-in and boarding passes, holds that expire, the refund retry, and the disruption agent (they need time to pass or a model key).
+- Holds that expire, the refund retry, and the disruption agent (they need time to pass or a model key). The real 24-hour check-in window is not exercised live (the stack uses a wider one); the unit and integration tests cover it.
 - Load or timing: this is a correctness check of one traveller's journey, not a benchmark.
 
 URLs can be changed with `FLIGHT_SEARCH_URL`, `BOOKING_URL`, `MAILPIT_URL` and `NOTIFICATION_MGMT_URL`; the staff login with `LIVE_STAFF_USERNAME`

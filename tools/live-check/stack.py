@@ -54,6 +54,16 @@ def service_env(service, keys, mismatched_link_key=False):
     raise ValueError("Unknown service: " + service)
 
 
+def service_args(service):
+    """Extra settings for `spring-boot:run`. Booking opens check-in 100 days before departure, so the seed flights (a few days out) can be
+    checked in to; the closing time is untouched. This is for the live check only: a real window is 24 hours (ADR-0013)."""
+    if service == "booking":
+        return ["-Dspring-boot.run.arguments=--skyhub.booking.check-in.opens-before=PT2400H"]
+    if service in ("notification", "flight-search"):
+        return []
+    raise ValueError("Unknown service: " + service)
+
+
 def drop_database_sql():
     """The only thing this tool ever drops."""
     return f"DROP DATABASE IF EXISTS {DATABASE} WITH (FORCE);"
@@ -158,7 +168,7 @@ def start_service(name, state, mismatched=False):
     mvnw = str(REPO / ("mvnw.cmd" if os.name == "nt" else "mvnw"))
     log = open(WORK / f"{name}.log", "w")
     flags = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
-    process = subprocess.Popen([mvnw, "-B", "-f", f"services/{name}/pom.xml", "spring-boot:run"], cwd=REPO, env=env,
+    process = subprocess.Popen([mvnw, "-B", "-f", f"services/{name}/pom.xml", "spring-boot:run", *service_args(name)], cwd=REPO, env=env,
                                stdout=log, stderr=subprocess.STDOUT, **flags)
     state["pids"][name] = process.pid
     save_state(state)

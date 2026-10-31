@@ -71,6 +71,7 @@ How a slice goes, every time:
 | 52 | Staff can ask whether a scanned boarding pass is still good: signed by us and exactly the pass issued now, so a checked-out, replaced or cancelled pass is refused | ADR-0056 |
 | 53 | Signing out of a booking ends every session of it, a copied token included, with a booking session epoch (the same idea as accounts) | ADR-0057 |
 | 54 | Check in and check out one passenger at a time; a checked-in passenger's seat freezes, the others' do not; a pass says which passenger it is for | ADR-0058 |
+| 55 | The live check reaches check-in: booking starts with a wide check-in window, and the booking journey drives per-passenger check-in, check-out, the gate check and a cancelled flight and booking through the real chain | ADR-0059 |
 
 ## Next slices (pick one at a time; each is independent)
 
