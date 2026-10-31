@@ -416,6 +416,39 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/v1/ops/boarding-passes/boardings:
+    post:
+      tags: [CheckIn]
+      operationId: boardPassenger
+      summary: A gate scans a pass and the passenger boards
+      description: |
+        For a gate (ADR-0060). The pass is checked exactly as in `verifyBoardingPass`, and if it is good the passenger **boards**: once.
+        `valid: true` here means the passenger has boarded now, and the answer carries the pass. A pass that has been used is refused the
+        second time with `ALREADY_BOARDED`; the first scan is the one that counts, and the staff member who made it is recorded from their
+        token. A refused pass says only why, never who it was for. Checking a pass with `verifyBoardingPass` never boards anyone.
+        A passenger who has boarded can no longer check out.
+      security:
+        - staffToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoardingPassVerificationRequest'
+      responses:
+        '200':
+          description: The verdict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPassVerification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/v1/ops/disruptions:
     post:
       tags: [Disruptions]
@@ -1459,7 +1492,7 @@ components:
           type: boolean
         reason:
           type: string
-          enum: [BAD_SIGNATURE, UNKNOWN_BOOKING, BOOKING_CANCELLED, FLIGHT_CANCELLED, NOT_CHECKED_IN, SUPERSEDED]
+          enum: [BAD_SIGNATURE, UNKNOWN_BOOKING, BOOKING_CANCELLED, FLIGHT_CANCELLED, NOT_CHECKED_IN, SUPERSEDED, ALREADY_BOARDED]
           description: Why a pass was refused. Absent for a good pass.
         pass:
           $ref: '#/components/schemas/BoardingPass'
@@ -1639,7 +1672,9 @@ components:
 
     StaffRole:
       type: string
-      enum: [OPS, ADMIN]
+      enum: [OPS, ADMIN, GATE]
+      description: |
+        OPS and ADMIN run operations (ADMIN also creates staff). GATE (ADR-0060) may check a boarding pass and board a passenger, and nothing else.
 
     PasswordLinkRequest:
       type: object

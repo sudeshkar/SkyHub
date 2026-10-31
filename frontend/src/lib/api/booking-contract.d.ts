@@ -241,6 +241,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/boarding-passes/boardings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A gate scans a pass and the passenger boards
+         * @description For a gate (ADR-0060). The pass is checked exactly as in `verifyBoardingPass`, and if it is good the passenger **boards**: once.
+         *     `valid: true` here means the passenger has boarded now, and the answer carries the pass. A pass that has been used is refused the
+         *     second time with `ALREADY_BOARDED`; the first scan is the one that counts, and the staff member who made it is recorded from their
+         *     token. A refused pass says only why, never who it was for. Checking a pass with `verifyBoardingPass` never boards anyone.
+         *     A passenger who has boarded can no longer check out.
+         */
+        post: operations["boardPassenger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/disruptions": {
         parameters: {
             query?: never;
@@ -844,7 +868,7 @@ export interface components {
              * @description Why a pass was refused. Absent for a good pass.
              * @enum {string}
              */
-            reason?: "BAD_SIGNATURE" | "UNKNOWN_BOOKING" | "BOOKING_CANCELLED" | "FLIGHT_CANCELLED" | "NOT_CHECKED_IN" | "SUPERSEDED";
+            reason?: "BAD_SIGNATURE" | "UNKNOWN_BOOKING" | "BOOKING_CANCELLED" | "FLIGHT_CANCELLED" | "NOT_CHECKED_IN" | "SUPERSEDED" | "ALREADY_BOARDED";
             pass?: components["schemas"]["BoardingPass"];
         };
         BoardingPasses: {
@@ -918,8 +942,11 @@ export interface components {
             username: string;
             password: string;
         };
-        /** @enum {string} */
-        StaffRole: "OPS" | "ADMIN";
+        /**
+         * @description OPS and ADMIN run operations (ADMIN also creates staff). GATE (ADR-0060) may check a boarding pass and board a passenger, and nothing else.
+         * @enum {string}
+         */
+        StaffRole: "OPS" | "ADMIN" | "GATE";
         PasswordLinkRequest: {
             email: string;
         };
@@ -1442,6 +1469,33 @@ export interface operations {
         };
     };
     verifyBoardingPass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardingPassVerificationRequest"];
+            };
+        };
+        responses: {
+            /** @description The verdict */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardingPassVerification"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    boardPassenger: {
         parameters: {
             query?: never;
             header?: never;

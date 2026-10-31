@@ -231,6 +231,37 @@ if check("a second booking of two passengers is made on the first flight for the
             check("the pass from before is refused now that there are new ones", verdict.get("valid") is False and verdict.get("reason") == "SUPERSEDED", verdict)
             status, verdict = gate(FRESH_BARCODE)
             check("and the new pass is accepted", verdict.get("valid") is True, verdict)
+
+            # ---- the gate agent, and boarding (ADR-0060) ----
+            def board(barcode, token):
+                return call("POST", f"{BOOKING}/api/v1/ops/boarding-passes/boardings", {"barcode": barcode}, token=token)
+
+            agent = f"live.gate.{run}"
+            status, _ = call("POST", f"{BOOKING}/api/v1/ops/staff", {"username": agent, "password": "a long gate passphrase", "role": "GATE"}, token=OPS)
+            check("an administrator creates a gate agent (201)", status == 201, status)
+            status, signed = call("POST", f"{BOOKING}/api/v1/ops/sessions", {"username": agent, "password": "a long gate passphrase"})
+            check("the gate agent signs in (201) with the GATE role", status == 201 and signed.get("role") == "GATE", (status, signed))
+            GATE = signed.get("accessToken") if status == 201 else None
+            status, _ = call("GET", f"{BOOKING}/api/v1/ops/flights/{FIRST['flightNumber']}/departures/{day(FIRST)}/bookings", token=GATE)
+            check("a gate agent cannot see who is booked on a flight (403)", status == 403, status)
+            status, _ = call("POST", f"{BOOKING}/api/v1/ops/disruptions",
+                             {"flightNumber": FIRST["flightNumber"], "departureDate": day(FIRST), "type": "CANCELLED", "reason": "not allowed"}, token=GATE)
+            check("or record a disruption (403)", status == 403, status)
+            status, verdict = gate(FRESH_BARCODE, token=GATE)
+            check("but can check a pass (200)", status == 200 and verdict.get("valid") is True, (status, verdict))
+            status, verdict = board(FRESH_BARCODE, GATE)
+            check("and board the passenger on it", status == 200 and verdict.get("valid") is True and verdict["pass"]["passengerIndex"] == 0, (status, verdict))
+            status, verdict = board(FRESH_BARCODE, GATE)
+            check("the same pass is refused the second time (ALREADY_BOARDED), saying nothing about the passenger",
+                  verdict.get("valid") is False and verdict.get("reason") == "ALREADY_BOARDED" and verdict.get("pass") is None, verdict)
+            status, verdict = gate(FRESH_BARCODE, token=GATE)
+            check("checking the pass now says so too", verdict.get("reason") == "ALREADY_BOARDED", verdict)
+            status, verdict = gate(again["passes"][1]["barcode"], token=GATE)
+            check("checking never boards anyone: the other passenger's pass is still good", verdict.get("valid") is True, verdict)
+            status, problem = call("DELETE", CI + "/0?passengerIndex=0", token=T2)
+            check("a passenger who has boarded cannot check out (409)", status == 409 and problem.get("title") == "Already boarded", (status, problem))
+            status, verdict = board(again["passes"][1]["barcode"], GATE)
+            check("the other passenger boards on their own pass", verdict.get("valid") is True, verdict)
 status, affected = call("GET", f"{BOOKING}/api/v1/ops/flights/{SECOND['flightNumber']}/departures/{day(SECOND)}/bookings", token=OPS)
 check("the booking is among those on the second flight", status == 200 and LOCATOR in [i["locator"] for i in affected["items"]], status)
 status, _ = call("POST", f"{BOOKING}/api/v1/ops/disruptions",

@@ -72,6 +72,7 @@ How a slice goes, every time:
 | 53 | Signing out of a booking ends every session of it, a copied token included, with a booking session epoch (the same idea as accounts) | ADR-0057 |
 | 54 | Check in and check out one passenger at a time; a checked-in passenger's seat freezes, the others' do not; a pass says which passenger it is for | ADR-0058 |
 | 55 | The live check reaches check-in: booking starts with a wide check-in window, and the booking journey drives per-passenger check-in, check-out, the gate check and a cancelled flight and booking through the real chain | ADR-0059 |
+| 56 | A passenger boards once (the first scan counts, and who made it is kept), a boarded passenger cannot check out, and a GATE role may check passes and board and do nothing else | ADR-0060 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -83,7 +84,7 @@ Ordered by how much they add to the story, not a commitment.
 | **More notifications** | a boarding-pass attachment; SMS; non-blocking retry topics | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
 | **Account follow-ups** | Saved passengers (revisit ADR-0054's mailbox trust first) | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
-| **Check-in extras** | QR/PDF417 boarding pass image; boarding (marking a passenger as boarded) and a gate-agent role (ADR-0056) | |
+| **Check-in extras** | QR/PDF417 boarding pass image; boarding times (a time rule for boarding) and undoing a wrong scan (ADR-0060) | |
 | **Gateway and deployment** | Kong gateway, containers for every service, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
 
 ## Smaller loose ends

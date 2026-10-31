@@ -1,6 +1,7 @@
 package com.skyhub.booking.application;
 
 import com.skyhub.booking.application.CheckInMetrics.Outcome;
+import com.skyhub.booking.domain.AlreadyBoardedException;
 import com.skyhub.booking.domain.CheckIn;
 import com.skyhub.booking.domain.CheckInClosedException;
 import com.skyhub.booking.domain.CheckInWindow;
@@ -46,10 +47,11 @@ public class CheckInService {
     private final TransactionOperations transactions;
     private final CheckInWindow window;
     private final CheckInMetrics metrics;
+    private final BoardedPassengers boarded;
 
     public CheckInService(PnrRepository pnrs, CheckInRepository checkIns, BoardingSequence sequence,
                           DisruptionRepository disruptions, FlightCatalog flights, BoardingPassSigner signer, Clock clock, TransactionOperations transactions,
-                          CheckInWindow window, CheckInMetrics metrics) {
+                          CheckInWindow window, CheckInMetrics metrics, BoardedPassengers boarded) {
         this.pnrs = pnrs;
         this.checkIns = checkIns;
         this.sequence = sequence;
@@ -60,6 +62,7 @@ public class CheckInService {
         this.transactions = transactions;
         this.window = window;
         this.metrics = metrics;
+        this.boarded = boarded;
     }
 
     /** Checks in everyone on the booking who is not yet in. */
@@ -149,6 +152,12 @@ public class CheckInService {
         List<Integer> named = passengersAsked(pnr, passengerIndexes);
         if (rows(locator, segmentIndex).stream().noneMatch(row -> named.contains(row.getPassengerIndex()))) {
             return false;
+        }
+        if (boarded.anyBoarded(locator, segmentIndex, named)) {
+            // Someone on the aircraft cannot check out (ADR-0060). Nobody is removed, so a party cannot be half checked out by accident.
+            String who = named.stream().filter(p -> boarded.isBoarded(locator, segmentIndex, p))
+                    .map(p -> pnr.getPassengers().get(p).getFirstName()).collect(java.util.stream.Collectors.joining(", "));
+            throw new AlreadyBoardedException(who + " has already boarded " + flight.flightNumber() + ", so cannot check out");
         }
         requireCheckInNotClosedFor(flight);
         Long removed = transactions.execute(status -> checkIns.deleteByLocatorAndSegmentIndexAndPassengerIndexIn(locator, segmentIndex, named));

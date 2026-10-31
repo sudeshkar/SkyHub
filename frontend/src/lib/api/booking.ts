@@ -304,7 +304,7 @@ export type Disruption = components["schemas"]["Disruption"];
 export type RecordDisruptionRequest = components["schemas"]["RecordDisruptionRequest"];
 
 export type StaffOutcome =
-  | { kind: "opened"; accessToken: string; expiresAt: string; username: string; role: "OPS" | "ADMIN" }
+  | { kind: "opened"; accessToken: string; expiresAt: string; username: string; role: "OPS" | "ADMIN" | "GATE" }
   | { kind: "denied" } // wrong username or password, or a locked account: the service does not say which
   | { kind: "unavailable" };
 

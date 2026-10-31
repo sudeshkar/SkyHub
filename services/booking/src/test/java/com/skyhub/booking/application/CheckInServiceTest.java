@@ -57,6 +57,7 @@ class CheckInServiceTest {
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final HmacBoardingPassSigner signer = new HmacBoardingPassSigner("0123456789abcdef0123456789abcdef".getBytes());
     private final List<CheckIn> stored = new ArrayList<>();
+    private final FakeBoardedPassengers boarded = new FakeBoardedPassengers();
     private Optional<Instant> departure = Optional.of(DEPARTURE);
     private Pnr pnr;
     private CheckInService service;
@@ -83,7 +84,7 @@ class CheckInServiceTest {
         when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty());
         service = new CheckInService(pnrs, checkIns, sequence, disruptions, (flight, date) -> departure.map(d -> new FlightInfo(d, com.skyhub.booking.domain.Money.of("100.00", "USD"))), signer,
                 Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
-                new CheckInWindow(Duration.ofHours(24), Duration.ofMinutes(60)), new CheckInMetrics(registry));
+                new CheckInWindow(Duration.ofHours(24), Duration.ofMinutes(60)), new CheckInMetrics(registry), boarded);
     }
 
     private double count(String outcome) {
@@ -436,5 +437,31 @@ class CheckInServiceTest {
         deletingRemovesFromStored();
 
         assertThatExceptionOfType(InvalidBookingException.class).isThrownBy(() -> service.checkOut("ABC234", 0, List.of(5)));
+    }
+
+    // ---- a passenger who has boarded cannot check out (ADR-0060) ---------------------------------------------------------
+
+    @Test
+    void should_refuse_checking_out_a_passenger_who_has_boarded_and_remove_nobody() {
+        deletingRemovesFromStored();
+        service.checkIn("ABC234", 0);
+        boarded.board("ABC234", 0, 0, "gate.one", NOW);
+
+        assertThatExceptionOfType(com.skyhub.booking.domain.AlreadyBoardedException.class)
+                .isThrownBy(() -> service.checkOut("ABC234", 0, List.of(0))).withMessageContaining("Priya");
+        assertThatExceptionOfType(com.skyhub.booking.domain.AlreadyBoardedException.class)
+                .isThrownBy(() -> service.checkOut("ABC234", 0));   // everyone: includes someone who has boarded
+
+        assertThat(stored).hasSize(2);
+    }
+
+    @Test
+    void should_still_let_a_passenger_who_has_not_boarded_check_out() {
+        deletingRemovesFromStored();
+        service.checkIn("ABC234", 0);
+        boarded.board("ABC234", 0, 0, "gate.one", NOW);   // Priya has; Raj has not
+
+        assertThat(service.checkOut("ABC234", 0, List.of(1))).isTrue();
+        assertThat(stored).extracting(CheckIn::getPassengerIndex).containsExactly(0);
     }
 }

@@ -71,7 +71,7 @@ every email from Mailpit and the real Kafka topic. It checks, among others, that
 
 It exits non-zero if any check fails.
 
-## 2. The booking journey (72 checks)
+## 2. The booking journey (83 checks)
 
 ```bash
 python tools/live-check/booking_journey.py
@@ -88,6 +88,9 @@ Finds a real one-stop trip (CMB to LHR) in flight search, then books it through 
   a changed pass is refused, a traveller's token and no token cannot use the gate, and checking in again numbers everyone afresh and refuses the old pass. After
   staff cancel the flight, and then the booking, the gate refuses the pass for that reason (ADR-0055, 0056, 0058). `stack.py` starts booking with a check-in
   window of 100 days so the seed flights can be checked in to (ADR-0059); a real window is 24 hours.
+- **A gate agent and boarding:** an administrator creates a `GATE` account; it cannot see who is booked on a flight or record a disruption (403) but can check a pass
+  and **board** a passenger; the same pass is refused the second time (`ALREADY_BOARDED`) and says nothing about the passenger; checking never boards anyone; a
+  passenger who has boarded cannot check out (409); the other passenger boards on their own pass (ADR-0060).
 - **Operations:** staff cancel the second flight; the traveller is emailed, the flight can no longer be sold (409), and **flight search, following
   the disruption topic, stops offering it**. A bulk rebooking moves the booking to the next day's flight (MOVED, a seat each, emailed), asking
   again is UNCHANGED, and a replacement that lands after the onward flight has gone is REFUSED naming the flight it would miss.

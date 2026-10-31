@@ -459,4 +459,87 @@ class CheckInIntegrationTest {
                 .param("passengerIndex", "2").header("Authorization", token)).andExpect(status().isBadRequest());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM check_in WHERE locator = ?", Integer.class, locator)).isZero();
     }
+
+    // ---- boarding, and the gate agent (ADR-0060) ------------------------------------------------------------------------
+
+    /** A staff account with only the gate's powers, made the way an administrator would. */
+    private String gateAgent(String username, String ops) throws Exception {
+        mvc.perform(post("/api/v1/ops/staff").header("Authorization", ops).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"%s\",\"password\":\"a long gate passphrase\",\"role\":\"GATE\"}".formatted(username)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("GATE"));
+        return TestStaff.login(mvc, username, "a long gate passphrase");
+    }
+
+    private org.springframework.test.web.servlet.ResultActions board(String barcode, String authorization) throws Exception {
+        var request = post("/api/v1/ops/boarding-passes/boardings").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"barcode\":\"%s\"}".formatted(barcode));
+        return mvc.perform(authorization == null ? request : request.header("Authorization", authorization));
+    }
+
+    @Test
+    void should_let_a_gate_agent_board_a_passenger_once_and_record_who_scanned() throws Exception {
+        String gate = gateAgent("gate.one", TestStaff.adminBearer(mvc));
+        String locator = bookTwo("2029-08-01");
+        String token = tokenFor(locator);
+        String both = mvc.perform(post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String priya = JsonPath.read(both, "$.passes[0].barcode");
+        String raj = JsonPath.read(both, "$.passes[1].barcode");
+
+        board(priya, gate).andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.pass.passengerName").value("PERERA/PRIYA"));
+        board(priya, gate).andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false))
+                .andExpect(jsonPath("$.reason").value("ALREADY_BOARDED")).andExpect(jsonPath("$.pass").doesNotExist());
+        verify(priya, gate).andExpect(jsonPath("$.reason").value("ALREADY_BOARDED"));   // checking now says so too
+        verify(raj, gate).andExpect(jsonPath("$.valid").value(true));                   // and checking never boards anyone
+        board(raj, gate).andExpect(jsonPath("$.valid").value(true));
+
+        assertThat(jdbc.queryForList("SELECT boarded_by FROM boarded_passenger WHERE locator = ?", String.class, locator)).containsExactly("gate.one", "gate.one");
+    }
+
+    @Test
+    void should_give_a_gate_agent_the_gate_and_nothing_else() throws Exception {
+        String gate = gateAgent("gate.two", TestStaff.adminBearer(mvc));
+        String locator = bookTwo("2029-08-02");
+        String barcode = JsonPath.read(mvc.perform(checkInWho(locator, tokenFor(locator), "[0]")).andReturn().getResponse().getContentAsString(), "$.passes[0].barcode");
+
+        verify(barcode, gate).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/ops/flights/SK501/departures/2029-08-02/bookings").header("Authorization", gate)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/ops/disruptions").header("Authorization", gate).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"flightNumber\":\"SK501\",\"departureDate\":\"2029-08-02\",\"type\":\"CANCELLED\",\"reason\":\"x\"}")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/ops/staff").header("Authorization", gate).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"gate.three\",\"password\":\"a long gate passphrase\",\"role\":\"GATE\"}")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/ops/rebookings").header("Authorization", gate).contentType(MediaType.APPLICATION_JSON).content("{\"moves\":[]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void should_board_nobody_on_a_pass_that_is_not_good_or_without_a_staff_token() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String locator = bookTwo("2029-08-03");
+        String token = tokenFor(locator);
+        String barcode = JsonPath.read(mvc.perform(checkInWho(locator, token, "[0]")).andReturn().getResponse().getContentAsString(), "$.passes[0].barcode");
+
+        board(barcode.replace("15D", "1A"), ops).andExpect(jsonPath("$.reason").value("BAD_SIGNATURE"));
+        board(barcode, null).andExpect(status().isUnauthorized());
+        board(barcode, token).andExpect(status().isForbidden());   // a traveller's own booking token
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isNoContent());
+        board(barcode, ops).andExpect(jsonPath("$.reason").value("NOT_CHECKED_IN"));
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM boarded_passenger WHERE locator = ?", Integer.class, locator)).isZero();
+    }
+
+    @Test
+    void should_refuse_checking_out_a_passenger_who_has_boarded() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String locator = bookTwo("2029-08-04");
+        String token = tokenFor(locator);
+        String barcode = JsonPath.read(mvc.perform(checkInWho(locator, token, "[0]")).andReturn().getResponse().getContentAsString(), "$.passes[0].barcode");
+        board(barcode, ops).andExpect(jsonPath("$.valid").value(true));
+
+        mvc.perform(checkOut(locator, token, 0)).andExpect(status().isConflict()).andExpect(jsonPath("$.title").value("Already boarded"));
+
+        mvc.perform(get("/api/v1/pnrs/{l}/check-ins/0", locator).header("Authorization", token)).andExpect(status().isOk());   // still checked in
+        verify(barcode, ops).andExpect(jsonPath("$.reason").value("ALREADY_BOARDED"));
+    }
 }
