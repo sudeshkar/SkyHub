@@ -1,5 +1,8 @@
 # SkyHub
 
+<img width="1254" height="1254" alt="SKyHUb Aviation Logo" src="https://github.com/user-attachments/assets/b8f70cd4-5f47-4507-8ca9-b8f832e3913b" />
+
+
 A two-hub airline booking platform: search flights across **Dubai International (DXB)** and **Al Maktoum (DWC)**, pick seats, book, manage the booking and check in online.
 
 SkyHub is a **portfolio project, not a real airline**. It is built the way a production system would be: API-first contracts, test-driven code, security and observability from the start, and a written reason for every significant decision.
