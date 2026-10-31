@@ -91,6 +91,23 @@ describe("setPassword", () => {
     expect(setCall).not.toHaveBeenCalled();
   });
 
+  it("refuses a password the hashing cannot store before calling the service, counting bytes as the service does", async () => {
+    for (const tooLong of ["a".repeat(73), "é".repeat(37)]) {
+      expect(await setPassword({ status: "idle" }, form({ ...good, password: tooLong, confirm: tooLong }))).toMatchObject({
+        status: "error", message: expect.stringContaining("72"),
+      });
+    }
+    expect(setCall).not.toHaveBeenCalled();
+  });
+
+  it("accepts the longest password the hashing can store", async () => {
+    vi.mocked(setCall).mockResolvedValue({ kind: "set" });
+    const longest = "é".repeat(36); // 36 characters but exactly 72 bytes
+
+    expect(await setPassword({ status: "idle" }, form({ ...good, password: longest, confirm: longest }))).toEqual({ status: "done" });
+    expect(setCall).toHaveBeenCalledWith("abc", longest);
+  });
+
   it("says the link has stopped working, and asks for a new one, when the service refuses the token", async () => {
     vi.mocked(setCall).mockResolvedValue({ kind: "invalid-link" });
 

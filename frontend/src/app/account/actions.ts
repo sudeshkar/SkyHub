@@ -3,11 +3,10 @@
 import { redirect } from "next/navigation";
 import { saveAccountSession, clearAccountSession } from "@/lib/account-session";
 import { openAccountSession, requestPasswordLink, setAccountPassword } from "@/lib/api/booking";
+import { passwordProblem } from "@/lib/password-policy";
 import { POLICIES, rateLimit } from "@/lib/rate-limit";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD = 12;
-const MAX_PASSWORD = 100;
 const UNAVAILABLE = "The booking service is not responding right now. Please try again.";
 
 function waitMessage(retryAfterSeconds: number): string {
@@ -50,9 +49,8 @@ export async function setPassword(_previous: SetPasswordState, form: FormData): 
 
   const decision = await rateLimit(POLICIES.manage);
   if (!decision.allowed) return fail(waitMessage(decision.retryAfterSeconds));
-  if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
-    return fail(`Choose a password of ${MIN_PASSWORD} to ${MAX_PASSWORD} characters.`);
-  }
+  const problem = passwordProblem(password); // the same rule as the service (ADR-0048), counted in bytes as the hashing does
+  if (problem) return fail(problem);
   if (password !== confirm) return fail("The two passwords do not match.");
 
   const outcome = await setAccountPassword(token, password);

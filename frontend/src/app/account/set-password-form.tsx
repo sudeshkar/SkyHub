@@ -28,12 +28,12 @@ export function SetPasswordForm({ token }: { token: string }) {
       <input type="hidden" name="token" value={token} />
       <label className="block text-sm font-medium">
         New password
-        <input name="password" type="password" required minLength={12} maxLength={100} autoComplete="new-password" className={field} />
-        <span className="mt-1 block text-xs font-normal text-muted">At least 12 characters. A few words in a row is easy to remember and hard to guess.</span>
+        <input name="password" type="password" required minLength={12} maxLength={72} autoComplete="new-password" className={field} />
+        <span className="mt-1 block text-xs font-normal text-muted">At least 12 characters, and at most 72 bytes (about 72 letters, fewer with accents or symbols). A few words in a row is easy to remember and hard to guess.</span>
       </label>
       <label className="block text-sm font-medium">
         Repeat the password
-        <input name="confirm" type="password" required minLength={12} maxLength={100} autoComplete="new-password" className={field} />
+        <input name="confirm" type="password" required minLength={12} maxLength={72} autoComplete="new-password" className={field} />
       </label>
       <button type="submit" disabled={pending} className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60">
         {pending ? "Saving…" : "Save password"}

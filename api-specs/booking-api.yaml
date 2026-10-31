@@ -1489,7 +1489,10 @@ components:
         password:
           type: string
           minLength: 12
-          maxLength: 100
+          maxLength: 72
+          description: |
+            12 characters at least and 72 bytes in UTF-8 at most (ADR-0048). The limit is the hashing's, so a password of accented or
+            non-Latin letters reaches it in fewer than 72 characters; that is a 400 from the service, not from this schema.
 
     AccountLoginRequest:
       type: object
@@ -1606,7 +1609,8 @@ components:
         password:
           type: string
           minLength: 12
-          maxLength: 200
+          maxLength: 72
+          description: Same rule as a traveller's password (ADR-0048), 12 characters at least and 72 bytes in UTF-8 at most.
         role:
           $ref: '#/components/schemas/StaffRole'
 

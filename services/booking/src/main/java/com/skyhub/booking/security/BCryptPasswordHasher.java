@@ -5,7 +5,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
  * Adapter: BCrypt, which salts every hash and is deliberately slow (cost 12 by default). BCrypt reads only the
- * first 72 bytes of a password, which is why the contract caps passwords well above what people type.
+ * first 72 bytes of a password and this encoder refuses anything longer, which is why the password policy caps passwords
+ * at 72 bytes (ADR-0048): a longer one cannot be stored.
  */
 public class BCryptPasswordHasher implements PasswordHasher {
 

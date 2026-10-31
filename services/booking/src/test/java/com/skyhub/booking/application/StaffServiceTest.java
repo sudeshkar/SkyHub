@@ -200,4 +200,31 @@ class StaffServiceTest {
         assertThat(service.ensureFirstAdmin(null, null)).isFalse();
         verify(accounts, never()).save(any());
     }
+
+    // ---- one password rule (ADR-0048) -------------------------------------------------------------------------------------
+
+    @Test
+    void should_refuse_a_password_the_hashing_cannot_store_just_as_travellers_are() {
+        for (String tooLong : new String[] {"a".repeat(73), "é".repeat(37)}) {
+            assertThatExceptionOfType(InvalidStaffAccountException.class)
+                    .isThrownBy(() -> service.create("admin", new CreateStaffCommand("sam.ops", tooLong, StaffRole.OPS)))
+                    .withMessageContaining("72");
+        }
+        verify(accounts, never()).save(any());
+    }
+
+    @Test
+    void should_say_the_same_thing_to_staff_as_to_travellers_about_a_short_password() {
+        assertThatExceptionOfType(InvalidStaffAccountException.class)
+                .isThrownBy(() -> service.create("admin", new CreateStaffCommand("sam.ops", "short", StaffRole.OPS)))
+                .withMessage(com.skyhub.booking.domain.PasswordPolicy.violation("short").orElseThrow());
+    }
+
+    @Test
+    void should_refuse_a_bootstrap_password_that_cannot_be_stored_with_the_same_message_instead_of_failing_at_start_up() {
+        when(accounts.count()).thenReturn(0L);
+
+        assertThatExceptionOfType(InvalidStaffAccountException.class)
+                .isThrownBy(() -> service.ensureFirstAdmin("first.admin", "a".repeat(80))).withMessageContaining("72");
+    }
 }

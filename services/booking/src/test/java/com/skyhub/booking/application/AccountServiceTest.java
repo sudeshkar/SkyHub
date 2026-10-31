@@ -269,4 +269,26 @@ class AccountServiceTest {
 
         assertThatExceptionOfType(AccountLoginFailedException.class).isThrownBy(() -> service.signOutEverywhere(99L));
     }
+
+    // ---- one password rule (ADR-0048) -------------------------------------------------------------------------------------
+
+    @Test
+    void should_refuse_a_password_the_hashing_cannot_store_with_a_message_not_a_server_error() {
+        for (String tooLong : new String[] {"a".repeat(73), "é".repeat(37), "あ".repeat(25)}) {
+            assertThatExceptionOfType(InvalidAccountException.class).as(tooLong.substring(0, 3) + "…")
+                    .isThrownBy(() -> service.setPassword("raw-token", tooLong)).withMessageContaining("72");
+        }
+        verify(accounts, never()).findForUpdateByLinkTokenHash(any());   // refused before the link is even looked at
+    }
+
+    @Test
+    void should_accept_the_longest_password_the_hashing_can_store() {
+        TravellerAccount account = TravellerAccount.unverified(new ContactEmail("priya@example.com"), "idx", NOW.minusSeconds(60));
+        account.issueLink(Sha256.hex("raw-token"), NOW.minusSeconds(60));
+        when(accounts.findForUpdateByLinkTokenHash(Sha256.hex("raw-token"))).thenReturn(Optional.of(account));
+
+        service.setPassword("raw-token", "é".repeat(36));   // exactly 72 bytes
+
+        assertThat(account.hasPassword()).isTrue();
+    }
 }
