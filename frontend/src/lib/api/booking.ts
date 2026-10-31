@@ -344,6 +344,53 @@ export async function getMyAccount(token: string): Promise<MyAccountOutcome> {
   return { kind: "unavailable" };
 }
 
+export type EmailChangeOutcome =
+  | { kind: "sent" } // a link is on its way if the new address can be used; the service never says whether it can
+  | { kind: "password-refused" } // wrong, missing or locked: a 403, so the session is not ended
+  | { kind: "rejected"; detail: string } // not an address, or the account's own address
+  | { kind: "unauthorized" }
+  | { kind: "unavailable" };
+
+/** Asks to move the signed-in account to another address (ADR-0039). A link goes to the NEW address. */
+export async function requestAccountEmailChange(token: string, newEmail: string, password: string): Promise<EmailChangeOutcome> {
+  const response = await call("/api/v1/accounts/me/email-change", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ newEmail, password }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 202) return { kind: "sent" };
+  if (response.status === 403) return { kind: "password-refused" };
+  if (response.status === 400) {
+    const problem = (await response.json().catch(() => null)) as Problem | null;
+    return { kind: "rejected", detail: problem?.detail ?? "That address was not accepted." };
+  }
+  if (response.status === 401) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
+export type ConfirmEmailOutcome =
+  | { kind: "changed" }
+  | { kind: "invalid-link" } // wrong, used, expired, someone else's, or the address was taken meanwhile: the service does not say which
+  | { kind: "unauthorized" }
+  | { kind: "unavailable" };
+
+/** Spends the link sent to the new address, for the signed-in account (ADR-0039). */
+export async function confirmAccountEmailChange(token: string, linkToken: string): Promise<ConfirmEmailOutcome> {
+  const response = await call("/api/v1/accounts/me/email-change/confirmation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ token: linkToken }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 204) return { kind: "changed" };
+  if (response.status === 400) return { kind: "invalid-link" };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
 export type MyBooking = components["schemas"]["BookingSummary"];
 
 export type MyBookingsOutcome =

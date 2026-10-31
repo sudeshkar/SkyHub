@@ -63,6 +63,9 @@ async function AccountContent({ searchParams }: { searchParams: AccountSearchPar
           </button>
         </form>
       </div>
+      <p className="mb-8 text-sm">
+        <Link href="/account/change-email" className="underline">Change email address</Link>
+      </p>
       <MyBookingsSection token={session.token} {...(await searchParams)} />
       <p className="mt-8 text-sm text-muted">
         Booked with a different address? Use <Link href="/manage" className="underline">Manage booking</Link> with its reference and your last name.

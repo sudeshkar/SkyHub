@@ -233,4 +233,20 @@ class NotificationServiceTest {
 
         assertThat(count("failed")).isEqualTo(1);
     }
+
+    @Test
+    void should_send_the_email_change_link_to_the_new_address_and_record_it_without_a_booking_reference() {
+        service.emailChangeLink(new com.skyhub.notification.domain.AccountEmailChangeLinkEvent(
+                UUID.fromString("6c1e9a52-7d3b-4f08-b4a6-2e9f0d8c3a14"), "account.email-change-link", 1,
+                Instant.parse("2026-11-01T10:00:00Z"), "priya.new@example.com", "abc", Instant.parse("2026-11-01T11:00:00Z")));
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().to()).isEqualTo("priya.new@example.com");
+        assertThat(message.getValue().body()).contains("http://localhost:3000/account/confirm-email?token=abc");
+        ArgumentCaptor<SentNotification> row = ArgumentCaptor.forClass(SentNotification.class);
+        verify(sent).saveAndFlush(row.capture());
+        assertThat(row.getValue().getLocator()).isNull();
+        assertThat(row.getValue().getRecipient()).doesNotContain("priya.new");   // only the masked form is kept
+    }
 }

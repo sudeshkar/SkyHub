@@ -112,4 +112,14 @@ class BookingEventsListenerTest {
         assertThatExceptionOfType(InvalidEventException.class).isThrownBy(() -> listener.onMessage("not json"));
         verify(service, never()).bookingConfirmed(any());
     }
+
+    @Test
+    void should_hand_an_email_change_link_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/account-email-change-link.v1.example.json")));
+
+        ArgumentCaptor<com.skyhub.notification.domain.AccountEmailChangeLinkEvent> event =
+                ArgumentCaptor.forClass(com.skyhub.notification.domain.AccountEmailChangeLinkEvent.class);
+        verify(service).emailChangeLink(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().contactEmail()).isEqualTo("priya.new@example.com");
+    }
 }

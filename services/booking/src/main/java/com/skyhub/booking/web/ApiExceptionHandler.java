@@ -4,6 +4,7 @@ import com.skyhub.booking.application.FlightCatalogUnavailableException;
 import com.skyhub.booking.application.PaymentUnavailableException;
 import com.skyhub.booking.application.AccountLoginFailedException;
 import com.skyhub.booking.application.PasswordLinkInvalidException;
+import com.skyhub.booking.application.PasswordNotAcceptedException;
 import com.skyhub.booking.application.StaffLoginFailedException;
 import com.skyhub.booking.domain.InvalidAccountException;
 import com.skyhub.booking.application.rebooking.RebookingRefusedException;
@@ -164,6 +165,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AccountLoginFailedException.class)
     ProblemDetail handleAccountLoginFailed(AccountLoginFailedException ex) {
         return problem(HttpStatus.UNAUTHORIZED, "Sign-in failed", ex.getMessage());
+    }
+
+    /** A wrong, missing or locked password when changing the address: 403, so a mistyped password is not taken for an ended session. */
+    @ExceptionHandler(PasswordNotAcceptedException.class)
+    ProblemDetail handlePasswordNotAccepted(PasswordNotAcceptedException ex) {
+        return problem(HttpStatus.FORBIDDEN, "Password not accepted", ex.getMessage());
     }
 
     /** One answer for every login failure, so nothing says which usernames exist (ADR-0017). */

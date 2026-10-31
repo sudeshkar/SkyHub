@@ -1,5 +1,6 @@
 package com.skyhub.notification.application;
 
+import com.skyhub.notification.domain.AccountEmailChangeLinkEvent;
 import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
@@ -120,6 +121,26 @@ public final class EmailComposer {
 
                 If you did not ask for this, ignore this email: no account will be usable.
                 """.formatted(link, until));
+    }
+
+    /**
+     * Goes to the NEW address, whose owner proves it can be read by using the link while signed in to the account (ADR-0039). It
+     * says what it will do, and that nothing changes unless the link is used.
+     */
+    public static EmailMessage emailChangeLink(AccountEmailChangeLinkEvent event, String siteUrl) {
+        String base = siteUrl.endsWith("/") ? siteUrl.substring(0, siteUrl.length() - 1) : siteUrl;
+        String link = base + "/account/confirm-email?token=" + java.net.URLEncoder.encode(event.token(), java.nio.charset.StandardCharsets.UTF_8);
+        return new EmailMessage(event.contactEmail(), "Confirm your new SkyHub email address", """
+                Someone signed in to a SkyHub account asked to change its email address to this one. To confirm, sign in to that
+                account and then open this link:
+
+                %s
+
+                The link works once and stops working at %s. After it is used, bookings made with this address will appear in the
+                account, and you will sign in with this address from then on.
+
+                If you did not ask for this, ignore this email: nothing changes.
+                """.formatted(link, UTC_TIME.format(event.expiresAt())));
     }
 
     public static EmailMessage refundCompleted(BookingRefundCompletedEvent event) {
