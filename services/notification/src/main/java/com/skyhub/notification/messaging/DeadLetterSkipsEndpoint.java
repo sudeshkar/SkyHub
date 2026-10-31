@@ -11,7 +11,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * {@code GET /actuator/deadletterskips} shows the parked messages the replay will leave out; {@code POST} with
- * {@code {"partition", "offset", "reason"}} adds one; {@code DELETE ?partition=&offset=} takes one off again (ADR-0037). On the
+ * {@code {"partition", "offset", "reason", "operator"}} adds one; {@code DELETE ?partition=&offset=&operator=} takes one off again
+ * (ADR-0037). Every change says who made it (ADR-0052). On the
  * management port, like the replay tool (ADR-0032): that port is never exposed publicly.
  */
 @Component
@@ -34,12 +35,12 @@ class DeadLetterSkipsEndpoint {
     }
 
     @WriteOperation
-    Skip skip(int partition, long offset, @Nullable String reason) {
-        return skips.skip(partition, offset, reason);
+    Skip skip(int partition, long offset, @Nullable String reason, @Nullable String operator) {
+        return skips.skip(partition, offset, reason, Operator.named(operator));
     }
 
     @DeleteOperation
-    Unskipped unskip(int partition, long offset) {
-        return new Unskipped(skips.unskip(partition, offset));
+    Unskipped unskip(int partition, long offset, @Nullable String operator) {
+        return new Unskipped(skips.unskip(partition, offset, Operator.named(operator)));
     }
 }

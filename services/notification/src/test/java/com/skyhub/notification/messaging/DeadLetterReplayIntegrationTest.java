@@ -28,6 +28,8 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 @Import(PostgresTestcontainer.class)
 class DeadLetterReplayIntegrationTest {
 
+    private static final Operator ME = Operator.named("priya.perera");
+
     private static final Path EXAMPLE = Path.of("../../api-specs/events/booking-confirmed.v1.example.json");
 
     @Autowired
@@ -71,24 +73,24 @@ class DeadLetterReplayIntegrationTest {
         UUID a = park("REPLAY1");
         UUID b = park("REPLAY2");
 
-        var result = replayer.replay(1000);
+        var result = replayer.replay(1000, ME);
 
         assertThat(result.replayed()).isGreaterThanOrEqualTo(2);
         await().atMost(Duration.ofSeconds(30)).until(() -> rows(a) == 1 && rows(b) == 1);
-        assertThat(replayer.replay(1000).replayed()).isZero();   // they were taken: a second replay finds nothing new
+        assertThat(replayer.replay(1000, ME).replayed()).isZero();   // they were taken: a second replay finds nothing new
         assertThat(replayer.peek(10).parked()).isZero();
     }
 
     @Test
     void should_replay_only_as_many_as_asked_and_leave_the_rest_for_later() throws Exception {
-        replayer.replay(1000);   // start from empty
+        replayer.replay(1000, ME);   // start from empty
         UUID first = park("LIMIT01");
         UUID second = park("LIMIT02");
         UUID third = park("LIMIT03");
 
-        assertThat(replayer.replay(1).replayed()).isEqualTo(1);
+        assertThat(replayer.replay(1, ME).replayed()).isEqualTo(1);
         assertThat(replayer.peek(10).parked()).isEqualTo(2);
-        assertThat(replayer.replay(1000).replayed()).isEqualTo(2);
+        assertThat(replayer.replay(1000, ME).replayed()).isEqualTo(2);
 
         await().atMost(Duration.ofSeconds(30)).until(() -> rows(first) + rows(second) + rows(third) == 3);
     }
@@ -107,8 +109,8 @@ class DeadLetterReplayIntegrationTest {
             park("BUSY" + i);
         }
 
-        var one = CompletableFuture.supplyAsync(() -> replayer.replay(1000));
-        var two = CompletableFuture.supplyAsync(() -> replayer.replay(1000));
+        var one = CompletableFuture.supplyAsync(() -> replayer.replay(1000, ME));
+        var two = CompletableFuture.supplyAsync(() -> replayer.replay(1000, ME));
         var a = one.get();
         var b = two.get();
 

@@ -20,6 +20,8 @@ import org.springframework.boot.actuate.endpoint.InvalidEndpointRequestException
 
 class DeadLetterSkipsTest {
 
+    private static final Operator ME = Operator.named("priya.perera");
+
     private static final Instant NOW = Instant.parse("2026-11-01T10:00:00Z");
 
     /** Keeps the list in memory, the way the table would. */
@@ -31,8 +33,8 @@ class DeadLetterSkipsTest {
         }
 
         @Override
-        public void skip(int partition, long offset, String reason, Instant at) {
-            rows.putIfAbsent(key(partition, offset), new Skip(partition, offset, reason, at));
+        public void skip(int partition, long offset, String reason, String by, Instant at) {
+            rows.putIfAbsent(key(partition, offset), new Skip(partition, offset, reason, by, at));
         }
 
         @Override
@@ -64,32 +66,40 @@ class DeadLetterSkipsTest {
 
     @Test
     void should_list_a_waiting_message_to_be_left_out_with_the_reason_and_the_time() {
-        Skip skip = skips.skip(0, 5, "Event type was removed in v3; can never be parsed");
+        Skip skip = skips.skip(0, 5, "Event type was removed in v3; can never be parsed", ME);
 
-        assertThat(skip).isEqualTo(new Skip(0, 5, "Event type was removed in v3; can never be parsed", NOW));
+        assertThat(skip).isEqualTo(new Skip(0, 5, "Event type was removed in v3; can never be parsed", "priya.perera", NOW));
         assertThat(store.all()).containsExactly(skip);
     }
 
     @Test
+    void should_record_who_skipped_it_and_keep_the_first_name_when_it_is_skipped_again() {
+        skips.skip(0, 5, "first reason", ME);
+        skips.skip(0, 5, "second reason", Operator.named("sam.silva"));
+
+        assertThat(store.all()).extracting(Skip::skippedBy).containsExactly("priya.perera");
+    }
+
+    @Test
     void should_refuse_a_message_that_is_not_waiting_and_store_nothing() {
-        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, 6, "typo"))
+        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, 6, "typo", ME))
                 .withMessageContaining("not waiting");
-        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(7, 5, "no such partition"));
+        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(7, 5, "no such partition", ME));
         assertThat(store.all()).isEmpty();
     }
 
     @Test
     void should_require_a_reason_of_reasonable_length() {
-        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, 5, null));
-        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, 5, "   "));
-        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, 5, "x".repeat(201)));
+        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, 5, null, ME));
+        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, 5, "   ", ME));
+        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, 5, "x".repeat(201), ME));
         assertThat(store.all()).isEmpty();
-        assertThat(skips.skip(0, 5, "x".repeat(200)).reason()).hasSize(200);
+        assertThat(skips.skip(0, 5, "x".repeat(200), ME).reason()).hasSize(200);
     }
 
     @Test
     void should_hide_an_email_address_in_the_reason_before_storing_it() {
-        Skip skip = skips.skip(0, 5, "Bounced for priya@example.com; mailbox closed");
+        Skip skip = skips.skip(0, 5, "Bounced for priya@example.com; mailbox closed", ME);
 
         assertThat(skip.reason()).doesNotContain("priya").doesNotContain("example.com").contains("mailbox closed");
         assertThat(store.all().getFirst().reason()).doesNotContain("priya");
@@ -97,14 +107,14 @@ class DeadLetterSkipsTest {
 
     @Test
     void should_refuse_a_negative_partition_or_offset() {
-        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(-1, 5, "x"));
-        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, -1, "x"));
+        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(-1, 5, "x", ME));
+        assertThatExceptionOfType(InvalidEndpointRequestException.class).isThrownBy(() -> skips.skip(0, -1, "x", ME));
     }
 
     @Test
     void should_make_skipping_twice_the_same_as_once() {
-        skips.skip(0, 5, "first reason");
-        skips.skip(0, 5, "second reason");
+        skips.skip(0, 5, "first reason", ME);
+        skips.skip(0, 5, "second reason", ME);
 
         assertThat(store.all()).hasSize(1);
         assertThat(store.all().getFirst().reason()).isEqualTo("first reason");
@@ -112,17 +122,17 @@ class DeadLetterSkipsTest {
 
     @Test
     void should_take_a_message_off_the_list_again_and_say_whether_it_was_there() {
-        skips.skip(0, 5, "a reason");
+        skips.skip(0, 5, "a reason", ME);
 
-        assertThat(skips.unskip(0, 5)).isTrue();
-        assertThat(skips.unskip(0, 5)).isFalse();
+        assertThat(skips.unskip(0, 5, ME)).isTrue();
+        assertThat(skips.unskip(0, 5, ME)).isFalse();
         assertThat(store.all()).isEmpty();
     }
 
     @Test
     void should_show_everything_that_is_listed() {
-        skips.skip(0, 5, "one");
-        skips.skip(1, 9, "two");
+        skips.skip(0, 5, "one", ME);
+        skips.skip(1, 9, "two", ME);
 
         assertThat(skips.listed()).extracting(Skip::reason).containsExactly("one", "two");
     }

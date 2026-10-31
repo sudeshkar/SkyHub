@@ -38,7 +38,7 @@ if sys.argv[1] == "park":
 else:
     address = json.load(open(STATE))["address"]
     check("before the replay there is still no email for the parked request", len(mails_to(address)) == 0)
-    status, replay = call("POST", NOTIFICATION_MGMT + "/actuator/deadletters", {"limit": 500})
+    status, replay = call("POST", NOTIFICATION_MGMT + "/actuator/deadletters", {"limit": 500, "operator": "live-check"})
     check("the replay tool puts parked messages back (200)", status == 200 and replay.get("replayed", 0) >= 1, (status, replay))
     end = time.time() + 60
     mail = None
@@ -54,7 +54,7 @@ else:
         status, _ = call("POST", BOOKING + "/api/v1/accounts/passwords",
                          {"token": urllib.parse.unquote(token.group(1)), "password": "a long enough passphrase"})
         check("and the traveller can use it to choose a password (204)", status == 204, status)
-    status, replay = call("POST", NOTIFICATION_MGMT + "/actuator/deadletters", {"limit": 500})
+    status, replay = call("POST", NOTIFICATION_MGMT + "/actuator/deadletters", {"limit": 500, "operator": "live-check"})
     check("a second replay takes nothing more", status == 200 and replay.get("replayed") == 0, (status, replay))
 
 finish()

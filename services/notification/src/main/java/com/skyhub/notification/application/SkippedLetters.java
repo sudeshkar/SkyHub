@@ -11,12 +11,12 @@ import java.util.Set;
  */
 public interface SkippedLetters {
 
-    /** A message to leave out, and why. Never holds a message body. */
-    record Skip(int partition, long offset, String reason, Instant skippedAt) {
+    /** A message to leave out, why, and who said so (ADR-0052). Never holds a message body. */
+    record Skip(int partition, long offset, String reason, String skippedBy, Instant skippedAt) {
     }
 
     /** Lists a message to leave out. Listing it again changes nothing. */
-    void skip(int partition, long offset, String reason, Instant at);
+    void skip(int partition, long offset, String reason, String by, Instant at);
 
     /** Takes a message off the list. @return false if it was not listed */
     boolean unskip(int partition, long offset);

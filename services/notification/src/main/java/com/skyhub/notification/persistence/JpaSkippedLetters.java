@@ -22,9 +22,9 @@ class JpaSkippedLetters implements SkippedLetters {
 
     @Override
     @Transactional
-    public void skip(int partition, long offset, String reason, Instant at) {
+    public void skip(int partition, long offset, String reason, String by, Instant at) {
         if (!letters.existsByPartitionAndOffset(partition, offset)) {
-            letters.save(SkippedLetter.of(partition, offset, reason, at));
+            letters.save(SkippedLetter.of(partition, offset, reason, by, at));
         }
     }
 
@@ -52,7 +52,7 @@ class JpaSkippedLetters implements SkippedLetters {
     @Transactional(readOnly = true)
     public List<Skip> all() {
         return letters.findAll().stream()
-                .map(s -> new Skip(s.getPartition(), s.getOffset(), s.getReason(), s.getSkippedAt()))
+                .map(s -> new Skip(s.getPartition(), s.getOffset(), s.getReason(), s.getSkippedBy(), s.getSkippedAt()))
                 .sorted(java.util.Comparator.comparingInt(Skip::partition).thenComparingLong(Skip::offset)).toList();
     }
 }
