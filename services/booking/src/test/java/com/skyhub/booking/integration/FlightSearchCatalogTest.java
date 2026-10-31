@@ -48,6 +48,23 @@ class FlightSearchCatalogTest {
     }
 
     @Test
+    void should_report_when_the_flight_lands_as_an_instant_for_the_connection_rule() {
+        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02"))
+                .andRespond(withSuccess("{\"flightNumber\":\"SK501\",\"departureTime\":\"2026-11-02T10:30:00+04:00\","
+                        + "\"arrivalTime\":\"2026-11-02T14:00:00+01:00\",\"fare\":310.5,\"currency\":\"USD\"}", MediaType.APPLICATION_JSON));
+
+        assertThat(catalog.find("SK501", DATE).orElseThrow().arrival()).isEqualTo(Instant.parse("2026-11-02T13:00:00Z"));
+    }
+
+    @Test
+    void should_still_answer_when_flight_search_sends_no_arrival_and_leave_it_unknown() {
+        server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02"))
+                .andRespond(withSuccess(LEG, MediaType.APPLICATION_JSON));
+
+        assertThat(catalog.find("SK501", DATE).orElseThrow().arrival()).isNull();
+    }
+
+    @Test
     void should_report_the_fare_as_money() {
         server.expect(once(), requestTo(BASE + "/api/v1/flights/SK501/departures/2026-11-02"))
                 .andRespond(withSuccess(LEG, MediaType.APPLICATION_JSON));

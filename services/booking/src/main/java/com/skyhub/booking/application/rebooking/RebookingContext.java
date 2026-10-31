@@ -12,5 +12,15 @@ import java.util.Optional;
  */
 public record RebookingContext(Pnr pnr, int segmentIndex, PnrSegment from, PnrSegment to, FlightInfo fromInfo,
                                FlightInfo toInfo, Optional<Disruption> fromDisruption, Optional<Disruption> toDisruption,
-                               boolean checkedIn) {
+                               boolean checkedIn, Optional<Neighbour> previous, Optional<Neighbour> next) {
+
+    /** A flight of the same booking either side of the one being moved, with what is known about it (ADR-0036). */
+    public record Neighbour(PnrSegment segment, FlightInfo info, Optional<Disruption> disruption) {
+    }
+
+    /** A booking whose neighbouring flights are not considered: the single-flight case, and rules that do not look at them. */
+    public RebookingContext(Pnr pnr, int segmentIndex, PnrSegment from, PnrSegment to, FlightInfo fromInfo, FlightInfo toInfo,
+                            Optional<Disruption> fromDisruption, Optional<Disruption> toDisruption, boolean checkedIn) {
+        this(pnr, segmentIndex, from, to, fromInfo, toInfo, fromDisruption, toDisruption, checkedIn, Optional.empty(), Optional.empty());
+    }
 }

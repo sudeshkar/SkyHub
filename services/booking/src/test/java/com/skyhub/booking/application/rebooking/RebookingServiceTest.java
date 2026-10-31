@@ -79,6 +79,52 @@ class RebookingServiceTest {
         return new FlightInfo(departure, Money.of("100.00", "USD"), "DXB", "LHR");
     }
 
+    // ---- connections (ADR-0036) ----------------------------------------------------------------------------------
+
+    private static FlightInfo flightArriving(Instant departure, Instant arrival) {
+        return new FlightInfo(departure, Money.of("100.00", "USD"), "DXB", "LHR", arrival);
+    }
+
+    /** A two-flight booking: SK501 (to be moved, leg 0) then SK700 on the same day, departing at {@code onwardDeparts}. */
+    private void tripWithOnwardFlight(Instant onwardDeparts) {
+        PnrSegment onward = new PnrSegment("SK700", DAY);
+        pnr = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(FROM, onward),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("11D", "30A")), new PnrPassenger("Anil", "Perera", List.of("11E", "30B"))),
+                NOW, "key", "fingerprint");
+        when(pnrs.findByLocator("ABC234")).thenReturn(Optional.of(pnr));
+        // The replacement leaves at 08:30 the next day and lands four hours later.
+        when(catalog.find("SK501", DAY.plusDays(1))).thenReturn(Optional.of(
+                flightArriving(DEPARTS.plusSeconds(86_400), DEPARTS.plusSeconds(86_400 + 4 * 3600))));
+        when(catalog.find("SK700", DAY)).thenReturn(Optional.of(flightArriving(onwardDeparts, onwardDeparts.plusSeconds(8 * 3600))));
+        when(disruptions.findByFlightNumberAndDepartureDate("SK700", DAY)).thenReturn(Optional.empty());
+    }
+
+    @Test
+    void should_look_at_the_next_flight_of_the_booking_and_refuse_a_replacement_that_would_miss_it() {
+        tripWithOnwardFlight(DEPARTS.plusSeconds(86_400 + 4 * 3600 + 20 * 60));   // 20 minutes after the replacement lands
+
+        assertThatExceptionOfType(RebookingRefusedException.class).isThrownBy(() -> service.rebook(command()))
+                .withMessageContaining("SK700").withMessageContaining("20 minutes");
+
+        verify(audit, never()).save(any(Rebooking.class));
+        assertThat(pnr.getSegments().getFirst()).isEqualTo(FROM);
+        assertThat(count("refused")).isEqualTo(1);
+    }
+
+    @Test
+    void should_move_a_booking_whose_next_flight_still_leaves_in_time() {
+        tripWithOnwardFlight(DEPARTS.plusSeconds(86_400 + 4 * 3600 + 90 * 60));   // 90 minutes after the replacement lands
+
+        assertThat(service.rebook(command()).changed()).isTrue();
+    }
+
+    @Test
+    void should_ask_for_no_neighbours_when_the_booking_has_one_flight() {
+        service.rebook(command());
+
+        verify(catalog, never()).find(eq("SK700"), any(LocalDate.class));
+    }
+
     private static String key(PnrSegment flight, String seat) {
         return flight.flightNumber() + flight.departureDate() + seat;
     }
