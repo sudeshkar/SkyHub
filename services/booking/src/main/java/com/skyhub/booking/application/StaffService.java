@@ -1,6 +1,7 @@
 package com.skyhub.booking.application;
 
 import com.skyhub.booking.domain.InvalidStaffAccountException;
+import com.skyhub.booking.domain.PasswordPolicy;
 import com.skyhub.booking.domain.StaffAccount;
 import com.skyhub.booking.domain.StaffRole;
 import com.skyhub.booking.persistence.StaffAccountRepository;
@@ -19,8 +20,6 @@ import org.springframework.transaction.support.TransactionOperations;
 public class StaffService {
 
     private static final Logger log = LoggerFactory.getLogger(StaffService.class);
-    private static final int MIN_PASSWORD_LENGTH = 12;
-
     private record Attempt(PasswordGate.Outcome outcome, StaffAccount account) {
     }
 
@@ -101,10 +100,11 @@ public class StaffService {
         return true;
     }
 
+    /** The one rule for staff and travellers alike (ADR-0048). */
     private static void checkPassword(String password) {
-        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
-            throw new InvalidStaffAccountException("A password needs at least " + MIN_PASSWORD_LENGTH + " characters");
-        }
+        PasswordPolicy.violation(password).ifPresent(reason -> {
+            throw new InvalidStaffAccountException(reason);
+        });
     }
 
     private static String normalised(String username) {

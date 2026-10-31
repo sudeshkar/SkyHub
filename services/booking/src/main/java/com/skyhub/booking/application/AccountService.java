@@ -3,6 +3,7 @@ package com.skyhub.booking.application;
 import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.InvalidAccountException;
 import com.skyhub.booking.domain.InvalidBookingException;
+import com.skyhub.booking.domain.PasswordPolicy;
 import com.skyhub.booking.domain.TravellerAccount;
 import com.skyhub.booking.persistence.TravellerAccountRepository;
 import java.security.SecureRandom;
@@ -26,8 +27,6 @@ import org.springframework.transaction.support.TransactionOperations;
 public class AccountService {
 
     private static final Logger log = LoggerFactory.getLogger(AccountService.class);
-    private static final int MIN_PASSWORD_LENGTH = 12;
-    private static final int MAX_PASSWORD_LENGTH = 100;
 
     private record Attempt(PasswordGate.Outcome outcome, TravellerAccount account) {
     }
@@ -258,10 +257,10 @@ public class AccountService {
         }
     }
 
+    /** The one rule for staff and travellers alike (ADR-0048). */
     private static void checkPassword(String password) {
-        if (password == null || password.length() < MIN_PASSWORD_LENGTH || password.length() > MAX_PASSWORD_LENGTH) {
-            throw new InvalidAccountException(
-                    "A password needs " + MIN_PASSWORD_LENGTH + " to " + MAX_PASSWORD_LENGTH + " characters");
-        }
+        PasswordPolicy.violation(password).ifPresent(reason -> {
+            throw new InvalidAccountException(reason);
+        });
     }
 }

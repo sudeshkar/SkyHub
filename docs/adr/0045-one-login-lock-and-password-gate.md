@@ -35,4 +35,4 @@ ADR-0033 and ADR-0039 both list the copy as a negative. It is also a security ri
 - Negative: **the limits are now one constant for both,** so staff and travellers can no longer be given different limits without a change to the lock. That is the same as today (both are five and fifteen minutes); making them configurable per kind of account would be a new decision.
 - Negative: **one more small type to know about** (`PasswordProtected`) where there were two classes that happened to look alike. The cost is a line to implement it on a new kind of account.
 - Negative: the embeddable adds a level to the entities, which is invisible in the tables but is a change to how Hibernate maps two entities; the existing integration tests that lock an account and find it still locked on the next request are what prove the columns still persist.
-- Follow-up: the same treatment for the password-length rules and BCrypt cost that both services repeat.
+- Follow-up: the same treatment for the password-length rules and BCrypt cost that both services repeat (the length rules: done, ADR-0048, which also found that the old limits accepted passwords BCrypt cannot store).

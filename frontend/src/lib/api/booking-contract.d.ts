@@ -838,6 +838,10 @@ export interface components {
         };
         SetPasswordRequest: {
             token: string;
+            /**
+             * @description 12 characters at least and 72 bytes in UTF-8 at most (ADR-0048). The limit is the hashing's, so a password of accented or
+             *     non-Latin letters reaches it in fewer than 72 characters; that is a 400 from the service, not from this schema.
+             */
             password: string;
         };
         AccountLoginRequest: {
@@ -890,6 +894,7 @@ export interface components {
         };
         CreateStaffRequest: {
             username: string;
+            /** @description Same rule as a traveller's password (ADR-0048), 12 characters at least and 72 bytes in UTF-8 at most. */
             password: string;
             role: components["schemas"]["StaffRole"];
         };

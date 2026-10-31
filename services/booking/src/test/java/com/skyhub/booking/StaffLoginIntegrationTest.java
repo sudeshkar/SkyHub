@@ -187,4 +187,21 @@ class StaffLoginIntegrationTest {
 
     @Autowired
     private com.skyhub.booking.application.ManageTokenIssuer manageTokens;
+
+    @Test
+    void should_answer_400_not_500_for_a_password_the_hashing_cannot_store() throws Exception {
+        String admin = TestStaff.adminBearer(mvc);
+
+        mvc.perform(post("/api/v1/ops/staff").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"%s\",\"password\":\"%s\",\"role\":\"OPS\"}".formatted(unique("long"), "a".repeat(73))))
+                .andExpect(status().isBadRequest());   // the contract's maximum catches ASCII
+        mvc.perform(post("/api/v1/ops/staff").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"%s\",\"password\":\"%s\",\"role\":\"OPS\"}".formatted(unique("accents"), "é".repeat(50))))
+                .andExpect(status().isBadRequest())   // 50 characters but 100 bytes: only the service can see that
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.detail")
+                        .value(org.hamcrest.Matchers.containsString("72")));
+        mvc.perform(post("/api/v1/ops/staff").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"%s\",\"password\":\"%s\",\"role\":\"OPS\"}".formatted(unique("longest"), "é".repeat(36))))
+                .andExpect(status().isCreated());   // and exactly 72 bytes is stored and works
+    }
 }

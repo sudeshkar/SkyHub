@@ -51,3 +51,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0045](0045-one-login-lock-and-password-gate.md) | One login lock and one password gate for staff and traveller accounts | Accepted |
 | [0046](0046-sealing-link-tokens-on-the-topic.md) | Sealing one-time link tokens on the topic | Accepted |
 | [0047](0047-sign-out-everywhere.md) | Signing out everywhere | Accepted |
+| [0048](0048-one-password-rule-and-the-72-byte-limit.md) | One password rule, and the 72-byte limit | Accepted |

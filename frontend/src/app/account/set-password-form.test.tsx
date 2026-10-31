@@ -25,7 +25,7 @@ describe("SetPasswordForm", () => {
     render(<SetPasswordForm token="abc123" />);
 
     expect(screen.getByLabelText(/New password/)).toHaveAttribute("minLength", "12");
-    expect(screen.getByLabelText("Repeat the password")).toBeInTheDocument();
+    expect(screen.getByLabelText(/repeat the password/i)).toBeInTheDocument();
   });
 
   it("points to sign-in once the password is saved", async () => {
@@ -36,6 +36,14 @@ describe("SetPasswordForm", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent("password is saved");
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/account");
+  });
+
+  it("stops a password the hashing cannot store being typed, and tells the person the limit", () => {
+    render(<SetPasswordForm token="abc123" />);
+
+    expect(screen.getByLabelText(/new password/i)).toHaveAttribute("maxlength", "72");
+    expect(screen.getByLabelText(/repeat the password/i)).toHaveAttribute("maxlength", "72");
+    expect(screen.getByText(/72 bytes/i)).toBeInTheDocument();
   });
 
   it("says that other sessions on the account have ended, so a reset after a worry is known to have worked", async () => {

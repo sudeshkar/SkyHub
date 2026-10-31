@@ -182,4 +182,21 @@ class AccountsIntegrationTest {
         mvc.perform(body("/api/v1/accounts/passwords", "{\"token\":\"%s\",\"password\":\"%s\"}".formatted(token, PASSWORD)))
                 .andExpect(status().isNoContent());                        // and the sealed one is the real one: the traveller can use it
     }
+
+    @Test
+    void should_answer_400_not_500_for_a_password_the_hashing_cannot_store_and_keep_the_link_usable() throws Exception {
+        requestLink("long.password@example.com");
+        String token = latestToken("long.password@example.com");
+
+        mvc.perform(body("/api/v1/accounts/passwords", "{\"token\":\"%s\",\"password\":\"%s\"}".formatted(token, "a".repeat(73))))
+                .andExpect(status().isBadRequest());   // the contract's maximum catches ASCII
+        mvc.perform(body("/api/v1/accounts/passwords", "{\"token\":\"%s\",\"password\":\"%s\"}".formatted(token, "é".repeat(50))))
+                .andExpect(status().isBadRequest())    // 50 characters but 100 bytes: only the service can see that
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("72")));
+
+        // Neither attempt spent the link: the traveller can still choose a good password with it.
+        mvc.perform(body("/api/v1/accounts/passwords", "{\"token\":\"%s\",\"password\":\"%s\"}".formatted(token, "é".repeat(36))))
+                .andExpect(status().isNoContent());
+        signIn("long.password@example.com", "é".repeat(36));
+    }
 }
