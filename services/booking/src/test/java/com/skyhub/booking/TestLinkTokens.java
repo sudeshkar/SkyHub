@@ -26,6 +26,11 @@ public final class TestLinkTokens {
         return open(event.get("sealedToken").asString(), event.get("type").asString(), event.get("contactEmail").asString());
     }
 
+    /** The same for an event that carries a sealed token under another name, such as {@code sealedUndoToken} (ADR-0054). */
+    public static String tokenOf(JsonNode event, String field) {
+        return open(event.get(field).asString(), event.get("type").asString(), event.get("contactEmail").asString());
+    }
+
     public static String open(String sealed, String eventType, String address) {
         try {
             byte[] packed = Base64.getDecoder().decode(sealed.substring("v1:".length()));

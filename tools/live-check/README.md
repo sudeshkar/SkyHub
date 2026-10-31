@@ -53,7 +53,7 @@ export SKYHUB_BOOTSTRAP_ADMIN_USERNAME=live.admin SKYHUB_BOOTSTRAP_ADMIN_PASSWOR
 Throwaway keys are fine. A development database that holds bookings made under an earlier `SKYHUB_PII_KEY` will log, once per start, that
 some old bookings could not be read; that is expected and harmless for this check.
 
-## 1. The account journey (29 checks)
+## 1. The account journey (41 checks)
 
 ```bash
 python tools/live-check/account_journey.py
@@ -67,6 +67,7 @@ every email from Mailpit and the real Kafka topic. It checks, among others, that
 - the **old** address is emailed a notice with the new address masked and no link (ADR-0040);
 - the open session is refused at once after the move, and after "sign out everywhere" (ADR-0041, ADR-0047);
 - a password of 100 bytes is a 400 with the rule, not a 500 (ADR-0048).
+- the notice to the old address carries a sealed undo token, and the owner can **take the account back** with it: no sign-in, the person who moved it is shut out at once, the password they knew is gone, a reset link reaches the restored address, and the token works once (ADR-0054).
 
 It exits non-zero if any check fails.
 

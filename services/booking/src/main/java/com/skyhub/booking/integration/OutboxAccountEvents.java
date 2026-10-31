@@ -68,7 +68,7 @@ public class OutboxAccountEvents implements AccountEvents {
 
     /** The shape is api-specs/events/account-email-changed.v1.example.json. {@code contactEmail} is the OLD address. */
     @Override
-    public void emailChanged(long accountId, ContactEmail oldEmail, ContactEmail newEmail) {
+    public void emailChanged(long accountId, ContactEmail oldEmail, ContactEmail newEmail, String undoToken, Instant undoExpiresAt) {
         UUID id = ids.get();
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("eventId", id.toString());
@@ -77,6 +77,8 @@ public class OutboxAccountEvents implements AccountEvents {
         event.put("occurredAt", clock.instant().toString());
         event.put("contactEmail", oldEmail.value());
         event.put("newEmailMasked", newEmail.masked());
+        event.put("sealedUndoToken", sealer.seal(undoToken, EMAIL_CHANGED, oldEmail.value()));   // never the token itself (ADR-0046)
+        event.put("undoExpiresAt", undoExpiresAt.toString());
         outbox.save(OutboxEvent.pending(id, "account-" + accountId, EMAIL_CHANGED,
                 cipher.encrypt(json.writeValueAsString(event)), clock.instant()));
     }

@@ -476,6 +476,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/email-change-reversals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the account back to the address it had before it was moved
+         * @description For the person who can read the OLD address of an account that was moved without them (ADR-0054). The token comes from
+         *     the notice sent to that address when the account moved. It needs no sign-in, because the account may be lost, and it only
+         *     ever undoes the latest move: it works once, for seven days. Taking the account back puts the old address back, ends every
+         *     session, throws the password away (the person who moved the account may know it) and sends a link to the old address to
+         *     choose a new one. A wrong, used or expired token, or an old address that another account has taken since, all return the
+         *     same 400.
+         */
+        post: operations["undoEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/me/bookings": {
         parameters: {
             query?: never;
@@ -855,6 +880,9 @@ export interface components {
             password: string;
         };
         EmailChangeConfirmation: {
+            token: string;
+        };
+        EmailChangeReversal: {
             token: string;
         };
         AccountSession: {
@@ -1673,6 +1701,29 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    undoEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailChangeReversal"];
+            };
+        };
+        responses: {
+            /** @description The account has its old address back and a link to choose a new password is on its way to it */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
         };
     };
     listMyBookings: {

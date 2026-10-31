@@ -391,6 +391,28 @@ export async function confirmAccountEmailChange(token: string, linkToken: string
   return { kind: "unavailable" };
 }
 
+export type UndoEmailOutcome =
+  | { kind: "undone" }
+  | { kind: "invalid-link" } // wrong, used, expired, or the old address was taken since: the service does not say which
+  | { kind: "unavailable" };
+
+/**
+ * Takes an account back to the address it had before its latest move (ADR-0054). It needs no sign-in: the token went to the OLD
+ * address, and the account may be lost.
+ */
+export async function undoAccountEmailChange(linkToken: string): Promise<UndoEmailOutcome> {
+  const response = await call("/api/v1/accounts/email-change-reversals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: linkToken }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 204) return { kind: "undone" };
+  if (response.status === 400) return { kind: "invalid-link" };
+  return { kind: "unavailable" };
+}
+
 export type EndSessionsOutcome =
   | { kind: "ended" } // every session of the account, this one included, is now refused
   | { kind: "unauthorized" } // this session was already not accepted: there is nothing left to end

@@ -65,25 +65,33 @@ class OutboxAccountEmailChangeEventTest {
     void should_write_the_email_changed_event_for_the_old_address_as_the_notification_service_expects() throws Exception {
         new OutboxAccountEvents(outbox, cipher, json, Clock.fixed(Instant.parse("2026-11-01T10:30:00Z"), ZoneOffset.UTC), SEALER,
                 () -> UUID.fromString("9d4f2b73-1a8e-4c60-b5d9-3e7a0c6f1b28"))
-                .emailChanged(7L, new ContactEmail("priya@example.com"), new ContactEmail("priya.new@example.com"));
+                .emailChanged(7L, new ContactEmail("priya@example.com"), new ContactEmail("priya.new@example.com"),
+                        "dW5kby10b2tlbi1ub3QtYS1yZWFsLW9uZS1hYWFhYWFhYWFh", Instant.parse("2026-11-08T10:30:00Z"));
 
         ArgumentCaptor<OutboxEvent> saved = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outbox).save(saved.capture());
         assertThat(saved.getValue().getEventType()).isEqualTo("account.email-changed");
         assertThat(saved.getValue().getAggregateId()).isEqualTo("account-7");
-        assertThat(json.readTree(cipher.decrypt(saved.getValue().getPayload())))
-                .isEqualTo(json.readTree(Files.readString(Path.of("../../api-specs/events/account-email-changed.v1.example.json"))));
+        var made = (ObjectNode) json.readTree(cipher.decrypt(saved.getValue().getPayload()));
+        var example = (ObjectNode) json.readTree(Files.readString(Path.of("../../api-specs/events/account-email-changed.v1.example.json")));
+        // The seal has a random IV, so it differs; what matters is that it opens, for this type and the OLD address, to the same token.
+        assertThat(made.get("sealedUndoToken").asString()).startsWith("v1:").isNotEqualTo(example.get("sealedUndoToken").asString());
+        assertThat(TestLinkTokens.tokenOf(made, "sealedUndoToken")).isEqualTo(TestLinkTokens.tokenOf(example, "sealedUndoToken"));
+        assertThat(made.has("undoToken")).as("the plain token is never in the event").isFalse();
+        made.remove("sealedUndoToken");
+        example.remove("sealedUndoToken");
+        assertThat(made).isEqualTo(example);   // everything else is exactly the shared example
     }
 
     @Test
     void should_never_put_the_new_address_in_full_or_any_secret_in_the_notice() {
         new OutboxAccountEvents(outbox, cipher, json, Clock.fixed(NOW, ZoneOffset.UTC), SEALER)
-                .emailChanged(7L, new ContactEmail("priya@example.com"), new ContactEmail("priya.new@example.com"));
+                .emailChanged(7L, new ContactEmail("priya@example.com"), new ContactEmail("priya.new@example.com"), "secret-undo-token", NOW);
 
         ArgumentCaptor<OutboxEvent> saved = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outbox).save(saved.capture());
         String payload = cipher.decrypt(saved.getValue().getPayload());
-        assertThat(payload).doesNotContain("priya.new@example.com").doesNotContain("token").contains("p****@example.com");
+        assertThat(payload).doesNotContain("priya.new@example.com").doesNotContain("secret-undo-token").contains("p****@example.com").contains("sealedUndoToken");
         assertThat(saved.getValue().getPayload()).doesNotContain("priya@example.com");   // and it is encrypted at rest like every payload
     }
 }

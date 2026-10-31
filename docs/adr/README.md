@@ -57,3 +57,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0051](0051-past-bookings-most-recently-flown-first.md) | Past bookings, most recently flown first | Accepted |
 | [0052](0052-who-ran-a-management-port-action.md) | Who ran a management-port action | Accepted |
 | [0053](0053-one-command-live-check.md) | One command for the whole live check | Accepted |
+| [0054](0054-taking-an-account-back.md) | Taking an account back after it was moved without its owner | Accepted |

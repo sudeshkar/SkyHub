@@ -15,6 +15,10 @@ public interface TravellerAccountRepository extends JpaRepository<TravellerAccou
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<TravellerAccount> findForUpdateByLinkTokenHash(String linkTokenHash);
 
+    /** The account whose latest move this token can undo (ADR-0054). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<TravellerAccount> findForUpdateByUndoTokenHash(String undoTokenHash);
+
     /** Locks the account, so a password check and a change of address are handled one after the other (ADR-0039). */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<TravellerAccount> findForUpdateById(Long id);

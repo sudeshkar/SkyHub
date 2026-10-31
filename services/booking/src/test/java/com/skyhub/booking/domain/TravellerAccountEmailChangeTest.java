@@ -76,7 +76,7 @@ class TravellerAccountEmailChangeTest {
         TravellerAccount account = account();
         account.requestEmailChange(NEW, "idx:new", "token-hash", NOW);
 
-        account.confirmEmailChange(NOW.plusSeconds(60));
+        account.confirmEmailChange(NOW.plusSeconds(60), "undo-hash");
 
         assertThat(account.getEmail()).isEqualTo(NEW);
         assertThat(account.getEmailIndex()).isEqualTo("idx:new");
@@ -91,7 +91,7 @@ class TravellerAccountEmailChangeTest {
         account.issueLink("reset-hash", NOW);
         account.requestEmailChange(NEW, "idx:new", "token-hash", NOW.plusSeconds(10));
 
-        account.confirmEmailChange(NOW.plusSeconds(60));
+        account.confirmEmailChange(NOW.plusSeconds(60), "undo-hash");
 
         assertThat(account.linkIsValidAt(NOW.plusSeconds(61))).isFalse();
     }
@@ -104,7 +104,7 @@ class TravellerAccountEmailChangeTest {
         }
         account.requestEmailChange(NEW, "idx:new", "token-hash", NOW);
 
-        account.confirmEmailChange(NOW.plusSeconds(60));
+        account.confirmEmailChange(NOW.plusSeconds(60), "undo-hash");
 
         assertThat(account.isLockedAt(NOW.plusSeconds(61))).isTrue();
     }

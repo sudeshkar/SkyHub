@@ -212,7 +212,8 @@ class AccountEmailChangeTest {
 
         service.confirmEmailChange(7L, "raw-token");
 
-        verify(events).emailChanged(7L, new ContactEmail("priya@example.com"), new ContactEmail("priya.new@example.com"));
+        verify(events).emailChanged(7L, new ContactEmail("priya@example.com"), new ContactEmail("priya.new@example.com"), "raw-token",
+                NOW.plus(TravellerAccount.UNDO_LIFETIME));
     }
 
     @Test
@@ -241,7 +242,7 @@ class AccountEmailChangeTest {
     void should_not_tell_anyone_just_for_asking_since_nothing_has_changed_yet() {
         service.requestEmailChange(7L, "priya.new@example.com", PASSWORD);
 
-        verify(events, never()).emailChanged(any(Long.class), any(ContactEmail.class), any(ContactEmail.class));
+        verify(events, never()).emailChanged(any(Long.class), any(ContactEmail.class), any(ContactEmail.class), any(String.class), any(Instant.class));
     }
 
     @Test

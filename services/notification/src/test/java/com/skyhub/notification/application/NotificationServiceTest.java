@@ -257,17 +257,34 @@ class NotificationServiceTest {
 
     @Test
     void should_send_the_account_moved_notice_to_the_old_address_and_record_it_without_a_booking_reference() {
+        when(opener.open("v1:sealed-undo", "account.email-changed", "priya@example.com")).thenReturn("undo-plain");
+
         service.emailChanged(new com.skyhub.notification.domain.AccountEmailChangedEvent(
                 UUID.fromString("9d4f2b73-1a8e-4c60-b5d9-3e7a0c6f1b28"), "account.email-changed", 1,
-                Instant.parse("2026-11-01T10:30:00Z"), "priya@example.com", "p****@example.com"));
+                Instant.parse("2026-11-01T10:30:00Z"), "priya@example.com", "p****@example.com", "v1:sealed-undo",
+                Instant.parse("2026-11-08T10:30:00Z")));
 
         ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
         verify(email).send(message.capture());
         assertThat(message.getValue().to()).isEqualTo("priya@example.com");
+        assertThat(message.getValue().body()).contains("http://localhost:3000/account/undo-email-change?token=undo-plain");
         ArgumentCaptor<SentNotification> row = ArgumentCaptor.forClass(SentNotification.class);
         verify(sent).saveAndFlush(row.capture());
         assertThat(row.getValue().getLocator()).isNull();
         assertThat(row.getValue().getType()).isEqualTo("account.email-changed");
+    }
+
+    @Test
+    void should_send_the_moved_notice_without_opening_anything_when_it_has_no_undo_token() {
+        service.emailChanged(new com.skyhub.notification.domain.AccountEmailChangedEvent(
+                UUID.fromString("9d4f2b73-1a8e-4c60-b5d9-3e7a0c6f1b28"), "account.email-changed", 1,
+                Instant.parse("2026-11-01T10:30:00Z"), "priya@example.com", "p****@example.com", null, null));
+
+        verify(opener, org.mockito.Mockito.never()).open(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().body()).doesNotContain("undo-email-change");
     }
 
     @Test

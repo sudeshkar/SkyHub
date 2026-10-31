@@ -15,8 +15,8 @@ public interface AccountEvents {
     void emailChangeRequested(long accountId, ContactEmail newEmail, String token, Instant expiresAt);
 
     /**
-     * The account has moved: a notice for the OLD address (ADR-0040). It names the new address only masked and carries no token or
-     * link, so it is not a second way to change an account.
+     * The account has moved: a notice for the OLD address (ADR-0040). It names the new address only masked. It carries a one-time token
+     * (ADR-0054) with which the owner of the old address takes the account back; that token can only undo this move, never make one.
      */
-    void emailChanged(long accountId, ContactEmail oldEmail, ContactEmail newEmail);
+    void emailChanged(long accountId, ContactEmail oldEmail, ContactEmail newEmail, String undoToken, Instant undoExpiresAt);
 }

@@ -61,7 +61,11 @@ check("the OLD address was emailed a notice", notice is not None)
 if notice:
     body = notice["Text"]
     check("the notice names the new address only masked", "l****@example.com" in body and NEW not in body, body[:200])
-    check("the notice has no link and no token", "http" not in body and "token" not in body.lower())
+    undo_token = link_token(notice, "/account/undo-email-change")
+    check("the notice carries a link to take the account back, with a token", bool(undo_token))
+    notice_topic = kafka_events()
+    check("the notice event holds sealedUndoToken (v1:) and the plain token appears nowhere on the topic",
+          '"sealedUndoToken":"v1:' in notice_topic.replace(" ", "") and bool(undo_token) and undo_token not in notice_topic)
 status, _ = call("GET", BOOKING + "/api/v1/accounts/me", token=first)
 check("the session that was open is refused at once (401)", status == 401, status)
 status, _ = call("POST", BOOKING + "/api/v1/accounts/sessions", {"email": OLD, "password": PASSWORD})
@@ -88,5 +92,31 @@ mail = wait_mail(f"live.long.{run}@example.com", "Finish creating")
 long_token = link_token(mail, "/account/set-password") if mail else None
 status, problem = call("POST", BOOKING + "/api/v1/accounts/passwords", {"token": long_token, "password": "é" * 50})
 check("50 accented letters (100 bytes) is a 400 with the rule, not a 500", status == 400 and "72" in json.dumps(problem), (status, problem))
+
+# ---- 7. the owner of the old address takes the account back (ADR-0054) -----------------------------------------------------------------
+# At this point somebody holds the account at NEW with a password they know, and OLD's owner has the notice from step 4.
+status, session = call("POST", BOOKING + "/api/v1/accounts/sessions", {"email": NEW, "password": PASSWORD})
+check("before the link is used, the person who moved the account can still sign in (201)", status == 201, status)
+intruder = session["accessToken"] if status == 201 else None
+status, _ = call("POST", BOOKING + "/api/v1/accounts/email-change-reversals", {"token": "not-the-token"})
+check("a wrong token is a 400 and changes nothing", status == 400, status)
+status, _ = call("POST", BOOKING + "/api/v1/accounts/email-change-reversals", {"token": undo_token})   # no sign-in
+check("the token from the notice takes the account back, with no sign-in (204)", status == 204, status)
+status, _ = call("GET", BOOKING + "/api/v1/accounts/me", token=intruder)
+check("the session of the person who moved it is refused at once (401)", status == 401, status)
+for label, address in (("the address they moved it to", NEW), ("the old address with the password they knew", OLD)):
+    status, _ = call("POST", BOOKING + "/api/v1/accounts/sessions", {"email": address, "password": PASSWORD})
+    check(f"{label} no longer signs in (401)", status == 401, status)
+status, _ = call("POST", BOOKING + "/api/v1/accounts/email-change-reversals", {"token": undo_token})
+check("the token works only once (400)", status == 400, status)
+reset_mail = wait_mail(OLD, "Reset your SkyHub password")
+check("a link to choose a new password arrived at the restored address", reset_mail is not None)
+reset_token = link_token(reset_mail, "/account/set-password") if reset_mail else None
+status, _ = call("POST", BOOKING + "/api/v1/accounts/passwords", {"token": reset_token, "password": "a brand new passphrase"})
+check("the owner chooses a new password with it (204)", status == 204, status)
+status, session = call("POST", BOOKING + "/api/v1/accounts/sessions", {"email": OLD, "password": "a brand new passphrase"})
+check("the old address signs in with the new password (201)", status == 201, status)
+status, me = call("GET", BOOKING + "/api/v1/accounts/me", token=session["accessToken"] if status == 201 else None)
+check("and the account has its old address again", status == 200 and me["email"] == OLD, me)
 
 finish()

@@ -27,7 +27,7 @@ class TravellerAccountSessionsTest {
         int before = account.getSessionEpoch();
         account.requestEmailChange(new ContactEmail("priya.new@example.com"), "idx:new", "token-hash", NOW);
 
-        account.confirmEmailChange(NOW.plusSeconds(60));
+        account.confirmEmailChange(NOW.plusSeconds(60), "undo-hash");
 
         assertThat(account.getSessionEpoch()).isEqualTo(before + 1);
     }
@@ -63,7 +63,7 @@ class TravellerAccountSessionsTest {
         account.issueLink("one", NOW);
         account.setPassword("h1", NOW.plusSeconds(10));
         account.requestEmailChange(new ContactEmail("priya.new@example.com"), "idx:new", "token-hash", NOW.plusSeconds(20));
-        account.confirmEmailChange(NOW.plusSeconds(30));
+        account.confirmEmailChange(NOW.plusSeconds(30), "undo-hash");
 
         assertThat(account.getSessionEpoch()).isEqualTo(issuedUnder + 2);
     }

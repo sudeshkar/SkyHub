@@ -68,6 +68,8 @@ public final class EventParser {
             case AccountEmailChangedEvent e -> {
                 require(AccountEmailChangedEvent.TYPE.equals(e.type()), "wrong type");
                 require(notBlank(e.newEmailMasked()), "no masked new address");
+                require((e.sealedUndoToken() == null) == (e.undoExpiresAt() == null), "an undo token needs its expiry, and the other way round");
+                require(e.sealedUndoToken() == null || notBlank(e.sealedUndoToken()), "blank undo token");
             }
             case AccountEmailChangeLinkEvent e -> {
                 require(AccountEmailChangeLinkEvent.TYPE.equals(e.type()), "wrong type");
