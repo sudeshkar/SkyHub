@@ -1,76 +1,15 @@
 """Drives the account journey through the REAL chain: booking -> outbox -> Kafka -> notification -> SMTP -> Mailpit.
 Nothing here is mocked. Prints PASS/FAIL per check and exits non-zero if any fails. See README.md in this folder for how to run it."""
 import json
-import os
-import pathlib
-import re
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
+import urllib.parse
 import uuid
 
-BOOKING = os.environ.get("BOOKING_URL", "http://localhost:8082")
-MAILPIT = os.environ.get("MAILPIT_URL", "http://localhost:8025")
-REPO = pathlib.Path(__file__).resolve().parents[2]   # where docker-compose.yml is, for reading the Kafka topic
+from _live import BOOKING, call, check, finish, kafka_events, link_token, wait_mail
+
 PASSWORD = "a long enough passphrase"
 run = uuid.uuid4().hex[:8]
 OLD = f"live.old.{run}@example.com"
 NEW = f"live.new.{run}@example.com"
-results = []
-
-
-def check(name, ok, detail=""):
-    results.append(ok)
-    print(("PASS " if ok else "FAIL ") + name + (f"  [{detail}]" if detail and not ok else ""))
-    return ok
-
-
-def call(method, url, body=None, token=None):
-    data = None if body is None else json.dumps(body).encode()
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = "Bearer " + token
-    request = urllib.request.Request(url, data=data, method=method, headers=headers)
-    try:
-        with urllib.request.urlopen(request, timeout=15) as response:
-            raw = response.read().decode()
-            return response.status, (json.loads(raw) if raw else None)
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode()
-        try:
-            return e.code, json.loads(raw)
-        except ValueError:
-            return e.code, raw
-
-
-def wait_mail(to, subject_part, timeout=45):
-    """The first message to this address whose subject contains the text, read from Mailpit."""
-    end = time.time() + timeout
-    while time.time() < end:
-        status, listing = call("GET", f"{MAILPIT}/api/v1/search?query=" + urllib.request.quote(f"to:{to}"))
-        for m in (listing or {}).get("messages", []):
-            if subject_part.lower() in m["Subject"].lower():
-                _, full = call("GET", f"{MAILPIT}/api/v1/message/{m['ID']}")
-                return full
-        time.sleep(1)
-    return None
-
-
-def link_token(mail, path):
-    found = re.search(re.escape(path) + r"\?token=([A-Za-z0-9_%.\-]+)", mail["Text"])
-    return urllib.request.unquote(found.group(1)) if found else None
-
-
-def kafka_events():
-    """Everything on the real booking events topic, as a person with access to the broker would read it."""
-    out = subprocess.run(
-        ["docker", "compose", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-console-consumer.sh", "--bootstrap-server", "localhost:9092",
-         "--topic", "skyhub.booking.events", "--from-beginning", "--timeout-ms", "6000"],
-        capture_output=True, text=True, cwd=REPO)
-    return out.stdout
-
 
 # ---- 1. sign up: the link goes out by email, and what is on the topic is sealed ------------------------------------------------
 status, _ = call("POST", BOOKING + "/api/v1/accounts/password-links", {"email": OLD})
@@ -150,6 +89,4 @@ long_token = link_token(mail, "/account/set-password") if mail else None
 status, problem = call("POST", BOOKING + "/api/v1/accounts/passwords", {"token": long_token, "password": "é" * 50})
 check("50 accented letters (100 bytes) is a 400 with the rule, not a 500", status == 400 and "72" in json.dumps(problem), (status, problem))
 
-print()
-print(f"{sum(results)} of {len(results)} checks passed")
-sys.exit(0 if all(results) else 1)
+finish()

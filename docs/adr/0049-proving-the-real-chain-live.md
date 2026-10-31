@@ -35,4 +35,19 @@ Every service is tested against fakes, an in-process Kafka and a throwaway datab
 - Negative: **the failure path needs a restart in the middle,** which a script cannot do, so it is two runs with a manual step between them.
 - Negative: it covers one traveller's account journey. Bookings, payments, check-in and the operations screen (which need the flight search service) are not covered, nor is the website beyond what its own tests and `npm run e2e` do.
 - Negative: it checks correctness, not load or timing.
-- Follow-up: a booking-and-payment journey through the real chain; a script that starts and stops the stack itself so the whole thing is one command.
+- Follow-up: a script that starts and stops the stack itself so the whole thing is one command.
+
+## Addendum: the booking journey (2026-11-03)
+
+The first follow-up above is done: `booking_journey.py` (43 checks) books a real one-stop trip through flight search, seats, a hold, the mock
+payment provider, the confirmation email, a guest session, an account, the operations side (a cancelled flight, search following it, a bulk
+rebooking that keeps the connection, a refused one that would miss it) and a cancellation with a full refund. See the README in
+`tools/live-check/` for exactly what each check proves.
+
+- **It found no defect in the product.** All 43 pass. The only failures on the way were mine: a dev database that already had staff accounts, so
+  the bootstrap administrator was not created (the script now needs a fresh booking database, and the README says so and how, rather than
+  deleting anyone's logins), and two wrong assumptions in the script about the seed data (only SK001 flies DXB to LHR, so the replacement for a
+  cancelled SK001 is the same flight the next day).
+- **The helpers are shared** (`_live.py`), and the two earlier scripts were moved onto them; the account journey still passes 29 of 29.
+- **Still not covered:** check-in and boarding passes, holds that expire, the refund retry, and the disruption agent (they need time to pass or a
+  model key), the website, and load.
