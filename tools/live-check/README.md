@@ -71,7 +71,7 @@ every email from Mailpit and the real Kafka topic. It checks, among others, that
 
 It exits non-zero if any check fails.
 
-## 2. The booking journey (43 checks)
+## 2. The booking journey (50 checks)
 
 ```bash
 python tools/live-check/booking_journey.py
@@ -81,7 +81,7 @@ Finds a real one-stop trip (CMB to LHR) in flight search, then books it through 
 
 - **Booking:** quote, hold the seats, a declined card (402, seats stay held, no email), a changed price (409), the booking (201), asking again with the
   same key (200, no second email), the same key for a different booking (422), the confirmation email, the seat map.
-- **As a guest:** a wrong last name (404, same as unknown), the right one in any case, a seat change.
+- **As a guest:** a wrong last name (404, same as unknown), the right one in any case, a seat change, and **signing out of the booking** (a copied token and the earlier session are refused at once, a new session works; ADR-0057).
 - **As an account:** the traveller signs up *after* booking and Your bookings lists it (upcoming, not past) and opens it without the last name.
 - **Operations:** staff cancel the second flight; the traveller is emailed, the flight can no longer be sold (409), and **flight search, following
   the disruption topic, stops offering it**. A bulk rebooking moves the booking to the next day's flight (MOVED, a seat each, emailed), asking

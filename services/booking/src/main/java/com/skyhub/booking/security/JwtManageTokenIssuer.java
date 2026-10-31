@@ -30,7 +30,7 @@ public final class JwtManageTokenIssuer implements ManageTokenIssuer {
     }
 
     @Override
-    public ManageToken issue(String locator) {
+    public ManageToken issue(String locator, int epoch) {
         Instant issuedAt = clock.instant();
         Instant expiresAt = issuedAt.plus(timeToLive);
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -40,6 +40,7 @@ public final class JwtManageTokenIssuer implements ManageTokenIssuer {
                 .expiresAt(expiresAt)
                 .id(UUID.randomUUID().toString())
                 .claim("scope", "manage")
+                .claim("epoch", epoch)
                 .build();
         String value = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();

@@ -89,7 +89,7 @@ class DisruptionsControllerTest {
         mvc.perform(record(DELAY, null)).andExpect(status().isUnauthorized());
         mvc.perform(record(DELAY, "Bearer guess")).andExpect(status().isUnauthorized());
         // a traveller's booking token is a valid token, but not a staff one
-        mvc.perform(record(DELAY, "Bearer " + manageTokens.issue("ABC234").value())).andExpect(status().isForbidden());
+        mvc.perform(record(DELAY, "Bearer " + manageTokens.issue("ABC234", 0).value())).andExpect(status().isForbidden());
         verifyNoInteractions(disruptionService);
     }
 
@@ -136,7 +136,7 @@ class DisruptionsControllerTest {
     @Test
     void should_keep_withdrawal_from_travellers_and_anonymous_callers() throws Exception {
         mvc.perform(delete("/api/v1/ops/disruptions/SK501/2026-11-02")).andExpect(status().isUnauthorized());
-        mvc.perform(delete("/api/v1/ops/disruptions/SK501/2026-11-02").header("Authorization", "Bearer " + manageTokens.issue("ABC234").value()))
+        mvc.perform(delete("/api/v1/ops/disruptions/SK501/2026-11-02").header("Authorization", "Bearer " + manageTokens.issue("ABC234", 0).value()))
                 .andExpect(status().isForbidden());
         verify(disruptionService, never()).withdraw(any(), any(), any());
     }
@@ -163,7 +163,7 @@ class DisruptionsControllerTest {
     void should_keep_the_affected_bookings_from_travellers_and_anonymous_callers() throws Exception {
         mvc.perform(get("/api/v1/ops/flights/SK501/departures/2026-11-02/bookings")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/ops/flights/SK501/departures/2026-11-02/bookings")
-                        .header("Authorization", "Bearer " + manageTokens.issue("ABC234").value()))
+                        .header("Authorization", "Bearer " + manageTokens.issue("ABC234", 0).value()))
                 .andExpect(status().isForbidden());
         verify(disruptionService, never()).affectedBookings(any(), any());
     }

@@ -113,7 +113,7 @@ class AccountsControllerTest {
         mvc.perform(get("/api/v1/accounts/me").header("Authorization", "Bearer " + accountTokens.issue(7L).value()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("priya@example.com"));
         mvc.perform(get("/api/v1/accounts/me")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/accounts/me").header("Authorization", "Bearer " + manageTokens.issue("ABC234").value()))
+        mvc.perform(get("/api/v1/accounts/me").header("Authorization", "Bearer " + manageTokens.issue("ABC234", 0).value()))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/accounts/me").header("Authorization", "Bearer " + staffTokens.issue("priya.ops", StaffRole.ADMIN).value()))
                 .andExpect(status().isForbidden());

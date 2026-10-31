@@ -65,7 +65,7 @@ class StaffAuthorizationTest {
     void should_let_both_roles_check_a_boarding_pass_but_not_a_traveller_or_nobody() {
         Authentication ops = authenticate(staffTokens.issue("priya.ops", StaffRole.OPS).value());
         Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
-        Authentication traveller = authenticate(manageTokens.issue("ABC234").value());
+        Authentication traveller = authenticate(manageTokens.issue("ABC234", 0).value());
 
         assertThat(granted(StaffAuthorization.verifiesBoardingPasses(), ops)).isTrue();
         assertThat(granted(StaffAuthorization.verifiesBoardingPasses(), admin)).isTrue();
@@ -83,7 +83,7 @@ class StaffAuthorizationTest {
 
     @Test
     void should_refuse_a_booking_token_even_when_its_subject_looks_like_a_staff_name() {
-        Authentication traveller = authenticate(manageTokens.issue("priya.ops").value());
+        Authentication traveller = authenticate(manageTokens.issue("priya.ops", 0).value());
 
         assertThat(granted(StaffAuthorization.recordsDisruptions(), traveller)).isFalse();
         assertThat(granted(StaffAuthorization.createsStaff(), traveller)).isFalse();

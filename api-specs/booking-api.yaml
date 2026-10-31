@@ -220,6 +220,27 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/PnrNotFound'
+    delete:
+      tags: [ManageBooking]
+      operationId: endManageSessions
+      summary: Sign out of a booking everywhere
+      description: |
+        Ends every open session of this booking (ADR-0057): the token used for this call and any copy of it are refused from the next
+        request on, and a new session needs the last name again. It needs no password and can only make the booking harder to
+        reach, never easier. Other bookings are not affected. A token for another booking is 403.
+      security:
+        - manageToken: []
+      parameters:
+        - $ref: '#/components/parameters/Locator'
+      responses:
+        '204':
+          description: Every session of the booking has ended
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PnrNotFound'
 
   /api/v1/pnrs/{locator}:
     get:

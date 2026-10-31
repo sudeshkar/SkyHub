@@ -52,6 +52,7 @@ class ManageBookingServiceTest {
     private final com.skyhub.booking.persistence.CheckInRepository checkIns =
             mock(com.skyhub.booking.persistence.CheckInRepository.class);
     private final ManageTokenIssuer tokens = mock(ManageTokenIssuer.class);
+    private final BookingSessions sessions = mock(BookingSessions.class);
     private final CancellationRefunds refunds = mock(CancellationRefunds.class);
     private final BookingEvents events = mock(BookingEvents.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
@@ -82,12 +83,12 @@ class ManageBookingServiceTest {
         when(seats.findByFlightNumberAndDepartureDateAndSeatNumber(anyString(), eq(DATE), anyString()))
                 .thenAnswer(call -> Optional.ofNullable(
                         inventory.get(call.<String>getArgument(0) + call.<String>getArgument(2))));
-        when(tokens.issue("ABC234")).thenReturn(new ManageToken("signed.jwt.value", TOKEN_EXPIRY));
+        when(tokens.issue("ABC234", 0)).thenReturn(new ManageToken("signed.jwt.value", TOKEN_EXPIRY));
         when(refunds.decide(any(Pnr.class))).thenReturn(RefundPolicy.Decision.FULL_REFUND);
         when(refunds.settle(anyString())).thenReturn(Optional.empty());
         when(refunds.status(anyString())).thenReturn(Optional.empty());
         service = new ManageBookingService(pnrs, seats, checkIns, seatMapCache, tokens, new ManageMetrics(registry),
-                refunds, TransactionOperations.withoutTransaction(), events);
+                refunds, TransactionOperations.withoutTransaction(), events, sessions);
     }
 
     @Test
@@ -309,5 +310,31 @@ class ManageBookingServiceTest {
 
         var fresh = List.of(new com.skyhub.booking.application.view.SeatView("1A", 1, "A", Cabin.BUSINESS, SeatStatus.AVAILABLE));
         assertThat(seatMapCache.get("SK901", DATE, () -> fresh)).isEqualTo(fresh); // loader ran again: entry was cleared
+    }
+
+    // ---- signing out ends every session of the booking (ADR-0057) -------------------------------------------------------
+
+    @Test
+    void should_issue_a_token_for_the_epoch_the_booking_is_at_now() {
+        when(sessions.currentEpoch("ABC234")).thenReturn(4);
+        when(tokens.issue("ABC234", 4)).thenReturn(new ManageToken("epoch-four", TOKEN_EXPIRY));
+
+        assertThat(service.openSession("ABC234", "Perera").token().value()).isEqualTo("epoch-four");
+        assertThat(service.tokenFor("ABC234").value()).isEqualTo("epoch-four");   // the way an account opens a booking
+    }
+
+    @Test
+    void should_end_every_session_of_the_booking_and_count_it() {
+        service.endSessions("ABC234");
+
+        org.mockito.Mockito.verify(sessions).endAll("ABC234");
+        assertThat(registry.find("skyhub.manage.actions").tag("action", "sessions_ended").counter().count()).isEqualTo(1);
+    }
+
+    @Test
+    void should_end_nothing_for_a_booking_that_does_not_exist() {
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(PnrNotFoundException.class).isThrownBy(() -> service.endSessions("ZZZZZZ"));
+
+        org.mockito.Mockito.verify(sessions, org.mockito.Mockito.never()).endAll(anyString());
     }
 }

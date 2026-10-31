@@ -86,7 +86,7 @@ class RebookingControllerTest {
     @Test
     void should_keep_it_from_travellers_and_anonymous_callers() throws Exception {
         mvc.perform(rebook(BODY, null)).andExpect(status().isUnauthorized());
-        mvc.perform(rebook(BODY, "Bearer " + manageTokens.issue("ABC234").value())).andExpect(status().isForbidden());
+        mvc.perform(rebook(BODY, "Bearer " + manageTokens.issue("ABC234", 0).value())).andExpect(status().isForbidden());
 
         verifyNoInteractions(rebooking);
     }

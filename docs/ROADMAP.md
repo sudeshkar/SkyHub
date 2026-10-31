@@ -69,6 +69,7 @@ How a slice goes, every time:
 | 50 | The notice to the old address carries a one-time link that takes the account back: old address restored, password thrown away, every session ended, a reset link sent | ADR-0054 |
 | 51 | Check out of a flight (whole party) until check-in closes, so seats can change again and a checked-in booking on a cancelled flight can be moved | ADR-0055 |
 | 52 | Staff can ask whether a scanned boarding pass is still good: signed by us and exactly the pass issued now, so a checked-out, replaced or cancelled pass is refused | ADR-0056 |
+| 53 | Signing out of a booking ends every session of it, a copied token included, with a booking session epoch (the same idea as accounts) | ADR-0057 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -88,7 +89,6 @@ Ordered by how much they add to the story, not a commitment.
 - **Browser coverage:** `npm run e2e` (Playwright) drives search, the seat hold countdown, payment, finding a booking, cancelling and the refund panel in a real browser. Still not clicked through: check-in and boarding passes, disruption notices, and the refund-pending retry. It runs by hand against a local stack, not in CI.
 - **Monitoring gaps:** no Next.js tracing yet. (JDBC spans: each SQL statement is a span, from `datasource-micrometer`.) (The disruptions panel exists; no alert on purpose, since recording a disruption is a deliberate operations action.)
 - **Hold abuse:** holds are limited per client at the website (6 a minute); a per-client limit at the gateway is the next step (ADR-0012).
-- **Manage-token revocation:** a token stays valid until it expires (15 minutes); there is no way to revoke one (ADR-0011).
 - **Homepage hero video:** needs a paid plan on the video-generation service; the start frame is already prepared.
 - **Dev setup:** the Java extension's auto-build is off in this machine's local `.vscode/settings.json` (`java.autobuild.enabled: false`); `.vscode/` is not committed, so set it again on a new machine. Auto-build can overwrite `target/classes` and make a slice test fail for no code reason.
 - **Knowledge graph:** `graphify` is installed; adding its hook and a note in `CLAUDE.md` was offered, not done.

@@ -6,6 +6,7 @@ import {
   changeSeat as changeSeatCall,
   checkIn as checkInCall,
   checkOut as checkOutCall,
+  endManageSessions,
   getSeatMap,
   openManageSession,
   type CheckInOutcome,
@@ -63,8 +64,13 @@ export async function lookupBooking(_previous: LookupState, form: FormData): Pro
   redirect("/manage"); // outside any try/catch: redirect() works by throwing
 }
 
-/** Ends the session: the token is dropped from the browser. */
+/**
+ * Ends the session (ADR-0057): every session of the booking is ended on the server, so a copy of the token stops working too, and the
+ * token is dropped from this browser. If the server cannot be reached this browser is still signed out; the token then lapses by itself.
+ */
 export async function closeSession(): Promise<void> {
+  const session = await readSession();
+  if (session) await endManageSessions(session.locator, session.token);
   await clearSession();
   redirect("/manage");
 }

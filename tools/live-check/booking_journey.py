@@ -117,6 +117,22 @@ check("a seat can be changed (200)", status == 200 and changed["passengers"][0][
 now = seat_map(FIRST["flightNumber"], day(FIRST))
 check("the old seat is free again and the new one is booked", now[old_seat]["status"] == "AVAILABLE" and now[spare]["status"] == "BOOKED")
 
+# ---- 3b. signing out of the booking ends every session of it, a copied token included (ADR-0057) --------------------------------------------
+_, one = call("POST", f"{BOOKING}/api/v1/pnrs/{LOCATOR}/sessions", {"lastName": "perera"})
+_, copy = call("POST", f"{BOOKING}/api/v1/pnrs/{LOCATOR}/sessions", {"lastName": "perera"})   # what somebody who saw the cookie would hold
+status, _ = call("GET", f"{BOOKING}/api/v1/pnrs/{LOCATOR}", token=copy["accessToken"])
+check("a second session of the booking works before anyone signs out (200)", status == 200, status)
+status, _ = call("DELETE", f"{BOOKING}/api/v1/pnrs/{LOCATOR}/sessions", token=one["accessToken"])
+check("signing out of the booking is accepted (204)", status == 204, status)
+for label, t in (("the session that signed out", one["accessToken"]), ("a copy of another token for the same booking", copy["accessToken"]), ("the earlier session", MANAGE)):
+    status, _ = call("GET", f"{BOOKING}/api/v1/pnrs/{LOCATOR}", token=t)
+    check(f"{label} is refused at once (401)", status == 401, status)
+status, session = call("POST", f"{BOOKING}/api/v1/pnrs/{LOCATOR}/sessions", {"lastName": "perera"})
+check("proving the last name again opens a new session (201)", status == 201, status)
+MANAGE = session["accessToken"]
+status, _ = call("GET", f"{BOOKING}/api/v1/pnrs/{LOCATOR}", token=MANAGE)
+check("and it works (200)", status == 200, status)
+
 # ---- 4. an account sees the booking that was made before the account existed ----------------------------------------------------------
 call("POST", f"{BOOKING}/api/v1/accounts/password-links", {"email": TRAVELLER})
 link = wait_mail(TRAVELLER, "Finish creating")

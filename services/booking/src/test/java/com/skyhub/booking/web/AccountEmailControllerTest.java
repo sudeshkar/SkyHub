@@ -120,7 +120,7 @@ class AccountEmailControllerTest {
 
     @Test
     void should_serve_only_a_holder_of_an_account_token() throws Exception {
-        String manage = "Bearer " + manageTokens.issue("ABC234").value();
+        String manage = "Bearer " + manageTokens.issue("ABC234", 0).value();
         String staff = "Bearer " + staffTokens.issue("priya.ops", StaffRole.ADMIN).value();
 
         mvc.perform(json(ASK, ASK_BODY, null)).andExpect(status().isUnauthorized());

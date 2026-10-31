@@ -52,6 +52,7 @@ public class SecurityConfig {
                         .requestMatchers(POST, "/api/v1/quotes").permitAll()
                         .requestMatchers(POST, "/api/v1/pnrs").permitAll()
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/sessions").permitAll()
+                        .requestMatchers(DELETE, "/api/v1/pnrs/{locator}/sessions").access(ownsBooking)
                         .requestMatchers(GET, "/api/v1/pnrs/{locator}").access(ownsBooking)
                         .requestMatchers(POST, "/api/v1/pnrs/{locator}/cancellation").access(ownsBooking)
                         .requestMatchers(PUT, "/api/v1/pnrs/{locator}/seat-assignments").access(ownsBooking)

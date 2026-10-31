@@ -30,6 +30,13 @@ public class ManageBookingController implements ManageBookingApi {
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(body);
     }
 
+    /** Signing out: the token used for this call is refused from now on, like every other token of the booking (ADR-0057). */
+    @Override
+    public ResponseEntity<Void> endManageSessions(String locator) {
+        manageBooking.endSessions(locator);
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
     @Override
     public ResponseEntity<PnrDto> getPnr(String locator) {
         return noStore(BookingDtoMapper.toDto(manageBooking.find(locator)));

@@ -8,5 +8,6 @@ package com.skyhub.booking.application;
 @FunctionalInterface
 public interface ManageTokenIssuer {
 
-    ManageToken issue(String locator);
+    /** @param epoch the booking's current session epoch (ADR-0057): signing out raises it and ends every token issued under an earlier one */
+    ManageToken issue(String locator, int epoch);
 }
