@@ -10,4 +10,7 @@ import java.time.Instant;
 public interface AccountEvents {
 
     void passwordLinkRequested(long accountId, ContactEmail email, String token, PasswordLinkPurpose purpose, Instant expiresAt);
+
+    /** A link to the NEW address that, used while signed in to the account, moves the account to it (ADR-0039). */
+    void emailChangeRequested(long accountId, ContactEmail newEmail, String token, Instant expiresAt);
 }

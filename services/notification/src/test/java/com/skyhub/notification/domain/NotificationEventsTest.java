@@ -217,4 +217,38 @@ class NotificationEventsTest {
         assertThat(EventParser.parse(Files.readString(DISRUPTED), BookingDisruptedEvent.class).toString())
                 .doesNotContain("priya@example.com");
     }
+
+    private static final Path EMAIL_CHANGE_LINK = Path.of("../../api-specs/events/account-email-change-link.v1.example.json");
+
+    @Test
+    void should_read_the_email_change_link_event_which_belongs_to_no_booking_and_goes_to_the_new_address() throws Exception {
+        AccountEmailChangeLinkEvent event = EventParser.parse(Files.readString(EMAIL_CHANGE_LINK), AccountEmailChangeLinkEvent.class);
+
+        assertThat(event.eventId()).isEqualTo(UUID.fromString("6c1e9a52-7d3b-4f08-b4a6-2e9f0d8c3a14"));
+        assertThat(event.type()).isEqualTo("account.email-change-link");
+        assertThat(event.contactEmail()).isEqualTo("priya.new@example.com");
+        assertThat(event.token()).startsWith("bm90LWEtcmVhbC1v");
+        assertThat(event.expiresAt()).isEqualTo(Instant.parse("2026-11-01T11:00:00Z"));
+        assertThat(event.locator()).isNull();
+    }
+
+    @Test
+    void should_refuse_an_email_change_link_event_without_a_token_an_expiry_the_right_type_or_an_address() throws Exception {
+        String link = Files.readString(EMAIL_CHANGE_LINK);
+        for (String broken : new String[] {
+                link.replace("account.email-change-link", "account.password-link"),
+                link.replaceAll("\\s*\"token\": \"[^\"]*\",", ""),
+                link.replaceAll(",\\s*\"expiresAt\": \"[^\"]*\"", ""),
+                link.replace("\"contactEmail\": \"priya.new@example.com\",", "")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, AccountEmailChangeLinkEvent.class));
+        }
+    }
+
+    @Test
+    void should_never_print_the_email_change_token_or_the_new_address() throws Exception {
+        AccountEmailChangeLinkEvent event = EventParser.parse(Files.readString(EMAIL_CHANGE_LINK), AccountEmailChangeLinkEvent.class);
+
+        assertThat(event.toString()).doesNotContain("priya.new@example.com").doesNotContain(event.token());
+    }
 }

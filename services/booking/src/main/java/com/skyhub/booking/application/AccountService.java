@@ -145,24 +145,111 @@ public class AccountService {
     }
 
     private Attempt attempt(String index, String password) {
-        Instant now = clock.instant();
         TravellerAccount account = accounts.findForUpdateByEmailIndex(index).orElse(null);
+        return new Attempt(account == null ? verify(null, password, clock.instant()) : verify(account, password, clock.instant()), account);
+    }
+
+    /**
+     * Checks a password against an account the way sign-in does, and records the result on it (the caller saves): the same cost
+     * for an unknown account or one with no password, a locked account refused even with the right password, and five wrong
+     * passwords locking it. Shared by sign-in and by changing the address (ADR-0039), so neither can be a way round the lock.
+     */
+    private Outcome verify(TravellerAccount account, String password, Instant now) {
         if (account == null || !account.hasPassword()) {
             passwords.matches(password, decoyHash);
-            return new Attempt(Outcome.FAILED, account);
+            return Outcome.FAILED;
         }
         boolean correct = passwords.matches(password, account.getPasswordHash());   // checked even if locked: same cost
         if (account.isLockedAt(now)) {
-            return new Attempt(Outcome.LOCKED, account);
+            return Outcome.LOCKED;
         }
         if (correct) {
             account.recordSuccessfulLogin();
-            accounts.save(account);
-            return new Attempt(Outcome.SUCCESS, account);
+            return Outcome.SUCCESS;
         }
         account.recordFailedLogin(now);
-        accounts.save(account);
-        return new Attempt(Outcome.FAILED, account);
+        return Outcome.FAILED;
+    }
+
+    /**
+     * Asks to move the account to another address (ADR-0039): the current password, then a link to the NEW address. Nothing changes
+     * until someone who can read that mailbox uses the link while signed in. Nothing here says whether the new address is taken.
+     */
+    public void requestEmailChange(long accountId, String rawNewEmail, String password) {
+        ContactEmail newEmail = parse(rawNewEmail);
+        String newIndex = emailIndex.of(newEmail.value());
+        String given = password == null ? "" : password;
+        // The outcome is returned, not thrown, from the transaction: a thrown refusal would roll back the failed attempt it must keep.
+        EmailChange outcome = tx.execute(status -> startEmailChange(accountId, newEmail, newIndex, given));
+        switch (outcome) {
+            case PASSWORD_REFUSED -> {
+                metrics.emailChange("password_refused");
+                log.atWarn().addKeyValue("account.id", accountId).log("Address change refused: password not accepted");
+                throw new PasswordNotAcceptedException();
+            }
+            case SAME_ADDRESS -> throw new InvalidAccountException("That is already your address");
+            case TAKEN -> {
+                metrics.emailChange("taken");
+                log.atInfo().addKeyValue("account.id", accountId).log("Address change not started: the new address has an account");
+            }
+            case THROTTLED -> metrics.emailChange("throttled");
+            case REQUESTED -> {
+                metrics.emailChange("requested");
+                log.atInfo().addKeyValue("account.id", accountId).log("Address change link issued");
+            }
+        }
+    }
+
+    private enum EmailChange { PASSWORD_REFUSED, SAME_ADDRESS, TAKEN, THROTTLED, REQUESTED }
+
+    private EmailChange startEmailChange(long accountId, ContactEmail newEmail, String newIndex, String password) {
+        Instant now = clock.instant();
+        TravellerAccount account = accounts.findForUpdateById(accountId).orElseThrow(AccountLoginFailedException::new);
+        if (verify(account, password, now) != Outcome.SUCCESS) {
+            accounts.saveAndFlush(account);   // keeps the failed attempt, so asking here cannot be used to guess the password
+            return EmailChange.PASSWORD_REFUSED;
+        }
+        accounts.saveAndFlush(account);   // the successful check clears earlier failures
+        if (account.hasEmailIndex(newIndex)) {
+            return EmailChange.SAME_ADDRESS;
+        }
+        if (accounts.existsByEmailIndex(newIndex)) {
+            return EmailChange.TAKEN;
+        }
+        if (!account.mayBeAskedToChangeEmailAt(now)) {
+            return EmailChange.THROTTLED;
+        }
+        String token = newToken.get();
+        account.requestEmailChange(newEmail, newIndex, Sha256.hex(token), now);
+        accounts.saveAndFlush(account);
+        events.emailChangeRequested(accountId, newEmail, token, account.getEmailChangeExpiresAt());
+        return EmailChange.REQUESTED;
+    }
+
+    /** Spends the link sent to the new address, for the signed-in account it was sent for. A bad link is the same 400 as an account link. */
+    public void confirmEmailChange(long accountId, String token) {
+        String hash = Sha256.hex(token == null ? "" : token.strip());
+        boolean confirmed;
+        try {
+            confirmed = Boolean.TRUE.equals(tx.execute(status -> {
+                Instant now = clock.instant();
+                TravellerAccount account = accounts.findForUpdateById(accountId).orElseThrow(AccountLoginFailedException::new);
+                if (!account.emailChangeIsValidFor(hash, now)) {
+                    return false;
+                }
+                account.confirmEmailChange(now);
+                accounts.saveAndFlush(account);   // flushing here surfaces an address another account took in the meantime
+                return true;
+            }));
+        } catch (DataIntegrityViolationException addressTakenMeanwhile) {
+            confirmed = false;
+        }
+        if (!confirmed) {
+            metrics.emailChange("invalid_link");
+            throw new PasswordLinkInvalidException();
+        }
+        metrics.emailChange("confirmed");
+        log.atInfo().addKeyValue("account.id", accountId).log("Account moved to a new address");
     }
 
     /** The account behind a token. A token for an account that no longer exists is refused like a failed sign-in. */

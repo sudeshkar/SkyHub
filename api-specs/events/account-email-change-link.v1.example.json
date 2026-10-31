@@ -1,0 +1,9 @@
+{
+  "eventId": "6c1e9a52-7d3b-4f08-b4a6-2e9f0d8c3a14",
+  "type": "account.email-change-link",
+  "version": 1,
+  "occurredAt": "2026-11-01T10:00:00Z",
+  "contactEmail": "priya.new@example.com",
+  "token": "bm90LWEtcmVhbC1vbmUtdGVzdC10b2tlbi1mb3ItZW1haWwtY2hhbmdl",
+  "expiresAt": "2026-11-01T11:00:00Z"
+}

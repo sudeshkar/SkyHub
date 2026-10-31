@@ -407,6 +407,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/me/email-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask to move the account to another email address
+         * @description Needs the account's current password and sends a link to the NEW address (ADR-0039). Nothing changes until the link is
+         *     used. The answer is always 202 and never says whether the new address already has an account. A request within two
+         *     minutes of the last sends nothing. A wrong or locked password is a 403 (not a 401, so the session is not taken for
+         *     ended); the same five-wrong-passwords lock as sign-in applies. The account's own current address is a 400.
+         */
+        post: operations["requestEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/me/email-change/confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move the account to the new address using the emailed link
+         * @description Needs the signed-in account and the token from the link sent to the new address; either alone is not enough. The
+         *     token works once and for one hour. A wrong, used, expired or someone else's token, or an address another account took
+         *     meanwhile, all return the same 400. Changing the address also stops any password link already sent to the old
+         *     address. Bookings are listed by address, so the account then lists the new address's bookings.
+         */
+        post: operations["confirmEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/me/bookings": {
         parameters: {
             query?: never;
@@ -770,6 +816,14 @@ export interface components {
         AccountLoginRequest: {
             email: string;
             password: string;
+        };
+        EmailChangeRequest: {
+            newEmail: string;
+            /** @description The account's current password. */
+            password: string;
+        };
+        EmailChangeConfirmation: {
+            token: string;
         };
         AccountSession: {
             accessToken: string;
@@ -1506,6 +1560,64 @@ export interface operations {
                     "application/json": components["schemas"]["Account"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    requestEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description If the new address can be used, a link is on its way to it */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description The password was not accepted, or the account is locked */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    confirmEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailChangeConfirmation"];
+            };
+        };
+        responses: {
+            /** @description The account now has the new address */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };

@@ -1,6 +1,7 @@
 package com.skyhub.notification.application;
 
 import com.skyhub.notification.application.NotificationMetrics.Outcome;
+import com.skyhub.notification.domain.AccountEmailChangeLinkEvent;
 import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
@@ -68,6 +69,10 @@ public class NotificationService {
 
     public void passwordLink(AccountPasswordLinkEvent event) {
         deliver(event, EmailComposer.passwordLink(event, siteUrl));
+    }
+
+    public void emailChangeLink(AccountEmailChangeLinkEvent event) {
+        deliver(event, EmailComposer.emailChangeLink(event, siteUrl));
     }
 
     public void refundCompleted(BookingRefundCompletedEvent event) {

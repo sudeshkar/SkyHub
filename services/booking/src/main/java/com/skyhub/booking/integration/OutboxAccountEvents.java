@@ -24,6 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class OutboxAccountEvents implements AccountEvents {
 
     static final String PASSWORD_LINK = "account.password-link";
+    static final String EMAIL_CHANGE_LINK = "account.email-change-link";
 
     private final OutboxEventRepository outbox;
     private final PiiCipher cipher;
@@ -57,6 +58,22 @@ public class OutboxAccountEvents implements AccountEvents {
         event.put("token", token);
         event.put("expiresAt", expiresAt.toString());
         outbox.save(OutboxEvent.pending(id, "account-" + accountId, PASSWORD_LINK,
+                cipher.encrypt(json.writeValueAsString(event)), clock.instant()));
+    }
+
+    /** The shape is api-specs/events/account-email-change-link.v1.example.json. {@code contactEmail} is the NEW address. */
+    @Override
+    public void emailChangeRequested(long accountId, ContactEmail newEmail, String token, Instant expiresAt) {
+        UUID id = ids.get();
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("eventId", id.toString());
+        event.put("type", EMAIL_CHANGE_LINK);
+        event.put("version", 1);
+        event.put("occurredAt", clock.instant().toString());
+        event.put("contactEmail", newEmail.value());
+        event.put("token", token);
+        event.put("expiresAt", expiresAt.toString());
+        outbox.save(OutboxEvent.pending(id, "account-" + accountId, EMAIL_CHANGE_LINK,
                 cipher.encrypt(json.writeValueAsString(event)), clock.instant()));
     }
 }

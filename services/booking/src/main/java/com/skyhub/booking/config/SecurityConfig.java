@@ -59,6 +59,8 @@ public class SecurityConfig {
                                 "/api/v1/accounts/sessions").permitAll()
                         .requestMatchers(GET, "/api/v1/accounts/me").hasAuthority("SCOPE_account")
                         .requestMatchers(GET, "/api/v1/accounts/me/bookings").hasAuthority("SCOPE_account")
+                        .requestMatchers(POST, "/api/v1/accounts/me/email-change", "/api/v1/accounts/me/email-change/confirmation")
+                                .hasAuthority("SCOPE_account")
                         .requestMatchers(POST, "/api/v1/accounts/me/bookings/{locator}/sessions").hasAuthority("SCOPE_account")
                         .requestMatchers(POST, "/api/v1/ops/sessions").permitAll()
                         .requestMatchers(POST, "/api/v1/ops/staff").access(StaffAuthorization.createsStaff())

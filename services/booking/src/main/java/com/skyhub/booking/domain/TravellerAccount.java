@@ -46,6 +46,21 @@ public class TravellerAccount {
 
     private Instant linkExpiresAt;
 
+    /** The address this account is waiting to move to, encrypted like the current one (ADR-0039). Null when no change is pending. */
+    @Column(length = 500)
+    private ContactEmail pendingEmail;
+
+    @Column(length = 64)
+    private String pendingEmailIndex;
+
+    /** Only the hash of the token emailed to the new address, so a copy of the table cannot confirm a change. */
+    @Column(length = 64)
+    private String changeTokenHash;
+
+    private Instant changeIssuedAt;
+
+    private Instant changeExpiresAt;
+
     @Column(nullable = false)
     private int failedAttempts;
 
@@ -119,6 +134,49 @@ public class TravellerAccount {
         lockedUntil = null;
     }
 
+    /** Asking again straight away would only be used to flood someone's inbox. */
+    public boolean mayBeAskedToChangeEmailAt(Instant now) {
+        return changeIssuedAt == null || !now.isBefore(changeIssuedAt.plus(LINK_RESEND_AFTER));
+    }
+
+    /** Keeps the new address pending until it is proved. Replaces any earlier request: only the newest link works. */
+    public void requestEmailChange(ContactEmail newEmail, String newEmailIndex, String tokenHash, Instant now) {
+        pendingEmail = newEmail;
+        pendingEmailIndex = newEmailIndex;
+        changeTokenHash = tokenHash;
+        changeIssuedAt = now;
+        changeExpiresAt = now.plus(LINK_LIFETIME);
+    }
+
+    public boolean emailChangeIsValidFor(String tokenHash, Instant now) {
+        return changeTokenHash != null && tokenHash != null && changeTokenHash.equals(tokenHash)
+                && changeExpiresAt != null && now.isBefore(changeExpiresAt);
+    }
+
+    /**
+     * Moves to the pending address and spends the request. A password link that was already out is stopped too: it went to the
+     * old address, and whoever still reads that mailbox must not be able to set a password on an account that has moved on.
+     * The lock state is left alone.
+     */
+    public void confirmEmailChange(Instant now) {
+        if (pendingEmail == null || pendingEmailIndex == null) {
+            throw new IllegalStateException("No address change is pending");
+        }
+        email = pendingEmail;
+        emailIndex = pendingEmailIndex;
+        pendingEmail = null;
+        pendingEmailIndex = null;
+        changeTokenHash = null;
+        changeIssuedAt = null;
+        changeExpiresAt = null;
+        linkTokenHash = null;
+        linkExpiresAt = null;
+    }
+
+    public boolean hasEmailIndex(String index) {
+        return emailIndex.equals(index);
+    }
+
     public Long getId() {
         return id;
     }
@@ -137,6 +195,10 @@ public class TravellerAccount {
 
     public Instant getLinkExpiresAt() {
         return linkExpiresAt;
+    }
+
+    public Instant getEmailChangeExpiresAt() {
+        return changeExpiresAt;
     }
 
     @Override

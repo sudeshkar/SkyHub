@@ -32,6 +32,11 @@ public class AccountMetrics {
         count("skyhub.account.passwords", "Passwords chosen with an emailed link, by outcome", outcome);
     }
 
+    /** requested, throttled, taken (the new address has an account), password_refused, confirmed, invalid_link (ADR-0039). */
+    public void emailChange(String outcome) {
+        count("skyhub.account.email.changes", "Changes of an account's address, by outcome", outcome);
+    }
+
     private void count(String name, String description, String outcome) {
         counters.computeIfAbsent(name + "/" + outcome, key -> Counter.builder(name).description(description)
                 .tag("outcome", outcome).register(registry)).increment();

@@ -19,6 +19,7 @@ tags:
   - name: Accounts
   - name: MyBookings
   - name: BulkRebooking
+  - name: AccountEmail
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -643,6 +644,66 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/accounts/me/email-change:
+    post:
+      tags: [AccountEmail]
+      operationId: requestEmailChange
+      summary: Ask to move the account to another email address
+      description: |
+        Needs the account's current password and sends a link to the NEW address (ADR-0039). Nothing changes until the link is
+        used. The answer is always 202 and never says whether the new address already has an account. A request within two
+        minutes of the last sends nothing. A wrong or locked password is a 403 (not a 401, so the session is not taken for
+        ended); the same five-wrong-passwords lock as sign-in applies. The account's own current address is a 400.
+      security:
+        - accountToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequest'
+      responses:
+        '202':
+          description: If the new address can be used, a link is on its way to it
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The password was not accepted, or the account is locked
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/accounts/me/email-change/confirmation:
+    post:
+      tags: [AccountEmail]
+      operationId: confirmEmailChange
+      summary: Move the account to the new address using the emailed link
+      description: |
+        Needs the signed-in account and the token from the link sent to the new address; either alone is not enough. The
+        token works once and for one hour. A wrong, used, expired or someone else's token, or an address another account took
+        meanwhile, all return the same 400. Changing the address also stops any password link already sent to the old
+        address. Bookings are listed by address, so the account then lists the new address's bookings.
+      security:
+        - accountToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeConfirmation'
+      responses:
+        '204':
+          description: The account now has the new address
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1406,6 +1467,26 @@ components:
           type: string
           maxLength: 254
         password:
+          type: string
+          maxLength: 100
+
+    EmailChangeRequest:
+      type: object
+      required: [newEmail, password]
+      properties:
+        newEmail:
+          type: string
+          maxLength: 254
+        password:
+          type: string
+          maxLength: 100
+          description: The account's current password.
+
+    EmailChangeConfirmation:
+      type: object
+      required: [token]
+      properties:
+        token:
           type: string
           maxLength: 100
 

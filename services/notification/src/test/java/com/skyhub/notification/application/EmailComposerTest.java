@@ -212,4 +212,17 @@ class EmailComposerTest {
 
         assertThat(message.toString()).doesNotContain("priya@example.com").contains("p****@example.com");
     }
+
+    @Test
+    void should_send_the_email_change_link_to_the_new_address_with_the_token_encoded_and_say_what_it_does() {
+        var event = new com.skyhub.notification.domain.AccountEmailChangeLinkEvent(UUID.randomUUID(), "account.email-change-link", 1,
+                Instant.parse("2026-11-01T10:00:00Z"), "priya.new@example.com", "tok+en/with=chars", Instant.parse("2026-11-01T11:00:00Z"));
+
+        EmailMessage message = EmailComposer.emailChangeLink(event, "https://skyhub.example/");
+
+        assertThat(message.to()).isEqualTo("priya.new@example.com");
+        assertThat(message.subject()).isEqualTo("Confirm your new SkyHub email address");
+        assertThat(message.body()).contains("https://skyhub.example/account/confirm-email?token=tok%2Ben%2Fwith%3Dchars")
+                .contains("2026-11-01 11:00 UTC").contains("signed in").contains("did not ask").contains("nothing changes");
+    }
 }
