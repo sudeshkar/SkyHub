@@ -3,8 +3,9 @@
 import { redirect } from "next/navigation";
 import { getProposals, type ProposalSet } from "@/lib/api/agent";
 import {
+  type BulkMoveResult,
   openStaffSession,
-  rebookFlight,
+  rebookFlights,
   recordDisruption as recordDisruptionCall,
   type RecordDisruptionRequest,
   withdrawDisruption as withdrawDisruptionCall,
@@ -205,10 +206,10 @@ export type MoveBatchResult =
 const LOCATOR = /^[A-Z0-9]{6}$/;
 
 /**
- * Carries out the moves a person approved, one booking at a time, with their own staff token, so the audit names whoever
- * approved. The booking service re-checks every rule and may refuse any of them; each refusal is reported with its reason
- * and the rest carry on. A refused token ends the batch (the session is dropped); a service that stops answering ends it too,
- * rather than being hammered with the rest.
+ * Carries out the moves a person approved, in one call to the booking service (ADR-0035), with their own staff token, so the
+ * audit names whoever approved. The service re-checks every rule and may refuse any of them; each refusal is reported with its
+ * reason and the rest carry on. A refused token drops the session. When the service stops partway, the moves it did not try
+ * are left out of the answer, which is how the page knows to stop sending more batches.
  */
 export async function moveBookings(moves: Move[]): Promise<MoveBatchResult> {
   if (moves.length < 1 || moves.length > MAX_MOVES_PER_CALL) {
@@ -225,25 +226,31 @@ export async function moveBookings(moves: Move[]): Promise<MoveBatchResult> {
   const session = await readStaffSession();
   if (!session) return { status: "signed-out", results: [] };
 
-  const results: MoveResult[] = [];
-  for (const move of moves) {
-    const outcome = await rebookFlight(session.token, move.locator, {
-      segmentIndex: move.segmentIndex, flightNumber: move.flightNumber, departureDate: move.departureDate,
-    });
-    if (outcome.kind === "unauthorized") {
+  const outcome = await rebookFlights(session.token, moves);
+  switch (outcome.kind) {
+    case "unauthorized":
       await clearStaffSession(); // expired, or this role may not do it: back to the login
-      return { status: "signed-out", results };
-    }
-    if (outcome.kind === "moved" || outcome.kind === "unchanged") {
-      results.push({ locator: move.locator, status: outcome.kind, seats: outcome.seats });
-    } else if (outcome.kind === "refused") {
-      results.push({ locator: move.locator, status: "refused", detail: outcome.detail });
-    } else if (outcome.kind === "not-found") {
-      results.push({ locator: move.locator, status: "failed", detail: "That booking was not found." });
-    } else {
-      results.push({ locator: move.locator, status: "failed", detail: "The booking service is not responding." });
-      break; // do not keep hammering a service that has stopped answering
-    }
+      return { status: "signed-out", results: [] };
+    case "rejected":
+      return { status: "error", message: outcome.detail };
+    case "unavailable":
+      return { status: "error", message: "The booking service is not responding. Nothing may have been moved; check and try again." };
+    default:
+      return { status: "done", results: outcome.results.filter((r) => r.outcome !== "NOT_ATTEMPTED").map(toMoveResult) };
   }
-  return { status: "done", results };
+}
+
+function toMoveResult(result: BulkMoveResult): MoveResult {
+  switch (result.outcome) {
+    case "MOVED":
+      return { locator: result.locator, status: "moved", seats: result.seats ?? [] };
+    case "UNCHANGED":
+      return { locator: result.locator, status: "unchanged", seats: result.seats ?? [] };
+    case "REFUSED":
+      return { locator: result.locator, status: "refused", detail: result.detail ?? "A rule forbids this move." };
+    case "NOT_FOUND":
+      return { locator: result.locator, status: "failed", detail: "That booking was not found." };
+    default:
+      return { locator: result.locator, status: "failed", detail: result.detail ?? "This move could not be completed." };
+  }
 }

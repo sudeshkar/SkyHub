@@ -298,6 +298,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/rebookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move many bookings off disrupted flights in one request
+         * @description Staff only (ADR-0035). Each move is exactly what `POST /api/v1/ops/pnrs/{locator}/rebooking` does, with the same
+         *     rules, audit and email, and each is its own transaction: **a move is all or nothing, the request is not.** A refused
+         *     or conflicted move changes nothing and the rest carry on; the answer lists each move's result in request order.
+         *     After the timetable is unavailable or something unexpected fails, the remaining moves are not tried
+         *     (`NOT_ATTEMPTED`). Moves run one after another. Repeating a request is safe: a move already done answers
+         *     `UNCHANGED`. At most 50 moves; none, more, or the same booking and flight twice is a 400 and nothing changes.
+         */
+        post: operations["rebookFlights"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/password-links": {
         parameters: {
             query?: never;
@@ -688,6 +713,29 @@ export interface components {
             seats: components["schemas"]["SeatNumber"][];
             /** @description false when the booking was already on that flight */
             changed: boolean;
+        };
+        BulkRebookRequest: {
+            moves: components["schemas"]["BulkMove"][];
+        };
+        BulkMove: {
+            locator: string;
+            segmentIndex: number;
+            flightNumber: components["schemas"]["FlightNumber"];
+            /** Format: date */
+            departureDate: string;
+        };
+        BulkRebooked: {
+            results: components["schemas"]["MoveResult"][];
+        };
+        MoveResult: {
+            locator: string;
+            segmentIndex: number;
+            /** @enum {string} */
+            outcome: "MOVED" | "UNCHANGED" | "REFUSED" | "NOT_FOUND" | "CONFLICT" | "UNAVAILABLE" | "FAILED" | "NOT_ATTEMPTED";
+            /** @description Why a move was refused or did not happen. Never a name or an address. */
+            detail?: string | null;
+            /** @description The new seat of each passenger, in passenger order, for MOVED and UNCHANGED. */
+            seats?: components["schemas"]["SeatNumber"][] | null;
         };
         AffectedBookings: {
             flightNumber: components["schemas"]["FlightNumber"];
@@ -1324,6 +1372,33 @@ export interface operations {
                 };
             };
             503: components["responses"]["ScheduleUnavailable"];
+        };
+    };
+    rebookFlights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkRebookRequest"];
+            };
+        };
+        responses: {
+            /** @description One result per move, in request order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkRebooked"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     requestPasswordLink: {

@@ -38,3 +38,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0032](0032-dead-letter-replay.md) | Putting parked notifications back | Accepted |
 | [0033](0033-traveller-accounts.md) | Traveller accounts: sign up and sign in with an emailed link | Accepted |
 | [0034](0034-my-bookings.md) | My bookings: a signed-in traveller sees the bookings made with their address | Accepted |
+| [0035](0035-bulk-rebooking.md) | Moving many bookings in one request | Accepted |

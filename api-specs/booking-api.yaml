@@ -18,6 +18,7 @@ tags:
   - name: Rebooking
   - name: Accounts
   - name: MyBookings
+  - name: BulkRebooking
 
 paths:
   /api/v1/flights/{flightNumber}/departures/{departureDate}/seats:
@@ -519,6 +520,40 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '503':
           $ref: '#/components/responses/ScheduleUnavailable'
+
+  /api/v1/ops/rebookings:
+    post:
+      tags: [BulkRebooking]
+      operationId: rebookFlights
+      summary: Move many bookings off disrupted flights in one request
+      description: |
+        Staff only (ADR-0035). Each move is exactly what `POST /api/v1/ops/pnrs/{locator}/rebooking` does, with the same
+        rules, audit and email, and each is its own transaction: **a move is all or nothing, the request is not.** A refused
+        or conflicted move changes nothing and the rest carry on; the answer lists each move's result in request order.
+        After the timetable is unavailable or something unexpected fails, the remaining moves are not tried
+        (`NOT_ATTEMPTED`). Moves run one after another. Repeating a request is safe: a move already done answers
+        `UNCHANGED`. At most 50 moves; none, more, or the same booking and flight twice is a 400 and nothing changes.
+      security:
+        - staffToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkRebookRequest'
+      responses:
+        '200':
+          description: One result per move, in request order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkRebooked'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /api/v1/accounts/password-links:
     post:
@@ -1220,6 +1255,65 @@ components:
         changed:
           type: boolean
           description: false when the booking was already on that flight
+
+    BulkRebookRequest:
+      type: object
+      required: [moves]
+      properties:
+        moves:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/BulkMove'
+
+    BulkMove:
+      type: object
+      required: [locator, segmentIndex, flightNumber, departureDate]
+      properties:
+        locator:
+          type: string
+          pattern: '^[A-Z0-9]{6}$'
+        segmentIndex:
+          type: integer
+          minimum: 0
+          maximum: 3
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+
+    BulkRebooked:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MoveResult'
+
+    MoveResult:
+      type: object
+      required: [locator, segmentIndex, outcome]
+      properties:
+        locator:
+          type: string
+        segmentIndex:
+          type: integer
+        outcome:
+          type: string
+          enum: [MOVED, UNCHANGED, REFUSED, NOT_FOUND, CONFLICT, UNAVAILABLE, FAILED, NOT_ATTEMPTED]
+        detail:
+          type: string
+          nullable: true
+          description: Why a move was refused or did not happen. Never a name or an address.
+        seats:
+          type: array
+          nullable: true
+          description: The new seat of each passenger, in passenger order, for MOVED and UNCHANGED.
+          items:
+            $ref: '#/components/schemas/SeatNumber'
 
     AffectedBookings:
       type: object
