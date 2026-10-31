@@ -300,6 +300,44 @@ export async function getBoardingPasses(locator: string, token: string, segmentI
   return passesOutcome(response, [200]);
 }
 
+export type GateReason = NonNullable<components["schemas"]["BoardingPassVerification"]["reason"]>;
+
+export type GateOutcome =
+  | { kind: "good"; pass: BoardingPass } // the pass is good; for boarding, the passenger has boarded now
+  | { kind: "refused"; reason: GateReason } // says why, and nothing about the passenger
+  | { kind: "unauthorized" } // no staff token, or a role that may not do this
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+async function gateCall(path: string, token: string, barcode: string): Promise<GateOutcome> {
+  const response = await call(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ barcode }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) {
+    const verdict = (await response.json()) as components["schemas"]["BoardingPassVerification"];
+    if (verdict.valid && verdict.pass) return { kind: "good", pass: verdict.pass };
+    if (!verdict.valid && verdict.reason) return { kind: "refused", reason: verdict.reason };
+    return { kind: "unavailable" }; // an answer this page does not understand is not a yes
+  }
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  if (response.status === 400) return { kind: "rejected", detail: await problemDetail(response, "That was not accepted.") };
+  return { kind: "unavailable" };
+}
+
+/** Is this scanned pass still good (ADR-0056)? Never boards anyone. */
+export function verifyBoardingPass(token: string, barcode: string): Promise<GateOutcome> {
+  return gateCall("/api/v1/ops/boarding-passes/verification", token, barcode);
+}
+
+/** The passenger on this pass boards, once (ADR-0060); the staff token says who scanned it. */
+export function boardPassenger(token: string, barcode: string): Promise<GateOutcome> {
+  return gateCall("/api/v1/ops/boarding-passes/boardings", token, barcode);
+}
+
 export type Disruption = components["schemas"]["Disruption"];
 export type RecordDisruptionRequest = components["schemas"]["RecordDisruptionRequest"];
 

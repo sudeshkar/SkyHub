@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { readStaffSession } from "@/lib/staff-session";
 import { DisruptionForm } from "./disruption-form";
+import { GatePanel } from "./gate-panel";
 import { WithdrawForm } from "./withdraw-form";
 import { LoginForm } from "./login-form";
 import { ProposalsPanel } from "./proposals-panel";
@@ -39,7 +40,7 @@ async function OpsContent() {
     <>
       <div className="mb-8 mt-2 flex flex-wrap items-center justify-between gap-3">
         <p className="text-muted">
-          Signed in as <strong className="text-text">{session.username}</strong> ({session.role === "ADMIN" ? "administrator" : "operations"})
+          Signed in as <strong className="text-text">{session.username}</strong> ({{ ADMIN: "administrator", OPS: "operations", GATE: "gate agent" }[session.role]})
         </p>
         <form action={logOut}>
           <button type="submit" className="rounded-md border border-sand px-4 py-2 text-sm hover:bg-white">
@@ -47,9 +48,17 @@ async function OpsContent() {
           </button>
         </form>
       </div>
-      <DisruptionForm />
-      <ProposalsPanel />
-      <WithdrawForm />
+      {session.role === "GATE" ? (
+        // A gate agent works the gate and nothing else (ADR-0060): the operations screens would only be refused.
+        <GatePanel />
+      ) : (
+        <>
+          <DisruptionForm />
+          <ProposalsPanel />
+          <WithdrawForm />
+          <GatePanel />
+        </>
+      )}
     </>
   );
 }

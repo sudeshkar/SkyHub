@@ -14,6 +14,11 @@ describe("parseStaffSession", () => {
     expect(parseStaffSession(value)?.role).toBe("ADMIN");
   });
 
+  it("accepts the gate role, which the booking service issues (ADR-0060): a gate agent is signed in, not signed out", () => {
+    const value = JSON.stringify({ username: "gate.one", role: "GATE", token: TOKEN });
+    expect(parseStaffSession(value)).toEqual({ username: "gate.one", role: "GATE", token: TOKEN });
+  });
+
   it.each([
     ["nothing", undefined],
     ["empty", ""],

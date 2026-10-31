@@ -3,11 +3,14 @@
 import { redirect } from "next/navigation";
 import { getProposals, type ProposalSet } from "@/lib/api/agent";
 import {
+  boardPassenger,
   type BulkMoveResult,
+  type GateReason,
   openStaffSession,
   rebookFlights,
   recordDisruption as recordDisruptionCall,
   type RecordDisruptionRequest,
+  verifyBoardingPass,
   withdrawDisruption as withdrawDisruptionCall,
 } from "@/lib/api/booking";
 import { POLICIES, rateLimit } from "@/lib/rate-limit";
@@ -252,5 +255,52 @@ function toMoveResult(result: BulkMoveResult): MoveResult {
       return { locator: result.locator, status: "failed", detail: "That booking was not found." };
     default:
       return { locator: result.locator, status: "failed", detail: result.detail ?? "This move could not be completed." };
+  }
+}
+
+export type GateRefusal = GateReason;
+
+/** Only what the gate needs to see; the pass text and the booking reference never go back to the browser. */
+export type GatePass = { passengerName: string; flightNumber: string; departureDate: string; seatNumber: string; sequence: number };
+
+export type GateState =
+  | { status: "idle" }
+  | { status: "good"; intent: "check" | "board"; pass: GatePass }
+  | { status: "refused"; reason: GateRefusal }
+  | { status: "error"; message: string }
+  | { status: "signed-out" };
+
+const MAX_PASS = 300;
+
+/**
+ * A gate scans a pass (ADR-0062). The button pressed says whether this only checks the pass or also boards the passenger; anything but an
+ * explicit "board" only checks, so a stray submit can never board anyone. Whether this person may is decided by the booking service from
+ * their token. The pass text is passed on and never logged or sent back.
+ */
+export async function gateScan(_previous: GateState, form: FormData): Promise<GateState> {
+  const barcode = String(form.get("barcode") ?? "").trim();
+  const board = form.get("intent") === "board";
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return { status: "error", message: `Too many requests. Please wait ${decision.retryAfterSeconds} seconds.` };
+  if (barcode.length === 0 || barcode.length > MAX_PASS) return { status: "error", message: "Scan or paste a boarding pass." };
+
+  const session = await readStaffSession();
+  if (!session) return { status: "signed-out" };
+
+  const outcome = board ? await boardPassenger(session.token, barcode) : await verifyBoardingPass(session.token, barcode);
+  switch (outcome.kind) {
+    case "good": {
+      const { passengerName, flightNumber, departureDate, seatNumber, sequence } = outcome.pass;
+      return { status: "good", intent: board ? "board" : "check", pass: { passengerName, flightNumber, departureDate, seatNumber, sequence } };
+    }
+    case "refused":
+      return { status: "refused", reason: outcome.reason };
+    case "unauthorized":
+      await clearStaffSession(); // expired, or a role that may not do this: the cookie is no use any more
+      return { status: "signed-out" };
+    case "rejected":
+      return { status: "error", message: outcome.detail };
+    default:
+      return { status: "error", message: "The booking service is not responding right now, so nothing was changed. Please try again." };
   }
 }

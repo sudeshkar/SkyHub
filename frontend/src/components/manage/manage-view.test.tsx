@@ -200,7 +200,7 @@ describe("ManageView", () => {
       expect(checkOutFlight).toHaveBeenCalledWith(0);
       expect(screen.queryByText(PASS.barcode)).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Check in for SK501" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled()); // it stays disabled while the action is still finishing
     });
 
     it("keeps the passes and says why when check-in has closed", async () => {
@@ -363,7 +363,7 @@ describe("one passenger at a time (ADR-0058)", () => {
     expect(checkInFlight).toHaveBeenCalledWith(0, [1]);
     expect(screen.queryByText("PERERA/PRIYA")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Change seat for Raj Perera on SK501" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled()); // it stays disabled while the action is still finishing
     expect(screen.queryByRole("button", { name: "Check in Raj for SK501" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check in Priya for SK501" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check out Raj of SK501" })).toBeInTheDocument();
@@ -391,7 +391,7 @@ describe("one passenger at a time (ADR-0058)", () => {
     expect(checkOutFlight).toHaveBeenCalledWith(0, [0]);
     expect(screen.queryByText(PRIYA.barcode)).not.toBeInTheDocument();
     expect(screen.getByText(RAJ.barcode)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled()); // it stays disabled while the action is still finishing
     expect(screen.getByRole("button", { name: "Change seat for Raj Perera on SK501" })).toBeDisabled();
   });
 

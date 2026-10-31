@@ -21,7 +21,7 @@ export function parseStaffSession(value: string | undefined): StaffSession | nul
     if (typeof parsed !== "object" || parsed === null) return null;
     const { username, role, token } = parsed as Record<string, unknown>;
     if (typeof username !== "string" || !USERNAME.test(username)) return null;
-    if (role !== "OPS" && role !== "ADMIN") return null;
+    if (role !== "OPS" && role !== "ADMIN" && role !== "GATE") return null;
     if (typeof token !== "string" || token.length < 20 || token.length > 2_000) return null;
     return { username, role, token };
   } catch {
