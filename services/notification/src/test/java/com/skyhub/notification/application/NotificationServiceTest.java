@@ -249,4 +249,19 @@ class NotificationServiceTest {
         assertThat(row.getValue().getLocator()).isNull();
         assertThat(row.getValue().getRecipient()).doesNotContain("priya.new");   // only the masked form is kept
     }
+
+    @Test
+    void should_send_the_account_moved_notice_to_the_old_address_and_record_it_without_a_booking_reference() {
+        service.emailChanged(new com.skyhub.notification.domain.AccountEmailChangedEvent(
+                UUID.fromString("9d4f2b73-1a8e-4c60-b5d9-3e7a0c6f1b28"), "account.email-changed", 1,
+                Instant.parse("2026-11-01T10:30:00Z"), "priya@example.com", "p****@example.com"));
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        assertThat(message.getValue().to()).isEqualTo("priya@example.com");
+        ArgumentCaptor<SentNotification> row = ArgumentCaptor.forClass(SentNotification.class);
+        verify(sent).saveAndFlush(row.capture());
+        assertThat(row.getValue().getLocator()).isNull();
+        assertThat(row.getValue().getType()).isEqualTo("account.email-changed");
+    }
 }

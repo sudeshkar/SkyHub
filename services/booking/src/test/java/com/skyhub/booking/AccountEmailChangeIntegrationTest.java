@@ -222,4 +222,24 @@ class AccountEmailChangeIntegrationTest {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return JsonPath.read(response, "$.locator");
     }
+
+    @Test
+    void should_queue_one_notice_for_the_old_address_with_the_change_and_none_when_it_is_refused() throws Exception {
+        String bearer = signedIn("notice.old@example.com");
+        ask(bearer, "notice.new@example.com", PASSWORD).andExpect(status().isAccepted());
+        String token = latestToken("account.email-change-link", "notice.new@example.com");
+
+        confirm(bearer, "wrong-token").andExpect(status().isBadRequest());
+        assertThat(eventsFor("account.email-changed", "notice.old@example.com")).isZero();   // a refused change tells nobody
+
+        confirm(bearer, token).andExpect(status().isNoContent());
+        confirm(bearer, token).andExpect(status().isBadRequest());   // used: no second notice
+
+        assertThat(eventsFor("account.email-changed", "notice.old@example.com")).isEqualTo(1);
+        assertThat(eventsFor("account.email-changed", "notice.new@example.com")).isZero();   // never to the new address
+        String payload = jdbc.queryForList("SELECT payload FROM outbox_event WHERE event_type = 'account.email-changed' ORDER BY seq DESC LIMIT 1", String.class)
+                .getFirst();
+        String clear = cipher.decrypt(payload);
+        assertThat(clear).contains("n****@example.com").doesNotContain("notice.new@example.com").doesNotContain("token");
+    }
 }

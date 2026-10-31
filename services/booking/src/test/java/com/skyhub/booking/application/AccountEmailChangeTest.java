@@ -203,4 +203,44 @@ class AccountEmailChangeTest {
         assertThat(account.getEmail().value()).isEqualTo("priya@example.com");
         verify(accounts, never()).saveAndFlush(any(TravellerAccount.class));
     }
+
+    // ---- telling the old address (ADR-0040) ----------------------------------------------------------------------------
+
+    @Test
+    void should_tell_the_old_address_once_when_the_account_moves_naming_the_new_one() {
+        service.requestEmailChange(7L, "priya.new@example.com", PASSWORD);
+
+        service.confirmEmailChange(7L, "raw-token");
+
+        verify(events).emailChanged(7L, new ContactEmail("priya@example.com"), new ContactEmail("priya.new@example.com"));
+    }
+
+    @Test
+    void should_tell_nobody_when_the_change_is_refused() {
+        service.requestEmailChange(7L, "priya.new@example.com", PASSWORD);
+        org.mockito.Mockito.clearInvocations(events);
+
+        assertThatExceptionOfType(PasswordLinkInvalidException.class).isThrownBy(() -> service.confirmEmailChange(7L, "wrong"));
+        assertThatExceptionOfType(PasswordLinkInvalidException.class).isThrownBy(() -> at(NOW.plus(Duration.ofHours(2))).confirmEmailChange(7L, "raw-token"));
+
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void should_tell_nobody_when_another_account_took_the_address_in_the_meantime() {
+        service.requestEmailChange(7L, "priya.new@example.com", PASSWORD);
+        org.mockito.Mockito.clearInvocations(events);
+        when(accounts.saveAndFlush(any(TravellerAccount.class))).thenThrow(new DataIntegrityViolationException("uq_traveller_account_email"));
+
+        assertThatExceptionOfType(PasswordLinkInvalidException.class).isThrownBy(() -> service.confirmEmailChange(7L, "raw-token"));
+
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void should_not_tell_anyone_just_for_asking_since_nothing_has_changed_yet() {
+        service.requestEmailChange(7L, "priya.new@example.com", PASSWORD);
+
+        verify(events, never()).emailChanged(any(Long.class), any(ContactEmail.class), any(ContactEmail.class));
+    }
 }

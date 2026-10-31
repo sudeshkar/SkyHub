@@ -1,6 +1,7 @@
 package com.skyhub.notification.application;
 
 import com.skyhub.notification.domain.AccountEmailChangeLinkEvent;
+import com.skyhub.notification.domain.AccountEmailChangedEvent;
 import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
@@ -141,6 +142,23 @@ public final class EmailComposer {
 
                 If you did not ask for this, ignore this email: nothing changes.
                 """.formatted(link, UTC_TIME.format(event.expiresAt())));
+    }
+
+    /**
+     * Goes to the OLD address when an account moves (ADR-0040). It informs and holds no link: a notice must not be a second way to
+     * change an account. It names the new address only masked.
+     */
+    public static EmailMessage emailChanged(AccountEmailChangedEvent event) {
+        return new EmailMessage(event.contactEmail(), "The email address of your SkyHub account was changed", """
+                The email address of the SkyHub account that used this address was changed to %s at %s.
+
+                From now on that account is signed in to with the new address, and bookings made with the new address are listed in it.
+
+                If you made this change, there is nothing you need to do.
+
+                If you did not make this change, someone who knew your password and could read the new mailbox did. Tell SkyHub
+                support straight away.
+                """.formatted(event.newEmailMasked(), UTC_TIME.format(event.occurredAt())));
     }
 
     public static EmailMessage refundCompleted(BookingRefundCompletedEvent event) {

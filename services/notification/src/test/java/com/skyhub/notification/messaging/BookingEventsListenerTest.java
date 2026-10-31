@@ -122,4 +122,14 @@ class BookingEventsListenerTest {
         verify(service).emailChangeLink(event.capture());
         org.assertj.core.api.Assertions.assertThat(event.getValue().contactEmail()).isEqualTo("priya.new@example.com");
     }
+
+    @Test
+    void should_hand_an_account_moved_notice_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/account-email-changed.v1.example.json")));
+
+        ArgumentCaptor<com.skyhub.notification.domain.AccountEmailChangedEvent> event =
+                ArgumentCaptor.forClass(com.skyhub.notification.domain.AccountEmailChangedEvent.class);
+        verify(service).emailChanged(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().newEmailMasked()).isEqualTo("p****@example.com");
+    }
 }

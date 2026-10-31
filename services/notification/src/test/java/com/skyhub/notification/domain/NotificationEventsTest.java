@@ -251,4 +251,37 @@ class NotificationEventsTest {
 
         assertThat(event.toString()).doesNotContain("priya.new@example.com").doesNotContain(event.token());
     }
+
+    private static final Path EMAIL_CHANGED = Path.of("../../api-specs/events/account-email-changed.v1.example.json");
+
+    @Test
+    void should_read_the_email_changed_event_which_goes_to_the_old_address_and_names_the_new_one_only_masked() throws Exception {
+        AccountEmailChangedEvent event = EventParser.parse(Files.readString(EMAIL_CHANGED), AccountEmailChangedEvent.class);
+
+        assertThat(event.eventId()).isEqualTo(UUID.fromString("9d4f2b73-1a8e-4c60-b5d9-3e7a0c6f1b28"));
+        assertThat(event.type()).isEqualTo("account.email-changed");
+        assertThat(event.contactEmail()).isEqualTo("priya@example.com");
+        assertThat(event.newEmailMasked()).isEqualTo("p****@example.com");
+        assertThat(event.occurredAt()).isEqualTo(Instant.parse("2026-11-01T10:30:00Z"));
+        assertThat(event.locator()).isNull();
+    }
+
+    @Test
+    void should_refuse_an_email_changed_event_without_the_right_type_a_masked_address_or_an_address_to_write_to() throws Exception {
+        String notice = Files.readString(EMAIL_CHANGED);
+        for (String broken : new String[] {
+                notice.replace("account.email-changed", "account.email-change-link"),
+                notice.replaceAll(",\\s*\"newEmailMasked\": \"[^\"]*\"", ""),
+                notice.replace("\"contactEmail\": \"priya@example.com\",", "")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, AccountEmailChangedEvent.class));
+        }
+    }
+
+    @Test
+    void should_never_print_the_old_address() throws Exception {
+        AccountEmailChangedEvent event = EventParser.parse(Files.readString(EMAIL_CHANGED), AccountEmailChangedEvent.class);
+
+        assertThat(event.toString()).doesNotContain("priya@example.com");
+    }
 }
