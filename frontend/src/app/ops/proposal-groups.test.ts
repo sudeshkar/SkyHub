@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Proposal } from "@/lib/api/agent";
-import { groupProposals } from "./proposal-groups";
+import { groupProposals, outcomeCounts } from "./proposal-groups";
 
 const rebook = (locator: string, flightNumber: string, departureDate: string, passengerCount = 1): Proposal => ({
   locator, action: "REBOOK", flightNumber, departureDate, segmentIndex: 0, passengerCount, rationale: "Earliest flight that fits.",
@@ -85,5 +85,57 @@ describe("groupProposals", () => {
     expect(groups).toHaveLength(7);
     expect(groups.reduce((n, g) => n + g.proposals.length, 0)).toBe(5_000);
     expect(performance.now() - started).toBeLessThan(500);   // linear, not quadratic: generous bound, so it is not a flaky timing test
+  });
+});
+
+describe("groupProposals by outcome (ADR-0067)", () => {
+  const proposals = [
+    rebook("AAAAAA", "SK503", "2026-11-02", 2),   // moved
+    rebook("BBBBBB", "SK503", "2026-11-02", 1),   // already there
+    rebook("CCCCCC", "SK505", "2026-11-02", 3),   // refused
+    rebook("DDDDDD", "SK505", "2026-11-02", 1),   // failed
+    rebook("EEEEEE", "SK505", "2026-11-02", 4),   // not tried yet
+    human("FFFFFF", 5),
+  ];
+  const results = {
+    AAAAAA: { status: "moved" }, BBBBBB: { status: "unchanged" }, CCCCCC: { status: "refused" }, DDDDDD: { status: "failed" },
+  };
+  const locators = (groups: ReturnType<typeof groupProposals>) => groups.flatMap((g) => g.proposals.map((p) => p.locator));
+
+  it("shows everything, the bookings that need a person included, when no outcome is chosen", () => {
+    expect(locators(groupProposals(proposals, "", "all", results))).toHaveLength(6);
+    expect(locators(groupProposals(proposals, ""))).toHaveLength(6);   // the earlier two-argument form is unchanged
+  });
+
+  it("keeps only the bookings not tried yet, and leaves out the ones that need a person", () => {
+    const groups = groupProposals(proposals, "", "todo", results);
+
+    expect(locators(groups)).toEqual(["EEEEEE"]);
+    expect(groups.every((g) => g.kind === "rebook")).toBe(true);
+  });
+
+  it("keeps the bookings that moved or were already on the flight", () => {
+    expect(locators(groupProposals(proposals, "", "moved", results))).toEqual(["AAAAAA", "BBBBBB"]);
+  });
+
+  it("keeps the bookings that were refused or failed, so they can be looked at or tried again", () => {
+    expect(locators(groupProposals(proposals, "", "problem", results)).sort()).toEqual(["CCCCCC", "DDDDDD"]);
+  });
+
+  it("drops a group left empty and counts passengers from the bookings that remain", () => {
+    const groups = groupProposals(proposals, "", "problem", results);
+
+    expect(groups.map((g) => g.key)).toEqual(["SK505@2026-11-02"]);
+    expect(groups[0].passengers).toBe(4);   // 3 + 1: the booking not tried yet is not counted
+  });
+
+  it("combines with a search by reference", () => {
+    expect(locators(groupProposals(proposals, "cc", "problem", results))).toEqual(["CCCCCC"]);
+    expect(groupProposals(proposals, "aa", "problem", results)).toEqual([]);
+  });
+
+  it("counts each outcome in one pass, with the bookings that need a person only in the total", () => {
+    expect(outcomeCounts(proposals, results)).toEqual({ all: 6, todo: 1, moved: 2, problem: 2 });
+    expect(outcomeCounts([], {})).toEqual({ all: 0, todo: 0, moved: 0, problem: 0 });
   });
 });

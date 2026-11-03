@@ -85,7 +85,7 @@ Ask of every slice: *what will the next feature make me edit?* and *what happens
 
 The full table is [`ROADMAP.md`](ROADMAP.md). The order we plan to work in (each is one or more thin slices, picked one at a time):
 
-1. **Fuller rebooking** (the bulk endpoint, the connection rule and grouping proposals on the operations page are done, ADR-0035, 0036, 0043). Windowing very large proposal lists and filtering by moved or refused; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline.
+1. **Fuller rebooking** (the bulk endpoint, the connection rule and grouping proposals on the operations page are done, ADR-0035, 0036, 0043). Windowing very large proposal lists (filtering by moved or refused is done, ADR-0067); moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline.
 2. **More notifications.** a boarding-pass attachment; SMS. (Non-blocking retry topics are done, ADR-0066.) (Skipping one parked message that can never succeed is done, ADR-0037; HTML email beside the plain text is done, ADR-0050.)
 3. **Real payment provider.** An adapter for a real provider, webhooks, 3-D Secure (option 3 in ADR-0015). Also write an intent before charging, so a crash between charging and recording cannot lose a charge (ADR-0030).
 4. **Check-in extras.** A QR/PDF417 boarding-pass image; a per-route boarding window (the boarding window, ADR-0063, undoing a wrong scan, ADR-0064, and the who-has-boarded screen, ADR-0065, are done). (Checking out, ADR-0055, verifying a pass, ADR-0056, checking in one passenger at a time, ADR-0058, and boarding with a gate-agent role, ADR-0060, are done.)
