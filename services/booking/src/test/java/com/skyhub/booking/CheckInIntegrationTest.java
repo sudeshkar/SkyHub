@@ -597,4 +597,32 @@ class CheckInIntegrationTest {
         flightBoarding("SK501", "2029-12-03", tokenFor(locator)).andExpect(status().isForbidden());
         flightBoarding("SK501", "2029-12-03", null).andExpect(status().isUnauthorized());
     }
+
+    // ---- the check-in confirmation event (ADR-0073) -----------------------------------------------------------------------------
+
+    private long confirmations(String locator) {
+        return jdbc.queryForObject("SELECT count(*) FROM outbox_event WHERE aggregate_id = ? AND event_type = 'booking.checked-in'", Long.class, locator);
+    }
+
+    @Test
+    void should_queue_one_confirmation_for_each_check_in_that_checked_someone_in_and_none_for_a_repeat() throws Exception {
+        String locator = bookTwo("2030-01-01");
+        String token = tokenFor(locator);
+
+        mvc.perform(checkInWho(locator, token, "[1]")).andExpect(status().isCreated());
+        mvc.perform(checkInWho(locator, token, "[1]")).andExpect(status().isOk());     // already in: nothing new to say
+        assertThat(confirmations(locator)).isEqualTo(1);
+
+        mvc.perform(checkInWho(locator, token, "[]")).andExpect(status().isCreated());   // the rest of the party
+        assertThat(confirmations(locator)).isEqualTo(2);
+    }
+
+    @Test
+    void should_queue_nothing_when_the_check_in_is_refused() throws Exception {
+        String locator = book("SK888", "2030-01-02", "20A");   // SK888 leaves in 30 minutes: check-in is closed
+
+        mvc.perform(checkIn(locator, tokenFor(locator), 0)).andExpect(status().isConflict());
+
+        assertThat(confirmations(locator)).isZero();
+    }
 }

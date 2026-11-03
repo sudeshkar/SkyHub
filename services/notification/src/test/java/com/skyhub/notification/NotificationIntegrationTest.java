@@ -178,4 +178,17 @@ class NotificationIntegrationTest {
         }
         return found;
     }
+
+    @Test
+    void should_send_the_check_in_confirmation_too() throws Exception {
+        UUID checkedIn = UUID.randomUUID();
+        String message = Files.readString(Path.of("../../api-specs/events/booking-checked-in.v1.example.json"))
+                .replace("b5c8e0f2-6d35-4a79-9b21-0d3e5f7a9c66", checkedIn.toString()).replace("ABC234", "HHH888");
+
+        kafka.send(TOPIC, "HHH888", message);
+
+        await().atMost(Duration.ofSeconds(30)).until(() -> rows(checkedIn) == 1);
+        assertThat(jdbc.queryForObject("SELECT subject FROM sent_notification WHERE event_id = ?", String.class, checkedIn))
+                .isEqualTo("You are checked in for SkyHub flight SK501 on 2026-11-02");
+    }
 }

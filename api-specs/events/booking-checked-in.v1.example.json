@@ -1,0 +1,16 @@
+{
+  "eventId": "b5c8e0f2-6d35-4a79-9b21-0d3e5f7a9c66",
+  "type": "booking.checked-in",
+  "version": 1,
+  "occurredAt": "2026-10-30T10:00:00Z",
+  "locator": "ABC234",
+  "contactEmail": "priya@example.com",
+  "flightNumber": "SK501",
+  "departureDate": "2026-11-02",
+  "departure": "2026-11-02T14:30:00Z",
+  "checkInCloses": "2026-11-02T13:30:00Z",
+  "passengers": [
+    { "firstName": "Priya", "lastName": "Perera", "seat": "11D", "boardingNumber": 7 },
+    { "firstName": "Raj", "lastName": "Perera", "seat": "11E", "boardingNumber": 8 }
+  ]
+}

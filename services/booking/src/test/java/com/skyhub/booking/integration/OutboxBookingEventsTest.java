@@ -219,4 +219,22 @@ class OutboxBookingEventsTest {
 
         assertThat(stored).doesNotContain("priya@example.com").doesNotContain("Perera").doesNotContain("ABC234");
     }
+
+    @Test
+    void should_write_the_checked_in_event_with_each_passengers_seat_and_boarding_number_as_the_notification_service_expects() throws Exception {
+        PnrSegment flight = new PnrSegment("SK501", LocalDate.of(2026, 11, 2));
+        Pnr booked = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(flight),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("11D")), new PnrPassenger("Raj", "Perera", List.of("11E"))),
+                NOW, "keyhash", "fingerprint");
+
+        events(UUID.fromString("b5c8e0f2-6d35-4a79-9b21-0d3e5f7a9c66")).checkedIn(booked, flight,
+                List.of(com.skyhub.booking.domain.CheckIn.of("ABC234", 0, 0, 7, NOW), com.skyhub.booking.domain.CheckIn.of("ABC234", 0, 1, 8, NOW)),
+                Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z"));
+
+        OutboxEvent event = saved();
+        assertThat(event.getEventType()).isEqualTo("booking.checked-in");
+        assertThat(event.getAggregateId()).isEqualTo("ABC234");
+        assertThat(json.readTree(cipher.decrypt(event.getPayload())))
+                .isEqualTo(json.readTree(Files.readString(Path.of("../../api-specs/events/booking-checked-in.v1.example.json"))));
+    }
 }

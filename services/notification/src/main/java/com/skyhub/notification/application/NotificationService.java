@@ -7,6 +7,7 @@ import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingCheckInOpenEvent;
+import com.skyhub.notification.domain.BookingCheckedInEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
@@ -97,6 +98,10 @@ public class NotificationService {
 
     public void bookingDisruptionWithdrawn(BookingDisruptionWithdrawnEvent event) {
         deliver(event, EmailComposer.bookingDisruptionWithdrawn(event));
+    }
+
+    public void checkedIn(BookingCheckedInEvent event) {
+        deliver(event, EmailComposer.checkedIn(event));
     }
 
     public void bookingRebooked(BookingRebookedEvent event) {

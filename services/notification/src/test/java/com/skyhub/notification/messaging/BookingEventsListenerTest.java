@@ -132,4 +132,14 @@ class BookingEventsListenerTest {
         verify(service).emailChanged(event.capture());
         org.assertj.core.api.Assertions.assertThat(event.getValue().newEmailMasked()).isEqualTo("p****@example.com");
     }
+
+    @Test
+    void should_hand_a_check_in_confirmation_to_the_service() throws Exception {
+        listener.onMessage(Files.readString(Path.of("../../api-specs/events/booking-checked-in.v1.example.json")));
+
+        ArgumentCaptor<com.skyhub.notification.domain.BookingCheckedInEvent> event =
+                ArgumentCaptor.forClass(com.skyhub.notification.domain.BookingCheckedInEvent.class);
+        verify(service).checkedIn(event.capture());
+        org.assertj.core.api.Assertions.assertThat(event.getValue().passengers()).hasSize(2);
+    }
 }
