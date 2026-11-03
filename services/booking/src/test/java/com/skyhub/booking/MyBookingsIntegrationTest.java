@@ -194,15 +194,31 @@ class MyBookingsIntegrationTest {
 
     // ---- helpers -------------------------------------------------------------------------------------------------------
 
+    /**
+     * Bookings here are dated relative to today, so they must not share a flight with a test that cancels or delays a flight on a fixed date
+     * (DisruptionsIntegrationTest cancels SK501 on 2027-03-03, which "today + 120 days" reached on 2026-11-03 and made the booking 409).
+     * No other integration test disrupts this flight.
+     */
+    private static final String DATED_FLIGHT = "SK502";
+
     private String book(String email, String date, String seat) throws Exception {
+        return bookOn("SK501", email, date, seat);
+    }
+
+    /** For bookings dated relative to today: see {@link #DATED_FLIGHT}. */
+    private String bookDated(String email, String date, String seat) throws Exception {
+        return bookOn(DATED_FLIGHT, email, date, seat);
+    }
+
+    private String bookOn(String flight, String email, String date, String seat) throws Exception {
         String body = """
                 {
                   "paymentToken": "tok_visa",
                   "contactEmail": "%s",
-                  "segments": [{"flightNumber": "SK501", "departureDate": "%s"}],
+                  "segments": [{"flightNumber": "%s", "departureDate": "%s"}],
                   "passengers": [{"firstName": "Priya", "lastName": "Perera", "seats": ["%s"]}]
                 }
-                """.formatted(email, date, seat);
+                """.formatted(email, flight, date, seat);
         String response = mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
@@ -242,11 +258,11 @@ class MyBookingsIntegrationTest {
     void should_split_bookings_into_upcoming_and_past_by_flight_date_and_status() throws Exception {
         String email = "filters.traveller@example.com";
         java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
-        String longGone = book(email, today.minusDays(40).toString(), "12D");
-        String yesterday = book(email, today.minusDays(1).toString(), "12E");
-        String leavesToday = book(email, today.toString(), "12F");
-        String nextMonth = book(email, today.plusDays(30).toString(), "13A");
-        String cancelledFuture = book(email, today.plusDays(45).toString(), "13B");
+        String longGone = bookDated(email, today.minusDays(40).toString(), "12D");
+        String yesterday = bookDated(email, today.minusDays(1).toString(), "12E");
+        String leavesToday = bookDated(email, today.toString(), "12F");
+        String nextMonth = bookDated(email, today.plusDays(30).toString(), "13A");
+        String cancelledFuture = bookDated(email, today.plusDays(45).toString(), "13B");
         mvc.perform(post("/api/v1/pnrs/{l}/cancellation", cancelledFuture).header("Authorization", manageToken(cancelledFuture)))
                 .andExpect(status().isOk());
         String bearer = signedIn(email);
@@ -283,8 +299,8 @@ class MyBookingsIntegrationTest {
         java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
         List<String> future = new java.util.ArrayList<>();
         for (int i = 0; i < 3; i++) {
-            future.add(book(email, today.plusDays(20 + i).toString(), "15A"));
-            book(email, today.minusDays(20 + i).toString(), "15B");   // old bookings in between, so the filter has to read past them
+            future.add(bookDated(email, today.plusDays(20 + i).toString(), "15A"));
+            bookDated(email, today.minusDays(20 + i).toString(), "15B");   // old bookings in between, so the filter has to read past them
         }
         String index = cipher.blindIndex(email);
 
@@ -323,9 +339,9 @@ class MyBookingsIntegrationTest {
     void should_list_upcoming_trips_soonest_flight_first_whatever_order_they_were_booked_in() throws Exception {
         String email = "soonest.first@example.com";
         java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
-        String farAway = book(email, today.plusDays(120).toString(), "16A");     // booked first
-        String nextWeek = book(email, today.plusDays(7).toString(), "16B");      // booked later, flies sooner
-        String nextMonth = book(email, today.plusDays(30).toString(), "16C");
+        String farAway = bookDated(email, today.plusDays(120).toString(), "16A");     // booked first
+        String nextWeek = bookDated(email, today.plusDays(7).toString(), "16B");      // booked later, flies sooner
+        String nextMonth = bookDated(email, today.plusDays(30).toString(), "16C");
         String bearer = signedIn(email);
 
         assertThat(locators(bearer, "upcoming")).containsExactly(nextWeek, nextMonth, farAway);
@@ -343,9 +359,9 @@ class MyBookingsIntegrationTest {
                  "passengers":[{"firstName":"Priya","lastName":"Perera","seats":["17A","17A"]}]}""".formatted(email, today.minusDays(3), today.plusDays(10));
         String mixed = JsonPath.read(mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.locator");
-        String five = book(email, today.plusDays(5).toString(), "17B");
-        String tieA = book(email, today.plusDays(20).toString(), "17C");
-        String tieB = book(email, today.plusDays(20).toString(), "17D");
+        String five = bookDated(email, today.plusDays(5).toString(), "17B");
+        String tieA = bookDated(email, today.plusDays(20).toString(), "17C");
+        String tieB = bookDated(email, today.plusDays(20).toString(), "17D");
         String bearer = signedIn(email);
 
         List<String> upcoming = locators(bearer, "upcoming");
@@ -360,7 +376,7 @@ class MyBookingsIntegrationTest {
         java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
         List<String> made = new java.util.ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            made.add(book(email, today.plusDays(10 + i / 2).toString(), "18" + "ABCDE".charAt(i)));   // two share a date at each step
+            made.add(bookDated(email, today.plusDays(10 + i / 2).toString(), "18" + "ABCDE".charAt(i)));   // two share a date at each step
         }
         String index = cipher.blindIndex(email);
 
@@ -391,9 +407,9 @@ class MyBookingsIntegrationTest {
     void should_list_past_trips_most_recently_flown_first_whatever_order_they_were_booked_in() throws Exception {
         String email = "recent.first@example.com";
         java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
-        String longAgo = book(email, today.minusDays(200).toString(), "19A");    // booked first, flew first
-        String lastWeek = book(email, today.minusDays(7).toString(), "19B");
-        String lastYearButBookedLast = book(email, today.minusDays(60).toString(), "19C");
+        String longAgo = bookDated(email, today.minusDays(200).toString(), "19A");    // booked first, flew first
+        String lastWeek = bookDated(email, today.minusDays(7).toString(), "19B");
+        String lastYearButBookedLast = bookDated(email, today.minusDays(60).toString(), "19C");
         String bearer = signedIn(email);
 
         assertThat(locators(bearer, "past")).containsExactly(lastWeek, lastYearButBookedLast, longAgo);
@@ -411,9 +427,9 @@ class MyBookingsIntegrationTest {
                  "passengers":[{"firstName":"Priya","lastName":"Perera","seats":["20A","20A"]}]}""".formatted(email, today.minusDays(40), today.minusDays(30));
         String there = JsonPath.read(mvc.perform(post("/api/v1/pnrs").header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.locator");
-        String twenty = book(email, today.minusDays(20).toString(), "20B");
-        String tieA = book(email, today.minusDays(50).toString(), "20C");
-        String tieB = book(email, today.minusDays(50).toString(), "20D");
+        String twenty = bookDated(email, today.minusDays(20).toString(), "20B");
+        String tieA = bookDated(email, today.minusDays(50).toString(), "20C");
+        String tieB = bookDated(email, today.minusDays(50).toString(), "20D");
         String bearer = signedIn(email);
 
         List<String> past = locators(bearer, "past");
@@ -428,7 +444,7 @@ class MyBookingsIntegrationTest {
         java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
         List<String> made = new java.util.ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            made.add(book(email, today.minusDays(70 + i / 2).toString(), "21" + "ABCDE".charAt(i)));   // two share a date at each step
+            made.add(bookDated(email, today.minusDays(70 + i / 2).toString(), "21" + "ABCDE".charAt(i)));   // two share a date at each step
         }
         String index = cipher.blindIndex(email);
 
