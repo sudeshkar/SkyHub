@@ -22,8 +22,12 @@ public interface BookingEvents {
      */
     void bookingCancelled(Pnr pnr, RefundPolicy.Decision decision, Optional<Money> paid);
 
-    /** Staff moved one flight of this booking onto another (ADR-0023). Called only for a move that changed something. */
-    void bookingRebooked(Pnr pnr, PnrSegment from, PnrSegment to);
+    /**
+     * Staff moved one flight of this booking onto another (ADR-0023). Called only for a move that changed something.
+     * {@code checkedOut} is true when the move also checked the party out of the flight they left (ADR-0069), so the email can tell them
+     * to check in again (ADR-0070).
+     */
+    void bookingRebooked(Pnr pnr, PnrSegment from, PnrSegment to, boolean checkedOut);
 
     /** A flight on this booking was delayed or cancelled by the airline. One call per affected booking. */
     void bookingDisrupted(Pnr pnr, Disruption disruption);

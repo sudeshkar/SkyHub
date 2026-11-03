@@ -149,7 +149,7 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 
 **Means:** staff tried to move a booking off a disrupted flight and the booking service refused with "A passenger has already boarded ..." or "... has just boarded the flight" (ADR-0069). A booking that is only checked in is moved, and the move checks the party out; a booking with someone on the aircraft is not moved, because the whole party moves together or not at all.
 **Confirm:** `skyhub_rebookings_total{outcome="refused"}`; the "Who has boarded" panel on `/ops` (ADR-0065) lists the boardings of the flight with the booking reference. `skyhub_rebooking_check_ins_released_total` counts passengers a move checked out.
-**Mitigate:** if the boarding was a mistake, take it back with "Undo a boarding" (ADR-0064) and move the booking again. If the passenger really boarded, the booking is not moved by this tool; handle it by hand. A passenger who was moved is not told to check in again by the email; they check in for the new flight when it opens.
+**Mitigate:** if the boarding was a mistake, take it back with "Undo a boarding" (ADR-0064) and move the booking again. If the passenger really boarded, the booking is not moved by this tool; handle it by hand. A passenger who was moved is told by the rebooking email that their old passes no longer work and to check in again (ADR-0070); they check in for the new flight when it opens.
 
 ## ServiceDown
 

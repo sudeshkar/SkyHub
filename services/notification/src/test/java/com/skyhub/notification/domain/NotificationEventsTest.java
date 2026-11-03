@@ -188,6 +188,17 @@ class NotificationEventsTest {
     }
 
     @Test
+    void should_read_whether_the_move_checked_the_party_out_and_treat_an_older_event_without_the_field_as_not() throws Exception {
+        Path checkedOut = Path.of("../../api-specs/events/booking-rebooked-checked-out.v1.example.json");
+
+        assertThat(EventParser.parse(Files.readString(REBOOKED), BookingRebookedEvent.class).checkedOut()).isFalse();
+        assertThat(EventParser.parse(Files.readString(checkedOut), BookingRebookedEvent.class).checkedOut()).isTrue();
+        String older = Files.readString(REBOOKED).replaceAll(",\\s*\"checkedOut\": false", "");
+        assertThat(older).doesNotContain("checkedOut");
+        assertThat(EventParser.parse(older, BookingRebookedEvent.class).checkedOut()).isFalse();   // sent before this field existed
+    }
+
+    @Test
     void should_read_the_rebooking_event_with_each_passengers_new_seat() throws Exception {
         BookingRebookedEvent event = EventParser.parse(Files.readString(REBOOKED), BookingRebookedEvent.class);
 

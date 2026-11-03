@@ -82,6 +82,7 @@ How a slice goes, every time:
 | 63 | Filter the proposals on the operations page by what happened to them (not tried yet, moved, refused or failed), with a count for each, combined with the search and acting only on what is shown, so the refused ones can be looked at and tried again | ADR-0067 |
 | 64 | Windowing the proposal list on the operations page: the first 100 rows are drawn and "Show more" adds 100 at a time, while the groups, counts, ticks and moves still cover every matching booking, and the page says so | ADR-0068 |
 | 65 | Moving travellers who are checked in: a rebooking now moves a checked-in booking and checks the party out in the same transaction (only a boarded passenger blocks it); the database now says a boarded passenger is a checked-in one, closing a gate-versus-move race | ADR-0069 |
+| 66 | The rebooking email tells a traveller the move checked out that their old boarding passes no longer work and to check in again: a new `checkedOut` field on the `booking.rebooked` event (an addition to version 1, read as false when absent), with a second shared example | ADR-0070 |
 
 ## Next slices (pick one at a time; each is independent)
 

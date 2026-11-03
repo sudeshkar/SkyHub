@@ -156,8 +156,9 @@ public class RebookingService {
         pnr.rebook(index, target, newSeats);
         pnrs.saveAndFlush(pnr);
         audit.save(Rebooking.of(command.locator(), index, from, target, command.rebookedBy(), clock.instant()));
-        events.bookingRebooked(pnr, from, target);   // same transaction: the email exists exactly when the move does
-        checkOut(command.locator(), index);
+        // Checked out first, so the email can say so; both are in this transaction, so the email exists exactly when the move does.
+        boolean checkedOut = checkOut(command.locator(), index);
+        events.bookingRebooked(pnr, from, target, checkedOut);
         return new RebookingResult(command.locator(), index, from, target, newSeats, true);
     }
 
@@ -166,8 +167,10 @@ public class RebookingService {
      * flight and seats, and a check-in row is keyed by the flight's place on the booking, so left behind it would read as a check-in for the
      * new one. The database refuses to check out a passenger who has boarded, so a gate scanning at this very instant makes the move
      * stop, with nothing changed, instead of leaving a boarding on the wrong flight.
+     *
+     * @return whether anyone was checked out, which the rebooking email says (ADR-0070)
      */
-    private void checkOut(String locator, int index) {
+    private boolean checkOut(String locator, int index) {
         long released;
         try {
             released = checkIns.deleteByLocatorAndSegmentIndex(locator, index);
@@ -177,6 +180,7 @@ public class RebookingService {
         if (released > 0) {
             metrics.checkInsReleased(released);
         }
+        return released > 0;
     }
 
     /**

@@ -171,12 +171,24 @@ class OutboxBookingEventsTest {
         Pnr moved = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(next),
                 List.of(new PnrPassenger("Priya", "Perera", List.of("14A"))), NOW, "keyhash", "fingerprint");
 
-        events(REBOOKED_ID).bookingRebooked(moved, new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), next);
+        events(REBOOKED_ID).bookingRebooked(moved, new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), next, false);
 
         OutboxEvent event = saved();
         assertThat(event.getEventType()).isEqualTo("booking.rebooked");
         assertThat(event.getAggregateId()).isEqualTo("ABC234");
         assertThat(json.readTree(cipher.decrypt(event.getPayload()))).isEqualTo(json.readTree(Files.readString(REBOOKED_EXAMPLE)));
+    }
+
+    @Test
+    void should_say_in_the_rebooking_event_that_the_move_checked_the_party_out_ADR_0070() throws Exception {
+        PnrSegment next = new PnrSegment("SK501", LocalDate.of(2026, 11, 3));
+        Pnr moved = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(next),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("14A"))), NOW, "keyhash", "fingerprint");
+
+        events(UUID.fromString("f6b4e8d2-3a59-4c7b-8d21-8e2f9a4c5b66")).bookingRebooked(moved, new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), next, true);
+
+        assertThat(json.readTree(cipher.decrypt(saved().getPayload())))
+                .isEqualTo(json.readTree(Files.readString(Path.of("../../api-specs/events/booking-rebooked-checked-out.v1.example.json"))));
     }
 
     @Test

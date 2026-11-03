@@ -185,7 +185,7 @@ class NotificationServiceTest {
                 "booking.rebooked", 1, Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com",
                 new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)),
                 new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3)),
-                List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A")));
+                List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A")), false);
 
         service.bookingRebooked(moved);
         when(sent.existsByEventId(moved.eventId())).thenReturn(true);
