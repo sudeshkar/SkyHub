@@ -19,7 +19,7 @@ Once a flight is checked in (ADR-0013), its seats are frozen: the boarding passe
 
 - **Whole party, one flight**, the same unit as check-in. Other flights of the booking stay checked in.
 - **Allowed until check-in closes** (60 minutes before departure, by the revised time if the flight was delayed): after that the passes are what the gate works from. A closed window is the same 409 "Check-in unavailable" as for checking in.
-- **Always allowed for a cancelled flight**, because a booking that is checked in cannot be rebooked (ADR-0022), and the traveller should not be stuck. A cancelled booking cannot check out (409).
+- **Always allowed for a cancelled flight**, because a booking that is checked in could not be rebooked (ADR-0022; staff can now move it and the move checks the party out, ADR-0069), and the traveller should not be stuck. A cancelled booking cannot check out (409).
 - **Idempotent:** a flight that is not checked in is also 204, so a double press or a retry is harmless.
 - **Checking in again numbers the party afresh.** The boarding sequence never goes backwards, so the old numbers are not reused (gaps, as before: ADR-0013).
 - The old passes stop being shown (`GET` is 404 "Not checked in").

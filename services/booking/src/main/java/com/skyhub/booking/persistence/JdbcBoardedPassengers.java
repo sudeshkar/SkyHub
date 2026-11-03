@@ -49,6 +49,12 @@ class JdbcBoardedPassengers implements BoardedPassengers {
     }
 
     @Override
+    public boolean anyBoardedOnFlight(String locator, int segmentIndex) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM boarded_passenger WHERE locator = ? AND segment_index = ?)", Boolean.class, locator, segmentIndex));
+    }
+
+    @Override
     public boolean anyBoarded(String locator, int segmentIndex, Collection<Integer> passengerIndexes) {
         if (passengerIndexes.isEmpty()) {
             return false;

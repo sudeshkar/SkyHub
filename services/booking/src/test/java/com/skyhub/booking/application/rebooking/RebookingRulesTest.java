@@ -97,10 +97,24 @@ class RebookingRulesTest {
     }
 
     @Test
-    void should_not_move_a_booking_that_is_already_checked_in_on_that_flight() {
+    void should_not_move_a_booking_when_a_passenger_has_already_boarded_that_flight() {
+        RebookingContext ctx = with(c -> new RebookingContext(c.pnr(), 0, c.from(), c.to(), c.fromInfo(), c.toInfo(),
+                c.fromDisruption(), c.toDisruption(), true, java.util.Optional.empty(), java.util.Optional.empty(), true));
+
+        assertThat(new MustNotHaveBoarded().refusal(ctx)).hasValueSatisfying(r -> assertThat(r).contains("boarded").contains("SK501"));
+    }
+
+    @Test
+    void should_move_a_booking_that_is_only_checked_in_because_the_move_checks_them_out_ADR_0069() {
         RebookingContext ctx = with(c -> new RebookingContext(c.pnr(), 0, c.from(), c.to(), c.fromInfo(), c.toInfo(),
                 c.fromDisruption(), c.toDisruption(), true));
 
-        assertThat(new MustNotBeCheckedIn().refusal(ctx)).hasValueSatisfying(r -> assertThat(r).contains("checked in"));
+        assertThat(new MustNotHaveBoarded().refusal(ctx)).isEmpty();
+    }
+
+    @Test
+    void should_list_the_boarded_rule_and_no_longer_refuse_a_checked_in_booking_by_default() {
+        assertThat(RebookingRules.defaults()).anyMatch(rule -> rule instanceof MustNotHaveBoarded);
+        assertThat(RebookingRules.defaults()).noneMatch(rule -> rule.getClass().getSimpleName().equals("MustNotBeCheckedIn"));
     }
 }

@@ -72,3 +72,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0066](0066-non-blocking-retry-topics.md) | Non-blocking retry topics for notifications | Accepted |
 | [0067](0067-filtering-proposals-by-outcome.md) | Filtering proposals by what happened to them | Accepted |
 | [0068](0068-windowing-the-proposal-list.md) | Drawing only part of a long proposal list | Accepted |
+| [0069](0069-moving-checked-in-travellers.md) | Moving travellers who are checked in | Accepted |

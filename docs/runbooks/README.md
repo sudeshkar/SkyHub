@@ -145,6 +145,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** you need the booking reference, the flight's place on the booking (1 for the first flight) and the passenger's place: the "Who has boarded" panel on `/ops` (ADR-0065) lists them for a flight, with who scanned and when. Who scanned and when is in `boarded_passenger` (`boarded_by`, `boarded_at`). Loki `{service="booking"} |= "Passenger boarded"` has the reference and the scanner.
 **Mitigate:** on `/ops`, "Undo a boarding": reference, flight, passenger, a reason, and the tick-box. The passenger stays checked in and can board again with the same pass while boarding is open (ADR-0063). Every undo is a row in `boarding_reversal` (who scanned, who undid it, when, and why): `SELECT * FROM boarding_reversal WHERE locator = '...' ORDER BY reversed_at`. `skyhub_boarding_pass_reversals_total{outcome="not_boarded"}` rising means people are trying to undo boardings that never happened (a wrong reference or passenger number). There is no alert on purpose.
 
+## A move is refused because a passenger has boarded (no alert)
+
+**Means:** staff tried to move a booking off a disrupted flight and the booking service refused with "A passenger has already boarded ..." or "... has just boarded the flight" (ADR-0069). A booking that is only checked in is moved, and the move checks the party out; a booking with someone on the aircraft is not moved, because the whole party moves together or not at all.
+**Confirm:** `skyhub_rebookings_total{outcome="refused"}`; the "Who has boarded" panel on `/ops` (ADR-0065) lists the boardings of the flight with the booking reference. `skyhub_rebooking_check_ins_released_total` counts passengers a move checked out.
+**Mitigate:** if the boarding was a mistake, take it back with "Undo a boarding" (ADR-0064) and move the booking again. If the passenger really boarded, the booking is not moved by this tool; handle it by hand. A passenger who was moved is not told to check in again by the email; they check in for the new flight when it opens.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.

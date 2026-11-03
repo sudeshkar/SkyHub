@@ -14,6 +14,9 @@ public interface BoardedPassengers {
 
     boolean isBoarded(String locator, int segmentIndex, int passengerIndex);
 
+    /** Whether anyone on the booking has boarded this flight: a booking with a passenger on the aircraft is not moved (ADR-0069). */
+    boolean anyBoardedOnFlight(String locator, int segmentIndex);
+
     /** Whether any of these passengers has boarded this flight: someone on the aircraft cannot check out. */
     boolean anyBoarded(String locator, int segmentIndex, Collection<Integer> passengerIndexes);
 

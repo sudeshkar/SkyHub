@@ -222,4 +222,77 @@ class RebookingIntegrationTest {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return "Bearer " + JsonPath.<String>read(response, "$.accessToken");
     }
+
+    // ---- a checked-in booking is moved and checked out by the move (ADR-0069) -------------------------------------------
+
+    private String checkIn(String locator, String token) throws Exception {
+        return mvc.perform(post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+    }
+
+    private long checkInRows(String locator) {
+        return jdbc.queryForObject("SELECT count(*) FROM check_in WHERE locator = ?", Long.class, locator);
+    }
+
+    @Test
+    void should_move_a_checked_in_party_off_a_cancelled_flight_and_check_them_out_so_the_old_passes_stop_working() throws Exception {
+        String locator = book("SK501", "2027-12-01", "30A", "30B");
+        String token = tokenFor(locator);
+        String barcode = JsonPath.read(checkIn(locator, token), "$.passes[0].barcode");
+        disrupt("SK501", "2027-12-01", "CANCELLED");
+
+        mvc.perform(rebook(locator, 0, "SK502", "2027-12-01")).andExpect(status().isOk()).andExpect(jsonPath("$.changed").value(true));
+
+        assertThat(checkInRows(locator)).isZero();
+        mvc.perform(post("/api/v1/ops/boarding-passes/verification").header("Authorization", ops).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"barcode\":\"%s\"}".formatted(barcode)))
+                .andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.reason").value("NOT_CHECKED_IN"));   // the old pass is dead
+        mvc.perform(get("/api/v1/pnrs/{l}/check-ins/0", locator).header("Authorization", token)).andExpect(status().isNotFound());   // not in on the new flight
+        mvc.perform(post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0}")).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.passes[0].flightNumber").value("SK502"));   // and they can check in again, for the new flight
+    }
+
+    @Test
+    void should_check_out_a_party_of_which_only_one_passenger_was_checked_in() throws Exception {
+        String locator = book("SK501", "2027-12-02", "31A", "31B");
+        String token = tokenFor(locator);
+        mvc.perform(post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0,\"passengerIndexes\":[1]}")).andExpect(status().isCreated());
+        disrupt("SK501", "2027-12-02", "CANCELLED");
+
+        mvc.perform(rebook(locator, 0, "SK502", "2027-12-02")).andExpect(status().isOk());
+
+        assertThat(checkInRows(locator)).isZero();
+    }
+
+    @Test
+    void should_refuse_to_move_a_booking_when_a_passenger_has_boarded_and_leave_everything_as_it_was() throws Exception {
+        String locator = book("SK501", "2027-12-03", "32A", "32B");
+        checkIn(locator, tokenFor(locator));
+        jdbc.update("INSERT INTO boarded_passenger (locator, segment_index, passenger_index, boarded_by, boarded_at) VALUES (?, 0, 0, 'gate.one', now())", locator);
+        disrupt("SK501", "2027-12-03", "CANCELLED");
+
+        mvc.perform(rebook(locator, 0, "SK502", "2027-12-03")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("boarded")));
+
+        assertThat(checkInRows(locator)).isEqualTo(2);
+        assertThat(seatStatus("SK501", "2027-12-03", "32A")).isEqualTo("BOOKED");
+        assertThat(jdbc.queryForObject("SELECT flight_number FROM pnr_segment s JOIN pnr p ON p.id = s.pnr_id WHERE p.locator = ?", String.class, locator))
+                .isEqualTo("SK501");
+    }
+
+    @Test
+    void should_not_let_the_database_check_out_a_passenger_who_has_boarded_or_board_one_who_is_not_checked_in() throws Exception {
+        String locator = book("SK501", "2027-12-04", "33A", "33B");
+        checkIn(locator, tokenFor(locator));
+        jdbc.update("INSERT INTO boarded_passenger (locator, segment_index, passenger_index, boarded_by, boarded_at) VALUES (?, 0, 0, 'gate.one', now())", locator);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update("DELETE FROM check_in WHERE locator = ? AND passenger_index = 0", locator))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO boarded_passenger (locator, segment_index, passenger_index, boarded_by, boarded_at) VALUES (?, 1, 0, 'gate.one', now())", locator))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(jdbc.update("DELETE FROM check_in WHERE locator = ? AND passenger_index = 1", locator)).isEqualTo(1);   // the one who has not boarded can go
+    }
 }

@@ -9,7 +9,7 @@ public final class RebookingRules {
 
     /** The rules every rebooking must satisfy, cheapest first. To add a restriction, write a rule and list it here. */
     public static List<RebookingRule> defaults() {
-        return List.of(new FlightMustBeDisrupted(), new MustNotBeCheckedIn(), new TargetMustNotBeCancelled(),
+        return List.of(new FlightMustBeDisrupted(), new MustNotHaveBoarded(), new TargetMustNotBeCancelled(),
                 new MustStayOnTheSameRoute(), new MustNotLeaveEarlier(), new MustKeepTheConnections());
     }
 }

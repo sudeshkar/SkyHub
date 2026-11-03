@@ -397,11 +397,13 @@ export interface paths {
          * Move one flight of a booking onto another, after a disruption
          * @description Staff only (ADR-0023). Moves the given flight of the booking onto another flight, choosing seats for the whole party
          *     (kept together, in the cabin they were in). Refused unless the flight being left has a recorded delay or
-         *     cancellation, the booking is active and not checked in on it, and the new flight operates, is not cancelled, flies
+         *     cancellation, the booking is active and **no passenger has boarded it**, and the new flight operates, is not cancelled, flies
          *     the same route, does not leave before the original was due, and keeps the traveller's connections: it must land at
          *     least 60 minutes before the booking's next flight leaves and leave at least 60 minutes after the previous flight
          *     lands, on expected times (ADR-0036). Everything or nothing happens. Asking again for a
-         *     move that is already done changes nothing and answers `changed: false`. The traveller is emailed.
+         *     move that is already done changes nothing and answers `changed: false`. The traveller is emailed. A booking that is checked in
+         *     on the flight is moved too, and the move **checks the whole party out of it** in the same step: the old boarding passes stop
+         *     working, the new flight is not checked in, and the traveller checks in again (ADR-0069).
          */
         post: operations["rebookFlight"];
         delete?: never;
