@@ -110,7 +110,7 @@ export SKYHUB_BOARDING_PASS_KEY=$(openssl rand -base64 32)
 export SKYHUB_LINK_TOKEN_KEY=$(openssl rand -base64 32)   # also export the SAME value where the notification service starts (ADR-0046)
 ```
 
-Keep `SKYHUB_PII_KEY` somewhere safe: bookings saved with one key cannot be read with another. `SKYHUB_LINK_TOKEN_KEY` is the one key that two services share: the booking service seals the one-time token in sign-up, reset and address-change events with it, and the notification service opens it to build the emailed link, so a reader of the Kafka topic cannot take it. Set the same value on both; without it on the notification service, booking emails still go out but those links are refused and parked (ADR-0046).
+Keep `SKYHUB_PII_KEY` somewhere safe: bookings saved with one key cannot be read with another. `SKYHUB_LINK_TOKEN_KEY` is the one key that two services share: the booking service seals the one-time token in sign-up, reset and address-change events with it, and each boarding pass in a check-in event (ADR-0074), and the notification service opens them to build the emailed link or to attach the pass as a QR picture, so a reader of the Kafka topic cannot take them. Set the same value on both; without it on the notification service, booking emails still go out but those links are refused and parked (ADR-0046), and check-in emails go without their boarding passes (ADR-0074).
 
 **3. Start the services** (each in its own terminal)
 

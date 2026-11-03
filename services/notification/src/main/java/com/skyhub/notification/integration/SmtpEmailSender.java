@@ -17,7 +17,8 @@ import org.springframework.stereotype.Component;
  * Adapter: hands the email to an SMTP server (ADR-0021). Locally that is Mailpit, which catches every message and
  * shows it in a web page instead of delivering it; in production it would be the provider's SMTP relay. Anything
  * the server refuses or does not answer becomes {@link EmailUnavailableException}, which makes the event retry
- * instead of being recorded as sent. The message carries the plain text and an HTML version of it (ADR-0050). The failure message never contains the address or the body.
+ * instead of being recorded as sent. The message carries the plain text and an HTML version of it (ADR-0050), and any attachments
+ * (ADR-0074). The failure message never contains the address, the body or an attachment.
  */
 @Component
 @ConditionalOnProperty(name = "skyhub.notifications.email.mode", havingValue = "smtp", matchIfMissing = true)
@@ -40,6 +41,10 @@ public class SmtpEmailSender implements EmailSender {
             helper.setTo(message.to());
             helper.setSubject(message.subject());
             helper.setText(message.body(), HtmlBody.from(message.body()));
+            for (EmailMessage.Attachment attachment : message.attachments()) {
+                helper.addAttachment(attachment.fileName(), new org.springframework.core.io.ByteArrayResource(attachment.content()),
+                        attachment.contentType());
+            }
             mail.send(mime);
         } catch (MessagingException | MailException e) {
             throw new EmailUnavailableException("The mail server did not accept the message", e);

@@ -33,6 +33,14 @@ public class NotificationMetrics {
         registry.counter("skyhub.notifications.skipped").increment(count);
     }
 
+    /**
+     * Boarding passes attached to a check-in email (ADR-0074): {@code attached} for each pass sent, {@code dropped} once for each email
+     * that went without them because a pass would not open or a picture could not be drawn. A person has to look at dropped ones.
+     */
+    public void attachments(String outcome, int count) {
+        registry.counter("skyhub.notification.attachments", "outcome", outcome).increment(count);
+    }
+
     public void record(String type, Outcome outcome) {
         registry.counter("skyhub.notifications", "type", type, "outcome", outcome.name().toLowerCase(java.util.Locale.ROOT))
                 .increment();

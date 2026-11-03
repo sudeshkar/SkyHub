@@ -42,10 +42,9 @@ public interface BookingEvents {
     void checkInOpened(Pnr pnr, PnrSegment segment, java.time.Instant departure, java.time.Instant closes);
 
     /**
-     * These passengers have just been checked in (ADR-0073): {@code created} holds only the rows this check-in made, not anyone who was
-     * already in. {@code departure} is the expected time and {@code closes} is when check-in stops. Not called for a repeat. It names seats
-     * and boarding numbers and carries no boarding pass text.
+     * These passengers have just been checked in (ADR-0073): {@code passes} holds only the passes this check-in issued, not anyone who was
+     * already in. {@code departure} is the expected time and {@code closes} is when check-in stops. Not called for a repeat. Each pass is
+     * signed and is a credential for boarding, so an implementation must put it in the event sealed and never in the clear (ADR-0074).
      */
-    void checkedIn(Pnr pnr, PnrSegment segment, java.util.List<com.skyhub.booking.domain.CheckIn> created, java.time.Instant departure,
-                   java.time.Instant closes);
+    void checkedIn(Pnr pnr, PnrSegment segment, java.util.List<BoardingPass> passes, java.time.Instant departure, java.time.Instant closes);
 }

@@ -97,6 +97,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** `skyhub_notifications_total{outcome="failed"}` by `type`; Loki `{service="notification"} |= "Email not sent"` (carries `pnr.locator` and `event.type`). The messages waiting are on `skyhub.booking.events.retry-0` to `-3` (the headers say when each is due: `retry_topic-backoff-timestamp`). Mailpit locally: `docker compose ps mailpit`.
 **Mitigate:** fix the cause (the mail server or provider). Nothing needs replaying while the retries are still running. If the outage is longer than about 22 minutes, messages will be parked: follow `NotificationDeadLettered`.
 
+## NotificationAttachmentsDropped
+
+**Means:** a check-in confirmation email was sent **without** the boarding passes attached (ADR-0074). The traveller still has the confirmation, and the passes are on SkyHub in Manage booking, so nothing is lost, but the attachment is the thing that works with no signal at the airport.
+**Confirm:** `skyhub_notification_attachments_total` by `outcome` (`dropped` per email, `attached` per pass). Loki `{service="notification"} |= "Boarding passes not attached"` carries the `event.id`, `pnr.locator` and the kind of failure (`failure`), never the pass or the address. An `InvalidEventException` means a sealed pass would not open.
+**Mitigate:** the usual cause is that `SKYHUB_LINK_TOKEN_KEY` is not the same on the booking and notification services (the same key seals sign-up and reset links, ADR-0046, and passes): set the same value on both and restart. Emails already sent without passes are not resent; the travellers use Manage booking. Another cause is the notification service unable to draw a picture (`IllegalStateException`): check the runtime has the image libraries.
+
 ## NotificationDeadLettered
 
 **Means:** the notification service could not handle a message after all its retries (five attempts over about 22 minutes, on retry topics, ADR-0066) and it was copied to the dead-letter topic `skyhub.booking.events.DLT` (ADR-0019). Usually the mail provider was down for longer than the retries, or a message is malformed. The traveller did not get that email.

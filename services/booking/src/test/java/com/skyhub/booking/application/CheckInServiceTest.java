@@ -469,8 +469,8 @@ class CheckInServiceTest {
     // ---- telling other services who checked in (ADR-0073) --------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
-    private List<CheckIn> checkedInEvent(int times, Instant expectedDeparture) {
-        org.mockito.ArgumentCaptor<List<CheckIn>> created = org.mockito.ArgumentCaptor.forClass(List.class);
+    private List<BoardingPass> checkedInEvent(int times, Instant expectedDeparture) {
+        org.mockito.ArgumentCaptor<List<BoardingPass>> created = org.mockito.ArgumentCaptor.forClass(List.class);
         verify(events, org.mockito.Mockito.times(times)).checkedIn(eq(pnr), eq(new PnrSegment("SK501", DATE)), created.capture(),
                 eq(expectedDeparture), eq(expectedDeparture.minus(Duration.ofMinutes(60))));
         return created.getValue();
@@ -480,9 +480,12 @@ class CheckInServiceTest {
     void should_tell_other_services_who_was_checked_in_with_their_numbers_and_when_check_in_closes() {
         service.checkIn("ABC234", 0);
 
-        List<CheckIn> told = checkedInEvent(1, DEPARTURE);
-        assertThat(told).extracting(CheckIn::getPassengerIndex).containsExactly(0, 1);
-        assertThat(told).extracting(CheckIn::getBoardingSequence).containsExactly(7, 8);
+        List<BoardingPass> told = checkedInEvent(1, DEPARTURE);
+        assertThat(told).extracting(BoardingPass::passengerIndex).containsExactly(0, 1);
+        assertThat(told).extracting(BoardingPass::sequence).containsExactly(7, 8);
+        // The passes in the event are the signed ones the traveller is given: the notification service can only attach what the gate will accept (ADR-0074).
+        assertThat(told).allSatisfy(pass -> assertThat(signer.verify(pass.barcode())).isTrue());
+        assertThat(told).extracting(BoardingPass::barcode).isEqualTo(service.boardingPasses("ABC234", 0).passes().stream().map(BoardingPass::barcode).toList());
     }
 
     @Test
@@ -491,7 +494,7 @@ class CheckInServiceTest {
 
         service.checkIn("ABC234", 0, List.of(1));
 
-        assertThat(checkedInEvent(1, DEPARTURE)).extracting(CheckIn::getPassengerIndex).containsExactly(1);
+        assertThat(checkedInEvent(1, DEPARTURE)).extracting(BoardingPass::passengerIndex).containsExactly(1);
     }
 
     @Test

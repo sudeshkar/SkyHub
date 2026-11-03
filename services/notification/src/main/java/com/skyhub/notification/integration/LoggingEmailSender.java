@@ -20,8 +20,9 @@ public class LoggingEmailSender implements EmailSender {
 
     @Override
     public void send(EmailMessage message) {
+        // How many attachments, never what is in them: a boarding pass is a credential (ADR-0074).
         log.atInfo().addKeyValue("email.to", message.maskedTo()).addKeyValue("email.subject", message.subject())
-                .log("Email sent (log only)");
+                .addKeyValue("email.attachments", message.attachments().size()).log("Email sent (log only)");
         log.atDebug().addKeyValue("email.body", message.body()).log("Email body");
     }
 }

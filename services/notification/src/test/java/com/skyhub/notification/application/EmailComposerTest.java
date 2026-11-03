@@ -291,7 +291,7 @@ class EmailComposerTest {
 
     @Test
     void should_confirm_the_check_in_with_every_passengers_seat_and_boarding_number() {
-        EmailMessage message = EmailComposer.checkedIn(checkedIn());
+        EmailMessage message = EmailComposer.checkedIn(checkedIn(), false);
 
         assertThat(message.subject()).isEqualTo("You are checked in for SkyHub flight SK501 on 2026-11-02");
         assertThat(message.body()).contains("ABC234").contains("SK501 on 2026-11-02")
@@ -300,7 +300,7 @@ class EmailComposerTest {
 
     @Test
     void should_say_where_the_boarding_passes_are_and_until_when_a_traveller_can_change_their_mind() {
-        String body = EmailComposer.checkedIn(checkedIn()).body();
+        String body = EmailComposer.checkedIn(checkedIn(), false).body();
 
         assertThat(body).contains("Manage booking").contains("boarding pass").contains("Departure: 2026-11-02 14:30 UTC")
                 .contains("2026-11-02 13:30 UTC").contains("check out");
@@ -308,8 +308,30 @@ class EmailComposerTest {
 
     @Test
     void should_carry_no_boarding_pass_text_or_secret_only_what_the_traveller_already_knows() {
-        EmailMessage message = EmailComposer.checkedIn(checkedIn());
+        EmailMessage message = EmailComposer.checkedIn(checkedIn(), false);
 
         assertThat(message.body()).doesNotContain("M1PERERA").doesNotContain("barcode");
+    }
+
+    // ---- the attached passes (ADR-0074) ---------------------------------------------------------------------------------
+
+    @Test
+    void should_say_the_passes_are_attached_when_they_are_and_still_point_to_manage_booking() {
+        String body = EmailComposer.checkedIn(checkedIn(), true).body();
+
+        assertThat(body).contains("attached").contains("QR code").contains("Manage booking");
+    }
+
+    @Test
+    void should_not_claim_an_attachment_that_is_not_there() {
+        assertThat(EmailComposer.checkedIn(checkedIn(), false).body()).doesNotContain("attached");
+    }
+
+    @Test
+    void should_never_print_the_pictures_or_their_names_in_a_message_summary() {
+        EmailMessage message = new EmailMessage("priya@example.com", "Subject", "Body", java.util.List.of(
+                new EmailMessage.Attachment("boarding-pass-SK501-11D.png", "image/png", new byte[] {9, 9, 9})));
+
+        assertThat(message.toString()).doesNotContain("priya@example.com").doesNotContain("boarding-pass").doesNotContain("9, 9").contains("attachments=1");
     }
 }

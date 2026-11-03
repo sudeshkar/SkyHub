@@ -104,4 +104,18 @@ class AesGcmLinkTokenOpenerTest {
     void should_refuse_to_start_with_a_key_that_is_set_but_wrong_since_that_is_a_mistake_not_an_omission(String badKey) {
         assertThatIllegalStateException().isThrownBy(() -> new AesGcmLinkTokenOpener(badKey)).withMessageContaining("SKYHUB_LINK_TOKEN_KEY");
     }
+
+    @Test
+    void should_open_the_sealed_passes_of_the_shared_checked_in_example_to_the_pass_text_for_that_address() throws Exception {
+        var example = tools.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(java.nio.file.Files.readString(java.nio.file.Path.of("../../api-specs/events/booking-checked-in.v1.example.json")));
+
+        assertThat(opener.open(example.get("passengers").get(0).get("sealedPass").asString(), "booking.checked-in", "priya@example.com"))
+                .startsWith("M1PERERA/PRIYA ABC234 SK501 2026-11-02 11D 0007.");
+        assertThat(opener.open(example.get("passengers").get(1).get("sealedPass").asString(), "booking.checked-in", "priya@example.com"))
+                .startsWith("M1PERERA/RAJ ABC234 SK501 2026-11-02 11E 0008.");
+        // Bound to the address: the same seal does not open for anyone else.
+        org.assertj.core.api.Assertions.assertThatExceptionOfType(com.skyhub.notification.domain.InvalidEventException.class)
+                .isThrownBy(() -> opener.open(example.get("passengers").get(0).get("sealedPass").asString(), "booking.checked-in", "someone@example.com"));
+    }
 }

@@ -232,7 +232,7 @@ public class CheckInService {
                 .toList();
         List<CheckIn> saved = checkIns.saveAllAndFlush(rows);
         // Same transaction as the rows: the confirmation exists exactly when the check-in does, and not for a lost race, which throws above.
-        events.checkedIn(pnr, flight, saved, departure, departure.minus(window.closesBefore()));
+        events.checkedIn(pnr, flight, passes(pnr, flight, saved), departure, departure.minus(window.closesBefore()));
         return saved;
     }
 
