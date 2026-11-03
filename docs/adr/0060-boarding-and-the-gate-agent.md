@@ -30,4 +30,5 @@ A staff member could check whether a scanned pass is still good (ADR-0056), but 
 - Negative (fixed by ADR-0064): **boarding cannot be undone.** A wrong scan has no correction short of the database. An "un-board" would need its own authority.
 - Negative: **it needs the gate to be online**, like the check (ADR-0056).
 - Negative: the ops website was built for operations staff. It turned out that it could not even hold the `GATE` role: its session parser rejected it, so a gate agent was treated as signed out. ADR-0062 fixes that and adds the gate screen.
+- The database also enforces it (ADR-0069): a boarded passenger must be a checked-in one, so a check-in cannot be removed from under a boarding.
 - Not done: boarding by a standby or a passenger without a pass, and boarding more than one segment of a trip in one scan.

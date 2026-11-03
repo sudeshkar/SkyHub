@@ -38,6 +38,11 @@ final class FakeBoardedPassengers implements BoardedPassengers {
     }
 
     @Override
+    public boolean anyBoardedOnFlight(String locator, int segmentIndex) {
+        return rows.stream().anyMatch(r -> r.locator().equals(locator) && r.segmentIndex() == segmentIndex);
+    }
+
+    @Override
     public boolean undo(String locator, int segmentIndex, int passengerIndex, String by, String reason, Instant at) {
         Row boarding = rows.stream().filter(r -> r.locator().equals(locator) && r.segmentIndex() == segmentIndex && r.passengerIndex() == passengerIndex)
                 .findFirst().orElse(null);

@@ -36,4 +36,4 @@ Option 3.
 - Negative: a booking checked in on the disrupted flight is refused, not moved. Those travellers have boarding passes for seats that will not exist; moving them means invalidating the check-in, which is a decision of its own.
 - Negative: one leg of one booking per call, no price difference or fee (a rebooking after a disruption is free and the fare is unchanged), and the replacement's cabin is the traveller's own cabin or the move fails; a party is never upgraded or downgraded silently.
 - Negative: the CLI applies one booking at a time, sequentially. For hundreds of bookings that is hundreds of confirmations, or one "all the rest"; a screen with bulk approval is the follow-up.
-- Follow-up: arrival times and a connection rule; moving checked-in travellers; an approval screen on the operations page; a refund-completed email.
+- Follow-up: arrival times and a connection rule; moving checked-in travellers (done, ADR-0069); an approval screen on the operations page; a refund-completed email.

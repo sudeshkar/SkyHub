@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.skyhub.booking.application.BoardedPassengers;
 import com.skyhub.booking.application.BookingEvents;
 import com.skyhub.booking.application.FlightInfo;
 import com.skyhub.booking.application.SeatInventoryInitializer;
@@ -63,6 +64,7 @@ class RebookingServiceTest {
     private final PnrRepository pnrs = mock(PnrRepository.class);
     private final SeatInventoryRepository seats = mock(SeatInventoryRepository.class);
     private final CheckInRepository checkIns = mock(CheckInRepository.class);
+    private final BoardedPassengers boarded = mock(BoardedPassengers.class);
     private final DisruptionRepository disruptions = mock(DisruptionRepository.class);
     private final com.skyhub.booking.application.FlightCatalog catalog = mock(com.skyhub.booking.application.FlightCatalog.class);
     private final SeatInventoryInitializer initializer = mock(SeatInventoryInitializer.class);
@@ -125,6 +127,55 @@ class RebookingServiceTest {
         verify(catalog, never()).find(eq("SK700"), any(LocalDate.class));
     }
 
+    // ---- a checked-in booking is moved, and checked out by the move (ADR-0069) ---------------------------------------------
+
+    @Test
+    void should_move_a_checked_in_booking_and_check_the_whole_party_out_in_the_same_step() {
+        when(checkIns.deleteByLocatorAndSegmentIndex("ABC234", 0)).thenReturn(2L);
+
+        RebookingResult result = service.rebook(command());
+
+        assertThat(result.changed()).isTrue();
+        assertThat(pnr.getSegments().getFirst()).isEqualTo(TO);
+        verify(checkIns).deleteByLocatorAndSegmentIndex("ABC234", 0);
+        assertThat(registry.get("skyhub.rebooking.check_ins_released").counter().count()).isEqualTo(2.0);
+    }
+
+    @Test
+    void should_refuse_to_move_a_booking_when_a_passenger_has_boarded_and_change_nothing() {
+        when(boarded.anyBoardedOnFlight("ABC234", 0)).thenReturn(true);
+
+        assertThatExceptionOfType(RebookingRefusedException.class).isThrownBy(() -> service.rebook(command()))
+                .withMessageContaining("boarded");
+
+        assertThat(pnr.getSegments().getFirst()).isEqualTo(FROM);
+        verify(checkIns, never()).deleteByLocatorAndSegmentIndex(anyString(), org.mockito.ArgumentMatchers.anyInt());
+        verify(audit, never()).save(any(Rebooking.class));
+        assertThat(count("refused")).isEqualTo(1);
+    }
+
+    @Test
+    void should_touch_no_check_in_when_the_booking_was_not_checked_in_or_does_not_move() {
+        when(checkIns.deleteByLocatorAndSegmentIndex("ABC234", 0)).thenReturn(0L);
+
+        service.rebook(command());
+        service.rebook(new RebookCommand("ABC234", 0, "SK501", DAY.plusDays(1), "priya.ops"));   // already there now: unchanged
+
+        verify(checkIns, times(1)).deleteByLocatorAndSegmentIndex("ABC234", 0);
+        assertThat(registry.find("skyhub.rebooking.check_ins_released").counter()).isNull();
+    }
+
+    @Test
+    void should_refuse_rather_than_fail_when_a_passenger_boards_at_the_very_moment_of_the_move() {
+        // The database will not let a checked-in passenger who has boarded be checked out (ADR-0069).
+        when(checkIns.deleteByLocatorAndSegmentIndex("ABC234", 0))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("fk_boarded_check_in"));
+
+        assertThatExceptionOfType(RebookingRefusedException.class).isThrownBy(() -> service.rebook(command()))
+                .withMessageContaining("boarded");
+        assertThat(count("refused")).isEqualTo(1);
+    }
+
     private static String key(PnrSegment flight, String seat) {
         return flight.flightNumber() + flight.departureDate() + seat;
     }
@@ -162,7 +213,7 @@ class RebookingServiceTest {
     }
 
     private RebookingService service(SeatAllocator allocator, List<RebookingRule> rules) {
-        return new RebookingService(pnrs, seats, checkIns, disruptions, catalog, initializer, allocator, rules, audit, seatMaps, events,
+        return new RebookingService(pnrs, seats, checkIns, boarded, disruptions, catalog, initializer, allocator, rules, audit, seatMaps, events,
                 new RebookingMetrics(registry), Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction());
     }
 

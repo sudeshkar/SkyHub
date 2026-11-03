@@ -1,5 +1,6 @@
 package com.skyhub.booking.application.rebooking;
 
+import com.skyhub.booking.application.BoardedPassengers;
 import com.skyhub.booking.application.BookingEvents;
 import com.skyhub.booking.application.FlightCatalog;
 import com.skyhub.booking.application.FlightInfo;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -49,6 +51,7 @@ public class RebookingService {
     private final PnrRepository pnrs;
     private final SeatInventoryRepository seats;
     private final CheckInRepository checkIns;
+    private final BoardedPassengers boarded;
     private final DisruptionRepository disruptions;
     private final FlightCatalog catalog;
     private final SeatInventoryInitializer inventory;
@@ -61,7 +64,7 @@ public class RebookingService {
     private final Clock clock;
     private final TransactionOperations transactions;
 
-    public RebookingService(PnrRepository pnrs, SeatInventoryRepository seats, CheckInRepository checkIns,
+    public RebookingService(PnrRepository pnrs, SeatInventoryRepository seats, CheckInRepository checkIns, BoardedPassengers boarded,
                             DisruptionRepository disruptions, FlightCatalog catalog, SeatInventoryInitializer inventory,
                             SeatAllocator allocator, List<RebookingRule> rules, RebookingRepository audit,
                             SeatMapCache seatMaps, BookingEvents events, RebookingMetrics metrics, Clock clock,
@@ -69,6 +72,7 @@ public class RebookingService {
         this.pnrs = pnrs;
         this.seats = seats;
         this.checkIns = checkIns;
+        this.boarded = boarded;
         this.disruptions = disruptions;
         this.catalog = catalog;
         this.inventory = inventory;
@@ -133,7 +137,8 @@ public class RebookingService {
                 disruptions.findByFlightNumberAndDepartureDate(from.flightNumber(), from.departureDate()),
                 disruptions.findByFlightNumberAndDepartureDate(target.flightNumber(), target.departureDate()),
                 checkIns.existsByLocatorAndSegmentIndex(command.locator(), index),
-                neighbour(pnr, index - 1), neighbour(pnr, index + 1));
+                neighbour(pnr, index - 1), neighbour(pnr, index + 1),
+                boarded.anyBoardedOnFlight(command.locator(), index));
         for (RebookingRule rule : rules) {
             rule.refusal(context).ifPresent(reason -> {
                 throw new RebookingRefusedException(reason);
@@ -152,7 +157,26 @@ public class RebookingService {
         pnrs.saveAndFlush(pnr);
         audit.save(Rebooking.of(command.locator(), index, from, target, command.rebookedBy(), clock.instant()));
         events.bookingRebooked(pnr, from, target);   // same transaction: the email exists exactly when the move does
+        checkOut(command.locator(), index);
         return new RebookingResult(command.locator(), index, from, target, newSeats, true);
+    }
+
+    /**
+     * Checks the whole party out of the flight they are leaving, in the move's own transaction (ADR-0069): their passes were for the old
+     * flight and seats, and a check-in row is keyed by the flight's place on the booking, so left behind it would read as a check-in for the
+     * new one. The database refuses to check out a passenger who has boarded, so a gate scanning at this very instant makes the move
+     * stop, with nothing changed, instead of leaving a boarding on the wrong flight.
+     */
+    private void checkOut(String locator, int index) {
+        long released;
+        try {
+            released = checkIns.deleteByLocatorAndSegmentIndex(locator, index);
+        } catch (DataIntegrityViolationException boardedJustNow) {
+            throw new RebookingRefusedException("A passenger has just boarded the flight, so the booking is not moved");
+        }
+        if (released > 0) {
+            metrics.checkInsReleased(released);
+        }
     }
 
     /**
