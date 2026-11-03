@@ -73,3 +73,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0067](0067-filtering-proposals-by-outcome.md) | Filtering proposals by what happened to them | Accepted |
 | [0068](0068-windowing-the-proposal-list.md) | Drawing only part of a long proposal list | Accepted |
 | [0069](0069-moving-checked-in-travellers.md) | Moving travellers who are checked in | Accepted |
+| [0070](0070-telling-a-moved-traveller-to-check-in-again.md) | Telling a moved traveller to check in again | Accepted |

@@ -122,13 +122,14 @@ public class OutboxBookingEvents implements BookingEvents {
     }
 
     @Override
-    public void bookingRebooked(Pnr pnr, PnrSegment from, PnrSegment to) {
+    public void bookingRebooked(Pnr pnr, PnrSegment from, PnrSegment to, boolean checkedOut) {
         Map<String, Object> event = event(BOOKING_REBOOKED, pnr);
         event.put("from", Map.of("flightNumber", from.flightNumber(), "departureDate", from.departureDate().toString()));
         event.put("to", Map.of("flightNumber", to.flightNumber(), "departureDate", to.departureDate().toString()));
         int leg = pnr.getSegments().indexOf(to);
         event.put("passengers", pnr.getPassengers().stream().map(p -> Map.of("firstName", p.getFirstName(),
                 "lastName", p.getLastName(), "seat", p.getSeats().get(leg))).toList());
+        event.put("checkedOut", checkedOut);
         enqueue(pnr, event);
     }
 

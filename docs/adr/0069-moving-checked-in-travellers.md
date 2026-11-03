@@ -26,7 +26,7 @@ When a flight is cancelled or delayed, staff move the bookings on it to another 
 
 - Positive: staff can move everyone on a cancelled flight, including those who checked in, in the same batch, with no extra step and no database access.
 - Positive: the boarding invariant is now enforced where it cannot be raced.
-- Negative: **the traveller is not told to check in again.** The rebooking email names the new flight and seats only, and the website shows the new flight as not checked in. The check-in reminder (ADR-0029) is what brings them back, and it is sent when check-in opens for the new flight, which may be much later than the move. Adding a line to the email would change the event's shape and its shared example.
+- Negative (fixed by ADR-0070): **the traveller is not told to check in again.** The rebooking email names the new flight and seats only, and the website shows the new flight as not checked in. The check-in reminder (ADR-0029) is what brings them back, and it is sent when check-in opens for the new flight, which may be much later than the move. Adding a line to the email would change the event's shape and its shared example.
 - Negative: **a pass that was already issued is not revoked at the traveller's end.** It stays on their phone; the gate check (ADR-0056) refuses it, as it does after a check-out.
 - Negative: **boarding numbers already given on the old flight are not reused**, so the old flight's sequence has gaps (as after a check-out, ADR-0055).
 - Negative: **the check-out is not recorded as a row.** The rebooking audit row (who moved, from, to) is the record; the number checked out is a counter and a log line only.

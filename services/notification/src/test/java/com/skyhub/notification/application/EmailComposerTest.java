@@ -187,11 +187,31 @@ class EmailComposerTest {
                 new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)),
                 new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3)),
                 List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A"),
-                        new BookingRebookedEvent.SeatedPassenger("Anil", "Perera", "14B"))));
+                        new BookingRebookedEvent.SeatedPassenger("Anil", "Perera", "14B")), false));
 
         assertThat(message.subject()).isEqualTo("Your SkyHub booking ABC234 has moved to SK501 on 2026-11-03");
         assertThat(message.body()).contains("SK501 on 2026-11-02").contains("SK501 on 2026-11-03")
                 .contains("Priya Perera: 14A").contains("Anil Perera: 14B").contains("Manage booking");
+    }
+
+    private static BookingRebookedEvent moved(boolean checkedOut) {
+        return new BookingRebookedEvent(UUID.randomUUID(), "booking.rebooked", 1, Instant.parse("2026-10-30T10:00:00Z"), "ABC234",
+                "priya@example.com", new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)),
+                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3)),
+                List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A")), checkedOut);
+    }
+
+    @Test
+    void should_tell_a_traveller_who_was_checked_out_by_the_move_that_the_old_passes_are_dead_and_to_check_in_again() {
+        EmailMessage message = EmailComposer.bookingRebooked(moved(true));
+
+        assertThat(message.body()).contains("checked in").contains("SK501 on 2026-11-02").contains("no longer work")
+                .contains("check in again").contains("when check-in opens");
+    }
+
+    @Test
+    void should_say_nothing_about_checking_in_to_a_traveller_who_had_not_checked_in() {
+        assertThat(EmailComposer.bookingRebooked(moved(false)).body()).doesNotContain("check in again").doesNotContain("no longer work");
     }
 
     @Test
@@ -200,7 +220,7 @@ class EmailComposerTest {
                 Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com",
                 new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)),
                 new BookingConfirmedEvent.Segment("SK502", LocalDate.of(2026, 11, 2)),
-                List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A"))));
+                List.of(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A")), false));
 
         assertThat(message.body()).doesNotContain("refund");   // what is refundable depends on why the flight was disrupted
     }

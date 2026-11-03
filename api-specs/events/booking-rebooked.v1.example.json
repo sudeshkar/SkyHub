@@ -9,5 +9,6 @@
   "to": { "flightNumber": "SK501", "departureDate": "2026-11-03" },
   "passengers": [
     { "firstName": "Priya", "lastName": "Perera", "seat": "14A" }
-  ]
+  ],
+  "checkedOut": false
 }

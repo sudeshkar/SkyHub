@@ -83,6 +83,12 @@ public final class EmailComposer {
                 .collect(Collectors.joining("\n"));
         String oldFlight = event.from().flightNumber() + " on " + event.from().departureDate();
         String newFlight = event.to().flightNumber() + " on " + event.to().departureDate();
+        // Only for a traveller the move checked out (ADR-0070): the rest are not told about a step they never took.
+        String checkIn = event.checkedOut() ? """
+
+                You had checked in for %s. Your old boarding passes no longer work, and you are not checked in for the new flight.
+                Please check in again on SkyHub when check-in opens; we will email you when it does.
+                """.formatted(oldFlight) : "";
         String body = """
                 Your booking %s has been moved to a new flight, because your original flight, %s, was disrupted.
 
@@ -90,10 +96,10 @@ public final class EmailComposer {
 
                 Your seats:
                 %s
-
+                %s
                 If the new flight does not suit you, open Manage booking on SkyHub with your reference and the last name of
                 any passenger: you can change your seats there, or cancel the booking.
-                """.formatted(event.locator(), oldFlight, newFlight, seatList);
+                """.formatted(event.locator(), oldFlight, newFlight, seatList, checkIn);
         return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " has moved to " + newFlight, body);
     }
 
