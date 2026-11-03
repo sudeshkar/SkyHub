@@ -452,6 +452,42 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/v1/ops/boardings/reversals:
+    post:
+      tags: [CheckIn]
+      operationId: undoBoarding
+      summary: Take back a boarding that was recorded by mistake
+      description: |
+        For operations staff and administrators only (ADR-0064): a **gate agent cannot undo a scan**, so the person who made a mistake
+        is never the one who erases it. The passenger is named by booking reference, flight (leg number, from 0) and passenger number
+        (from 0), because a boarded pass says nothing about who it was for. A reason is required (1 to 200 characters).
+        The correction is **audited**: who scanned, when, who took it back, when and why are kept in an append-only table.
+        The passenger stays checked in, so they can board again with the same pass while boarding is open (ADR-0063).
+        Asking twice is answered with 404 the second time: there is nothing left to undo.
+      security:
+        - staffToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UndoBoardingRequest'
+      responses:
+        '204':
+          description: The boarding was taken back and the reversal recorded
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: That passenger has not boarded that flight, so there is nothing to undo
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /api/v1/ops/disruptions:
     post:
       tags: [Disruptions]
@@ -1486,6 +1522,27 @@ components:
           type: string
           maxLength: 300
           description: The text scanned from the pass, as printed in `barcode` of the boarding pass.
+
+    UndoBoardingRequest:
+      type: object
+      required: [locator, segmentIndex, passengerIndex, reason]
+      properties:
+        locator:
+          type: string
+          pattern: '^[A-Z0-9]{6}$'
+        segmentIndex:
+          type: integer
+          minimum: 0
+          description: Which flight on the booking, counting from 0.
+        passengerIndex:
+          type: integer
+          minimum: 0
+          description: Which passenger on the booking, counting from 0.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Why the boarding is being taken back. Kept with the correction; never shown to the traveller.
 
     BoardingPassVerification:
       type: object

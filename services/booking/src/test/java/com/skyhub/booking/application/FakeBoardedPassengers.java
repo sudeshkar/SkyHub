@@ -11,7 +11,12 @@ final class FakeBoardedPassengers implements BoardedPassengers {
     record Row(String locator, int segmentIndex, int passengerIndex, String by, Instant at) {
     }
 
+    /** What the reversal table would hold (ADR-0064): the boarding that was taken back, who took it back, and why. */
+    record Reversal(Row boarding, String reversedBy, String reason, Instant at) {
+    }
+
     final List<Row> rows = new ArrayList<>();
+    final List<Reversal> reversals = new ArrayList<>();
 
     @Override
     public boolean board(String locator, int segmentIndex, int passengerIndex, String by, Instant at) {
@@ -30,5 +35,17 @@ final class FakeBoardedPassengers implements BoardedPassengers {
     @Override
     public boolean anyBoarded(String locator, int segmentIndex, Collection<Integer> passengerIndexes) {
         return passengerIndexes.stream().anyMatch(p -> isBoarded(locator, segmentIndex, p));
+    }
+
+    @Override
+    public boolean undo(String locator, int segmentIndex, int passengerIndex, String by, String reason, Instant at) {
+        Row boarding = rows.stream().filter(r -> r.locator().equals(locator) && r.segmentIndex() == segmentIndex && r.passengerIndex() == passengerIndex)
+                .findFirst().orElse(null);
+        if (boarding == null) {
+            return false;
+        }
+        rows.remove(boarding);
+        reversals.add(new Reversal(boarding, by, reason, at));
+        return true;
     }
 }

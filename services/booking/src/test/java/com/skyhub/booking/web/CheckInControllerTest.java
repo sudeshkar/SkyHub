@@ -47,6 +47,9 @@ class CheckInControllerTest {
     @MockitoBean
     private BoardingService boardingService;
 
+    @MockitoBean
+    private com.skyhub.booking.application.BoardingReversalService boardingReversalService;
+
     /** A request made with a manage token issued for booking ABC234, as the security rules require. */
     private static RequestPostProcessor owner() {
         return SecurityMockMvcRequestPostProcessors.jwt()

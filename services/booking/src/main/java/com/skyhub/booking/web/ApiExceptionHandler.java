@@ -14,6 +14,7 @@ import com.skyhub.booking.domain.AlreadyBoardedException;
 import com.skyhub.booking.domain.AlreadyCheckedInException;
 import com.skyhub.booking.domain.BookingCancelledException;
 import com.skyhub.booking.domain.CheckInClosedException;
+import com.skyhub.booking.domain.NotBoardedException;
 import com.skyhub.booking.domain.NotCheckedInException;
 import com.skyhub.booking.domain.PaymentDeclinedException;
 import com.skyhub.booking.domain.PriceChangedException;
@@ -125,6 +126,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AlreadyBoardedException.class)
     ProblemDetail handleAlreadyBoarded(AlreadyBoardedException ex) {
         return problem(HttpStatus.CONFLICT, "Already boarded", ex.getMessage());
+    }
+
+    @ExceptionHandler(NotBoardedException.class)
+    ProblemDetail handleNotBoarded(NotBoardedException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Not boarded", ex.getMessage());
     }
 
     @ExceptionHandler(NotCheckedInException.class)

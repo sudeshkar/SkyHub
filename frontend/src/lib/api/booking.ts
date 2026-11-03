@@ -338,6 +338,31 @@ export function boardPassenger(token: string, barcode: string): Promise<GateOutc
   return gateCall("/api/v1/ops/boarding-passes/boardings", token, barcode);
 }
 
+export type UndoBoardingRequest = components["schemas"]["UndoBoardingRequest"];
+
+export type UndoBoardingOutcome =
+  | { kind: "undone" }
+  | { kind: "unauthorized" } // no staff token, or a role that may not do this (a gate agent may not)
+  | { kind: "refused"; detail: string } // that passenger has not boarded (404), or the request was not valid (400)
+  | { kind: "unavailable" };
+
+/** Takes a wrong boarding back (ADR-0064). Operations and administrators only; the staff token says who, and the reason is kept with it. */
+export async function undoBoarding(token: string, request: UndoBoardingRequest): Promise<UndoBoardingOutcome> {
+  const response = await call("/api/v1/ops/boardings/reversals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(request),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 204) return { kind: "undone" };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  if (response.status === 400 || response.status === 404) {
+    return { kind: "refused", detail: await problemDetail(response, "That boarding could not be undone.") };
+  }
+  return { kind: "unavailable" };
+}
+
 export type Disruption = components["schemas"]["Disruption"];
 export type RecordDisruptionRequest = components["schemas"]["RecordDisruptionRequest"];
 

@@ -41,6 +41,14 @@ public enum StaffRole {
         return true;
     }
 
+    /**
+     * Take back a boarding that was recorded by mistake (ADR-0064). Operations and administrators only: the gate agent who made a scan must
+     * not be the one who can erase it. Written out like the others so the next role has to decide.
+     */
+    public boolean mayUndoBoarding() {
+        return runsOperations;
+    }
+
     public boolean mayCreateStaff() {
         return createsStaff;
     }

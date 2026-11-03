@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { readStaffSession } from "@/lib/staff-session";
 import { DisruptionForm } from "./disruption-form";
 import { GatePanel } from "./gate-panel";
+import { UndoBoardingForm } from "./undo-boarding-form";
 import { WithdrawForm } from "./withdraw-form";
 import { LoginForm } from "./login-form";
 import { ProposalsPanel } from "./proposals-panel";
@@ -57,6 +58,7 @@ async function OpsContent() {
           <ProposalsPanel />
           <WithdrawForm />
           <GatePanel />
+          <UndoBoardingForm />
         </>
       )}
     </>
