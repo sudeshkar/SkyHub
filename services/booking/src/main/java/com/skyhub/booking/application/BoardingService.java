@@ -19,6 +19,9 @@ public class BoardingService {
 
     private static final Logger log = LoggerFactory.getLogger(BoardingService.class);
 
+    /** The longest reason for boarding someone late, as in the reversal table and the contract (ADR-0076). */
+    static final int MAX_LATE_REASON_LENGTH = 200;
+
     private final BoardingPassVerifier verifier;
     private final BoardedPassengers boarded;
     private final Clock clock;
@@ -63,6 +66,58 @@ public class BoardingService {
         log.atInfo().addKeyValue("pnr.locator", pass.locator()).addKeyValue("flight", pass.flightNumber())
                 .addKeyValue("boarding.by", by).log("Passenger boarded");
         return verdict;
+    }
+
+    /**
+     * Boards a passenger after the gate has closed (ADR-0076): for a good pass, once boarding has closed and while the flight has not yet
+     * left. It is a second door into the same boarding: the same checks of the pass, the same one row for each passenger, and the first
+     * boarding still counts. It is refused while boarding is still open (the ordinary way is the right one), before it has opened, and once
+     * the flight is due to have left. The reason is kept with who made it and when; it is free text, so only its length is logged.
+     * Whether this person may is the security layer's rule (operations and administrators, never a gate agent).
+     *
+     * @param by the staff member, from their token
+     * @throws com.skyhub.booking.domain.InvalidBookingException when the reason is missing, blank or too long, before anything is looked at
+     */
+    public Verdict boardLate(String barcode, String reason, String by) {
+        String why = reason == null ? "" : reason.strip();
+        if (why.isEmpty() || why.length() > MAX_LATE_REASON_LENGTH) {
+            throw new com.skyhub.booking.domain.InvalidBookingException(
+                    "A reason of 1 to " + MAX_LATE_REASON_LENGTH + " characters is needed to board a passenger after the gate has closed");
+        }
+        Verdict verdict = verifier.check(barcode);
+        if (!verdict.valid()) {
+            metrics.boarded(verdict.reason().tag());
+            return verdict;
+        }
+        BoardingPass pass = verdict.pass();
+        Reason refusal = lateRefusal(pass);
+        if (refusal != null) {
+            metrics.boarded(refusal.tag());
+            return Verdict.refused(refusal);
+        }
+        boolean first = boarded.boardLate(pass.locator(), verdict.segmentIndex(), pass.passengerIndex(), by, clock.instant(), why);
+        if (!first) {
+            metrics.boarded(Reason.ALREADY_BOARDED.tag());
+            return Verdict.refused(Reason.ALREADY_BOARDED);
+        }
+        metrics.boarded("boarded_late");
+        log.atInfo().addKeyValue("pnr.locator", pass.locator()).addKeyValue("flight", pass.flightNumber())
+                .addKeyValue("boarding.by", by).addKeyValue("boarding.late_reason_length", why.length()).log("Passenger boarded late");
+        return verdict;
+    }
+
+    /** @return why a late boarding is not allowed for this pass's flight right now, or null when it is */
+    private Reason lateRefusal(BoardingPass pass) {
+        Optional<Instant> departure = departures.of(pass.flightNumber(), pass.departureDate());
+        if (departure.isEmpty()) {
+            return Reason.FLIGHT_CANCELLED;
+        }
+        Instant now = clock.instant();
+        return switch (window.stateAt(departure.get(), now)) {
+            case NOT_YET_OPEN -> Reason.BOARDING_NOT_OPEN;
+            case OPEN -> Reason.BOARDING_STILL_OPEN;
+            case CLOSED -> now.isBefore(departure.get()) ? null : Reason.FLIGHT_DEPARTED;
+        };
     }
 
     /** @return why boarding is shut for this pass's flight right now, or null when it is open */

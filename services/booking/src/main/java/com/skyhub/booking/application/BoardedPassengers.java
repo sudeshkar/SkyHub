@@ -12,6 +12,12 @@ public interface BoardedPassengers {
     /** Records the passenger as boarded, once. @return false if they had already boarded, in which case nothing changes */
     boolean board(String locator, int segmentIndex, int passengerIndex, String by, Instant at);
 
+    /**
+     * Records the passenger as boarded after the gate closed, once, with why (ADR-0076). The same one row as {@link #board}, so a passenger
+     * boards once however they got on. @return false if they had already boarded, in which case nothing changes
+     */
+    boolean boardLate(String locator, int segmentIndex, int passengerIndex, String by, Instant at, String reason);
+
     boolean isBoarded(String locator, int segmentIndex, int passengerIndex);
 
     /** Whether anyone on the booking has boarded this flight: a booking with a passenger on the aircraft is not moved (ADR-0069). */

@@ -309,11 +309,11 @@ export type GateOutcome =
   | { kind: "rejected"; detail: string }
   | { kind: "unavailable" };
 
-async function gateCall(path: string, token: string, barcode: string): Promise<GateOutcome> {
+async function gateCall(path: string, token: string, body: Record<string, string>): Promise<GateOutcome> {
   const response = await call(path, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ barcode }),
+    body: JSON.stringify(body),
     cache: "no-store",
   });
   if (!response) return { kind: "unavailable" };
@@ -330,12 +330,20 @@ async function gateCall(path: string, token: string, barcode: string): Promise<G
 
 /** Is this scanned pass still good (ADR-0056)? Never boards anyone. */
 export function verifyBoardingPass(token: string, barcode: string): Promise<GateOutcome> {
-  return gateCall("/api/v1/ops/boarding-passes/verification", token, barcode);
+  return gateCall("/api/v1/ops/boarding-passes/verification", token, { barcode });
 }
 
 /** The passenger on this pass boards, once (ADR-0060); the staff token says who scanned it. */
 export function boardPassenger(token: string, barcode: string): Promise<GateOutcome> {
-  return gateCall("/api/v1/ops/boarding-passes/boardings", token, barcode);
+  return gateCall("/api/v1/ops/boarding-passes/boardings", token, { barcode });
+}
+
+/**
+ * Boards a passenger after the gate has closed (ADR-0076): operations and administrators only, with a reason that is kept with the
+ * boarding. The answer has the same shape as an ordinary boarding.
+ */
+export function boardLatePassenger(token: string, barcode: string, reason: string): Promise<GateOutcome> {
+  return gateCall("/api/v1/ops/boarding-passes/late-boardings", token, { barcode, reason });
 }
 
 export type FlightBoarding = components["schemas"]["FlightBoarding"];

@@ -12,8 +12,16 @@ import java.util.List;
  */
 public record FlightBoarding(String flightNumber, LocalDate departureDate, int checkedIn, List<Boarding> boardings) {
 
-    /** One passenger's boarding; {@code segmentIndex} and {@code passengerIndex} count from 0, as {@code BoardingReversalService} expects. */
-    public record Boarding(String locator, int segmentIndex, int passengerIndex, String boardedBy, Instant boardedAt) {
+    /**
+     * One passenger's boarding; {@code segmentIndex} and {@code passengerIndex} count from 0, as {@code BoardingReversalService} expects.
+     * {@code late} is true when operations boarded them after the gate closed (ADR-0076); the reason is kept in the database, not shown here.
+     */
+    public record Boarding(String locator, int segmentIndex, int passengerIndex, String boardedBy, Instant boardedAt, boolean late) {
+
+        /** An ordinary boarding, made while the gate was open. */
+        public Boarding(String locator, int segmentIndex, int passengerIndex, String boardedBy, Instant boardedAt) {
+            this(locator, segmentIndex, passengerIndex, boardedBy, boardedAt, false);
+        }
     }
 
     public int boarded() {

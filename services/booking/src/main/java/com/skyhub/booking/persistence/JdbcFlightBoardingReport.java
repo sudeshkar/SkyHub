@@ -30,14 +30,14 @@ class JdbcFlightBoardingReport implements FlightBoardingReport {
                 JOIN check_in c ON c.locator = p.locator AND c.segment_index = s.segment_order
                 WHERE s.departure_date = ? AND s.flight_number = ?""", Integer.class, departureDate, flightNumber);
         List<FlightBoarding.Boarding> boardings = jdbc.query("""
-                SELECT b.locator, b.segment_index, b.passenger_index, b.boarded_by, b.boarded_at
+                SELECT b.locator, b.segment_index, b.passenger_index, b.boarded_by, b.boarded_at, (b.late_reason IS NOT NULL) AS late
                 FROM pnr_segment s
                 JOIN pnr p ON p.id = s.pnr_id
                 JOIN boarded_passenger b ON b.locator = p.locator AND b.segment_index = s.segment_order
                 WHERE s.departure_date = ? AND s.flight_number = ?
                 ORDER BY b.boarded_at, b.locator, b.passenger_index""",
                 (rs, row) -> new FlightBoarding.Boarding(rs.getString("locator"), rs.getInt("segment_index"), rs.getInt("passenger_index"),
-                        rs.getString("boarded_by"), rs.getTimestamp("boarded_at").toInstant()),
+                        rs.getString("boarded_by"), rs.getTimestamp("boarded_at").toInstant(), rs.getBoolean("late")),
                 departureDate, flightNumber);
         return new FlightBoarding(flightNumber, departureDate, checkedIn == null ? 0 : checkedIn, boardings);
     }

@@ -57,6 +57,14 @@ public enum StaffRole {
         return runsOperations;
     }
 
+    /**
+     * Board a passenger after the gate has closed (ADR-0076). It overrules the gate, so the person at the gate does not get it. Written out
+     * like the others so the next role has to decide.
+     */
+    public boolean mayBoardLatePassengers() {
+        return runsOperations;
+    }
+
     public boolean mayCreateStaff() {
         return createsStaff;
     }

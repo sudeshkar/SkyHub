@@ -85,7 +85,7 @@ export function BoardedPanel() {
                       <td className="py-2 pr-4 font-mono">{row.locator}</td>
                       <td className="py-2 pr-4">Flight {row.leg}</td>
                       <td className="py-2 pr-4">Passenger {row.passenger}</td>
-                      <td className="py-2 pr-4">{row.by}</td>
+                      <td className="py-2 pr-4">{row.by}{row.late && <span className="ml-2 rounded bg-amber-bg px-1.5 py-0.5 text-xs font-semibold">late</span>}</td>
                       <td className="py-2">{row.at.replace("T", " ").replace(/\.\d+Z$|Z$/, "")}</td>
                     </tr>
                   ))}

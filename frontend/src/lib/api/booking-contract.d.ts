@@ -268,6 +268,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/boarding-passes/late-boardings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Board a passenger after the gate has closed
+         * @description For operations staff and administrators only (ADR-0076): a **gate agent cannot do this**, because it overrules the gate. The pass is
+         *     checked exactly as in `boardPassenger`, and if it is good and boarding has **closed but the flight has not yet left**, the
+         *     passenger boards. A reason is required (1 to 200 characters) and is kept with the boarding, with who made it and when; the who-has-
+         *     boarded list marks the boarding as late. Refused with `BOARDING_STILL_OPEN` while boarding is open (use the ordinary boarding),
+         *     `BOARDING_NOT_OPEN` before it opens, and `FLIGHT_DEPARTED` once the flight is due to have left. A passenger still boards once.
+         *     The answer has the same shape as `boardPassenger`.
+         */
+        post: operations["boardLatePassenger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/boardings/reversals": {
         parameters: {
             query?: never;
@@ -917,6 +942,12 @@ export interface components {
             /** @description The text scanned from the pass, as printed in `barcode` of the boarding pass. */
             barcode: string;
         };
+        LateBoardingRequest: {
+            /** @description The text scanned from the pass, as printed in `barcode` of the boarding pass. */
+            barcode: string;
+            /** @description Why the passenger is boarded after the gate closed. Kept with the boarding; never shown to the traveller. */
+            reason: string;
+        };
         UndoBoardingRequest: {
             locator: string;
             /** @description Which flight on the booking, counting from 0. */
@@ -948,14 +979,16 @@ export interface components {
             boardedBy: string;
             /** Format: date-time */
             boardedAt: string;
+            /** @description True when the passenger was boarded after the gate closed, by operations, with a reason (ADR-0076). */
+            late: boolean;
         };
         BoardingPassVerification: {
             valid: boolean;
             /**
-             * @description Why a pass was refused. Absent for a good pass. The two BOARDING_ reasons come only from boarding, never from checking.
+             * @description Why a pass was refused. Absent for a good pass. The BOARDING_ reasons and FLIGHT_DEPARTED come only from boarding, never from checking.
              * @enum {string}
              */
-            reason?: "BAD_SIGNATURE" | "UNKNOWN_BOOKING" | "BOOKING_CANCELLED" | "FLIGHT_CANCELLED" | "NOT_CHECKED_IN" | "SUPERSEDED" | "ALREADY_BOARDED" | "BOARDING_NOT_OPEN" | "BOARDING_CLOSED";
+            reason?: "BAD_SIGNATURE" | "UNKNOWN_BOOKING" | "BOOKING_CANCELLED" | "FLIGHT_CANCELLED" | "NOT_CHECKED_IN" | "SUPERSEDED" | "ALREADY_BOARDED" | "BOARDING_NOT_OPEN" | "BOARDING_CLOSED" | "BOARDING_STILL_OPEN" | "FLIGHT_DEPARTED";
             pass?: components["schemas"]["BoardingPass"];
         };
         BoardingPasses: {
@@ -1596,6 +1629,33 @@ export interface operations {
         };
         responses: {
             /** @description The verdict */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardingPassVerification"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    boardLatePassenger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LateBoardingRequest"];
+            };
+        };
+        responses: {
+            /** @description `valid: true` means the passenger has boarded now; otherwise the reason they did not */
             200: {
                 headers: {
                     [name: string]: unknown;

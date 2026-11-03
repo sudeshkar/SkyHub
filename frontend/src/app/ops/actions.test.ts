@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProposals } from "@/lib/api/agent";
 import {
   boardPassenger,
+  boardLatePassenger as lateCall,
   getFlightBoarding as boardingCall,
   openStaffSession,
   rebookFlights,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/api/booking";
 import { rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
-import { gateScan, loadFlightBoarding, loadProposals, logOut, moveBookings, recordDisruption, staffLogin, undoBoarding, withdrawDisruption } from "./actions";
+import { boardLate, gateScan, loadFlightBoarding, loadProposals, logOut, moveBookings, recordDisruption, staffLogin, undoBoarding, withdrawDisruption } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: { staffLogin: {}, manage: {} }, rateLimit: vi.fn() }));
 vi.mock("@/lib/staff-session", () => ({
@@ -22,7 +23,7 @@ vi.mock("@/lib/staff-session", () => ({
 }));
 vi.mock("@/lib/api/booking", () => ({
   openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlights: vi.fn(), withdrawDisruption: vi.fn(),
-  verifyBoardingPass: vi.fn(), boardPassenger: vi.fn(), undoBoarding: vi.fn(), getFlightBoarding: vi.fn(),
+  verifyBoardingPass: vi.fn(), boardPassenger: vi.fn(), undoBoarding: vi.fn(), getFlightBoarding: vi.fn(), boardLatePassenger: vi.fn(),
 }));
 vi.mock("@/lib/api/agent", () => ({ getProposals: vi.fn() }));
 // redirect() works by throwing; the real one is not available outside a request.
@@ -515,7 +516,10 @@ describe("loadFlightBoarding (ADR-0065)", () => {
     checkedIn: 3,
     boarded: 1,
     waiting: 2,
-    boardings: [{ locator: "ABC234", segmentIndex: 0, passengerIndex: 1, boardedBy: "gate.one", boardedAt: "2026-11-03T09:00:00Z" }],
+    boardings: [
+      { locator: "ABC234", segmentIndex: 0, passengerIndex: 1, boardedBy: "gate.one", boardedAt: "2026-11-03T09:00:00Z", late: false },
+      { locator: "DEF567", segmentIndex: 0, passengerIndex: 0, boardedBy: "priya.ops", boardedAt: "2026-11-03T09:20:00Z", late: true },
+    ],
   };
 
   beforeEach(() => {
@@ -535,7 +539,10 @@ describe("loadFlightBoarding (ADR-0065)", () => {
       checkedIn: 3,
       boarded: 1,
       waiting: 2,
-      rows: [{ locator: "ABC234", leg: 1, passenger: 2, by: "gate.one", at: "2026-11-03T09:00:00Z" }],
+      rows: [
+        { locator: "ABC234", leg: 1, passenger: 2, by: "gate.one", at: "2026-11-03T09:00:00Z", late: false },
+        { locator: "DEF567", leg: 1, passenger: 1, by: "priya.ops", at: "2026-11-03T09:20:00Z", late: true },
+      ],
     });
   });
 
@@ -569,5 +576,71 @@ describe("loadFlightBoarding (ADR-0065)", () => {
 
     expect(await loadFlightBoarding({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("4 seconds") });
     expect(boardingCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("boardLate (ADR-0076)", () => {
+  const BARCODE = "M1PERERA/PRIYA ABC234 SK501 2026-11-02 11D 0007.sig";
+  const request = { barcode: `  ${BARCODE}  `, reason: "  Held at security, flight still on the stand  ", confirm: "yes" };
+  const PASS = { passengerName: "PERERA/PRIYA", passengerIndex: 0, locator: "ABC234", flightNumber: "SK501", departureDate: "2026-11-02", seatNumber: "11D", sequence: 7, barcode: BARCODE };
+
+  beforeEach(() => {
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+  });
+
+  it("boards the passenger late with the staff member's own token and the trimmed reason, and shows only what the desk needs", async () => {
+    vi.mocked(lateCall).mockResolvedValue({ kind: "good", pass: PASS });
+
+    const result = await boardLate({ status: "idle" }, form(request));
+
+    expect(lateCall).toHaveBeenCalledWith(SESSION.token, BARCODE, "Held at security, flight still on the stand");
+    expect(result).toEqual({
+      status: "boarded", pass: { passengerName: "PERERA/PRIYA", flightNumber: "SK501", departureDate: "2026-11-02", seatNumber: "11D", sequence: 7 },
+    });
+  });
+
+  it("does nothing until the person has ticked the confirmation", async () => {
+    expect(await boardLate({ status: "idle" }, form({ ...request, confirm: "" }))).toMatchObject({ status: "error", message: expect.stringContaining("confirm") });
+    expect(lateCall).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a missing pass", { barcode: "   " }],
+    ["a pass over 300 characters", { barcode: "x".repeat(301) }],
+    ["a missing reason", { reason: "   " }],
+    ["a reason over 200 characters", { reason: "x".repeat(201) }],
+  ])("refuses %s before calling the service", async (_why, change) => {
+    expect(await boardLate({ status: "idle" }, form({ ...request, ...change }))).toMatchObject({ status: "error" });
+    expect(lateCall).not.toHaveBeenCalled();
+  });
+
+  it("says why a pass was refused and nothing about who it was for", async () => {
+    vi.mocked(lateCall).mockResolvedValue({ kind: "refused", reason: "FLIGHT_DEPARTED" });
+
+    expect(await boardLate({ status: "idle" }, form(request))).toEqual({ status: "refused", reason: "FLIGHT_DEPARTED" });
+  });
+
+  it("sends the person back to log in when there is no session or the token or role was refused", async () => {
+    vi.mocked(readStaffSession).mockResolvedValue(null);
+    expect(await boardLate({ status: "idle" }, form(request))).toEqual({ status: "signed-out" });
+    expect(lateCall).not.toHaveBeenCalled();
+
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+    vi.mocked(lateCall).mockResolvedValue({ kind: "unauthorized" });
+    expect(await boardLate({ status: "idle" }, form(request))).toEqual({ status: "signed-out" });
+    expect(clearStaffSession).toHaveBeenCalled();
+  });
+
+  it("says so when the booking service does not answer, without claiming anyone boarded", async () => {
+    vi.mocked(lateCall).mockResolvedValue({ kind: "unavailable" });
+
+    expect(await boardLate({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("not responding") });
+  });
+
+  it("is rate limited", async () => {
+    vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 6 });
+
+    expect(await boardLate({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("6 seconds") });
+    expect(lateCall).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ import { BoardedPanel } from "./boarded-panel";
 import { GatePanel } from "./gate-panel";
 import { UndoBoardingForm } from "./undo-boarding-form";
 import { WithdrawForm } from "./withdraw-form";
+import { LateBoardingForm } from "./late-boarding-form";
 import { LoginForm } from "./login-form";
 import { ProposalsPanel } from "./proposals-panel";
 import { logOut } from "./actions";
@@ -59,6 +60,7 @@ async function OpsContent() {
           <ProposalsPanel />
           <WithdrawForm />
           <GatePanel />
+          <LateBoardingForm />
           <BoardedPanel />
           <UndoBoardingForm />
         </>

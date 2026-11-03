@@ -3,6 +3,7 @@ package com.skyhub.booking.web;
 import com.skyhub.booking.api.CheckInApi;
 import com.skyhub.booking.api.model.BoardingPassVerificationDto;
 import com.skyhub.booking.api.model.BoardingPassVerificationRequestDto;
+import com.skyhub.booking.api.model.LateBoardingRequestDto;
 import com.skyhub.booking.api.model.BoardingPassesDto;
 import com.skyhub.booking.api.model.CheckInRequestDto;
 import com.skyhub.booking.api.model.UndoBoardingRequestDto;
@@ -74,6 +75,14 @@ public class CheckInController implements CheckInApi {
     public ResponseEntity<BoardingPassVerificationDto> boardPassenger(BoardingPassVerificationRequestDto request) {
         String by = SecurityContextHolder.getContext().getAuthentication().getName();
         BoardingPassVerifier.Verdict verdict = boarding.board(request.getBarcode(), by);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(BookingDtoMapper.toDto(verdict));
+    }
+
+    /** A staff action for operations and administrators only (SecurityConfig): it overrules the closed gate, so a gate agent cannot (ADR-0076). */
+    @Override
+    public ResponseEntity<BoardingPassVerificationDto> boardLatePassenger(LateBoardingRequestDto request) {
+        String by = SecurityContextHolder.getContext().getAuthentication().getName();
+        BoardingPassVerifier.Verdict verdict = boarding.boardLate(request.getBarcode(), request.getReason(), by);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(BookingDtoMapper.toDto(verdict));
     }
 

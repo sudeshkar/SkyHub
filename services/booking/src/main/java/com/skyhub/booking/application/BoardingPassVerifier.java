@@ -46,7 +46,11 @@ public class BoardingPassVerifier {
         /** The pass is good but boarding has not opened for this flight yet (ADR-0063). Only boarding refuses this; checking never does. */
         BOARDING_NOT_OPEN,
         /** The pass is good but boarding has closed for this flight (ADR-0063). */
-        BOARDING_CLOSED;
+        BOARDING_CLOSED,
+        /** Late boarding was asked for but the gate is still open: board the ordinary way (ADR-0076). Only late boarding gives this. */
+        BOARDING_STILL_OPEN,
+        /** The flight is due to have left, so not even operations may board someone (ADR-0076). Only late boarding gives this. */
+        FLIGHT_DEPARTED;
 
         String tag() {
             return name().toLowerCase(Locale.ROOT);

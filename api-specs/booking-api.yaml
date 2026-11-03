@@ -452,6 +452,40 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/v1/ops/boarding-passes/late-boardings:
+    post:
+      tags: [CheckIn]
+      operationId: boardLatePassenger
+      summary: Board a passenger after the gate has closed
+      description: |
+        For operations staff and administrators only (ADR-0076): a **gate agent cannot do this**, because it overrules the gate. The pass is
+        checked exactly as in `boardPassenger`, and if it is good and boarding has **closed but the flight has not yet left**, the
+        passenger boards. A reason is required (1 to 200 characters) and is kept with the boarding, with who made it and when; the who-has-
+        boarded list marks the boarding as late. Refused with `BOARDING_STILL_OPEN` while boarding is open (use the ordinary boarding),
+        `BOARDING_NOT_OPEN` before it opens, and `FLIGHT_DEPARTED` once the flight is due to have left. A passenger still boards once.
+        The answer has the same shape as `boardPassenger`.
+      security:
+        - staffToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LateBoardingRequest'
+      responses:
+        '200':
+          description: "`valid: true` means the passenger has boarded now; otherwise the reason they did not"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPassVerification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/v1/ops/boardings/reversals:
     post:
       tags: [CheckIn]
@@ -1566,6 +1600,20 @@ components:
           maxLength: 300
           description: The text scanned from the pass, as printed in `barcode` of the boarding pass.
 
+    LateBoardingRequest:
+      type: object
+      required: [barcode, reason]
+      properties:
+        barcode:
+          type: string
+          maxLength: 300
+          description: The text scanned from the pass, as printed in `barcode` of the boarding pass.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Why the passenger is boarded after the gate closed. Kept with the boarding; never shown to the traveller.
+
     UndoBoardingRequest:
       type: object
       required: [locator, segmentIndex, passengerIndex, reason]
@@ -1615,7 +1663,7 @@ components:
 
     FlightBoardingEntry:
       type: object
-      required: [locator, segmentIndex, passengerIndex, boardedBy, boardedAt]
+      required: [locator, segmentIndex, passengerIndex, boardedBy, boardedAt, late]
       properties:
         locator:
           type: string
@@ -1634,6 +1682,9 @@ components:
         boardedAt:
           type: string
           format: date-time
+        late:
+          type: boolean
+          description: True when the passenger was boarded after the gate closed, by operations, with a reason (ADR-0076).
 
     BoardingPassVerification:
       type: object
@@ -1643,8 +1694,8 @@ components:
           type: boolean
         reason:
           type: string
-          enum: [BAD_SIGNATURE, UNKNOWN_BOOKING, BOOKING_CANCELLED, FLIGHT_CANCELLED, NOT_CHECKED_IN, SUPERSEDED, ALREADY_BOARDED, BOARDING_NOT_OPEN, BOARDING_CLOSED]
-          description: Why a pass was refused. Absent for a good pass. The two BOARDING_ reasons come only from boarding, never from checking.
+          enum: [BAD_SIGNATURE, UNKNOWN_BOOKING, BOOKING_CANCELLED, FLIGHT_CANCELLED, NOT_CHECKED_IN, SUPERSEDED, ALREADY_BOARDED, BOARDING_NOT_OPEN, BOARDING_CLOSED, BOARDING_STILL_OPEN, FLIGHT_DEPARTED]
+          description: Why a pass was refused. Absent for a good pass. The BOARDING_ reasons and FLIGHT_DEPARTED come only from boarding, never from checking.
         pass:
           $ref: '#/components/schemas/BoardingPass'
 

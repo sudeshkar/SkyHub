@@ -72,20 +72,23 @@ class FlightBoardingControllerTest {
     void should_answer_with_the_counts_and_who_boarded_without_any_names_and_never_cache_it() throws Exception {
         LocalDate date = LocalDate.of(2026, 11, 3);
         when(report.of("SK501", date)).thenReturn(new FlightBoarding("SK501", date, 3,
-                List.of(new FlightBoarding.Boarding("ABC234", 0, 1, "gate.one", Instant.parse("2026-11-03T09:00:00Z")))));
+                List.of(new FlightBoarding.Boarding("ABC234", 0, 1, "gate.one", Instant.parse("2026-11-03T09:00:00Z"), false),
+                        new FlightBoarding.Boarding("DEF567", 0, 0, "priya.ops", Instant.parse("2026-11-03T09:05:00Z"), true))));
 
         fetch(as("priya.ops", StaffRole.OPS)).andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
                 .andExpect(jsonPath("$.flightNumber").value("SK501"))
                 .andExpect(jsonPath("$.departureDate").value("2026-11-03"))
                 .andExpect(jsonPath("$.checkedIn").value(3))
-                .andExpect(jsonPath("$.boarded").value(1))
-                .andExpect(jsonPath("$.waiting").value(2))
+                .andExpect(jsonPath("$.boarded").value(2))
+                .andExpect(jsonPath("$.waiting").value(1))
                 .andExpect(jsonPath("$.boardings[0].locator").value("ABC234"))
                 .andExpect(jsonPath("$.boardings[0].segmentIndex").value(0))
                 .andExpect(jsonPath("$.boardings[0].passengerIndex").value(1))
                 .andExpect(jsonPath("$.boardings[0].boardedBy").value("gate.one"))
                 .andExpect(jsonPath("$.boardings[0].boardedAt").value("2026-11-03T09:00:00Z"))
+                .andExpect(jsonPath("$.boardings[0].late").value(false))
+                .andExpect(jsonPath("$.boardings[1].late").value(true))   // boarded after the gate closed (ADR-0076): the list shows that it was
                 .andExpect(jsonPath("$.boardings[0].passengerName").doesNotExist());
     }
 

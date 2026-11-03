@@ -93,7 +93,7 @@ final class BookingDtoMapper {
         return new FlightBoardingDto(flight.flightNumber(), flight.departureDate(), flight.checkedIn(), flight.boarded(), flight.waiting(),
                 flight.boardings().stream()
                         .map(b -> new FlightBoardingEntryDto(b.locator(), b.segmentIndex(), b.passengerIndex(), b.boardedBy(),
-                                b.boardedAt().atOffset(ZoneOffset.UTC)))
+                                b.boardedAt().atOffset(ZoneOffset.UTC), b.late()))
                         .toList());
     }
 

@@ -54,6 +54,10 @@ public final class StaffAuthorization implements AuthorizationManager<RequestAut
         return new StaffAuthorization(StaffRole::mayViewFlightBoarding);
     }
 
+    public static StaffAuthorization boardsLatePassengers() {
+        return new StaffAuthorization(StaffRole::mayBoardLatePassengers);
+    }
+
     public static StaffAuthorization createsStaff() {
         return new StaffAuthorization(StaffRole::mayCreateStaff);
     }
