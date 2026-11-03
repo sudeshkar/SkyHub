@@ -208,3 +208,74 @@ describe("ProposalsPanel groups (ADR-0043)", () => {
     expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
   });
 });
+
+describe("ProposalsPanel outcome filter (ADR-0067)", () => {
+  async function moveWithMixedResults() {
+    vi.mocked(moveBookings).mockResolvedValueOnce({
+      status: "done",
+      results: [
+        { locator: "AAAAAA", status: "moved", seats: ["14A"] },
+        { locator: "BBBBBB", status: "refused", detail: "SK503 leaves too soon after the booking's earlier flight" },
+      ],
+    });
+    showProposals(proposal("AAAAAA"), proposal("BBBBBB"), proposal("CCCCCC"), human("DDDDDD"));
+    await screen.findByText("AAAAAA");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Move CCCCCC" }));   // leave this one for later
+    fireEvent.click(screen.getByRole("button", { name: "Move 2 selected" }));
+    await screen.findByText(/Refused:/);
+  }
+
+  const show = (label: RegExp) => fireEvent.change(screen.getByLabelText("Show"), { target: { value: screen.getByRole("option", { name: label }).getAttribute("value") } });
+
+  it("offers the outcomes with how many bookings are in each", async () => {
+    await moveWithMixedResults();
+
+    expect(screen.getByRole("option", { name: "All (4)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Not tried yet (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Moved (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Refused or failed (1)" })).toBeInTheDocument();
+  });
+
+  it("shows only the refused or failed bookings, with the reason, and moves only those if asked again", async () => {
+    await moveWithMixedResults();
+    vi.mocked(moveBookings).mockResolvedValueOnce({ status: "done", results: [{ locator: "BBBBBB", status: "moved", seats: ["14B"] }] });
+
+    show(/Refused or failed/);
+
+    expect(screen.getByText("BBBBBB")).toBeInTheDocument();
+    expect(screen.queryByText("AAAAAA")).not.toBeInTheDocument();
+    expect(screen.queryByText("CCCCCC")).not.toBeInTheDocument();
+    expect(screen.getByText(/leaves too soon/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Move 1 selected" }));
+    await waitFor(() => expect(moveBookings).toHaveBeenLastCalledWith([{ locator: "BBBBBB", segmentIndex: 0, flightNumber: "SK503", departureDate: "2026-11-02" }]));
+  });
+
+  it("says how many ticked bookings the filter is hiding, and does not move them", async () => {
+    await moveWithMixedResults();
+
+    show(/^Moved/);
+
+    expect(screen.getByText("AAAAAA")).toBeInTheDocument();
+    expect(screen.queryByText("BBBBBB")).not.toBeInTheDocument();
+    expect(screen.getByText(/hidden by the search or the filter/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Move 0 selected" })).toBeDisabled();
+  });
+
+  it("says plainly when no booking is in the chosen outcome, and shows the bookings that need a person only under All", async () => {
+    await moveWithMixedResults();
+
+    show(/Not tried yet/);
+    expect(screen.queryByText("DDDDDD")).not.toBeInTheDocument();
+    expect(screen.getByText("CCCCCC")).toBeInTheDocument();
+
+    show(/^All/);
+    expect(screen.getByText("DDDDDD")).toBeInTheDocument();
+  });
+
+  it("starts on All with the filter on a fresh set of proposals", async () => {
+    showProposals(proposal("AAAAAA"));
+    await screen.findByText("AAAAAA");
+
+    expect(screen.getByLabelText("Show")).toHaveValue("all");
+  });
+});

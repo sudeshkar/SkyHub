@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import type { Proposal, ProposalSet } from "@/lib/api/agent";
 import { loadProposals, moveBookings, type MoveResult, type ProposalsState } from "./actions";
 import { MAX_MOVES_PER_CALL as BATCH } from "./limits";
-import { groupProposals, type ProposalGroup } from "./proposal-groups";
+import { groupProposals, OUTCOME_OPTIONS, outcomeCounts, type OutcomeFilter, type ProposalGroup } from "./proposal-groups";
 
 const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
 
@@ -79,12 +79,14 @@ function ProposalTable({ set }: { set: ProposalSet }) {
   const [problem, setProblem] = useState<string | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [query, setQuery] = useState("");
+  const [outcome, setOutcome] = useState<OutcomeFilter>("all");
 
   const done = (p: Proposal) => results[p.locator]?.status === "moved" || results[p.locator]?.status === "unchanged";
   const movable = set.proposals.filter((p) => p.action === "REBOOK" && !done(p));
   const chosen = movable.filter((p) => !deselected.has(p.locator));
   // What is shown is what is acted on (ADR-0043): a ticked booking that the search hides is neither counted nor moved.
-  const groups = groupProposals(set.proposals, query);
+  const groups = groupProposals(set.proposals, query, outcome, results);
+  const counts = outcomeCounts(set.proposals, results);
   const shown = new Set(groups.flatMap((g) => g.proposals.map((p) => p.locator)));
   const chosenShown = chosen.filter((p) => shown.has(p.locator));
   const hiddenChosen = chosen.length - chosenShown.length;
@@ -131,7 +133,7 @@ function ProposalTable({ set }: { set: ProposalSet }) {
     setProgress(null);
   }
 
-  const counts = Object.values(results).reduce(
+  const tally = Object.values(results).reduce(
     (sum, r) => ({ ...sum, [r.status]: (sum[r.status] ?? 0) + 1 }),
     {} as Record<MoveResult["status"], number>,
   );
@@ -158,13 +160,29 @@ function ProposalTable({ set }: { set: ProposalSet }) {
         </p>
       )}
 
-      <label className="block max-w-xs text-sm font-medium">
-        Find a booking
-        <input value={query} onChange={(event) => setQuery(event.target.value)} autoComplete="off" placeholder="Part of a reference"
-          className={`${field} font-mono uppercase tracking-widest`} />
-      </label>
+      <div className="flex flex-wrap gap-4">
+        <label className="block max-w-xs flex-1 text-sm font-medium">
+          Find a booking
+          <input value={query} onChange={(event) => setQuery(event.target.value)} autoComplete="off" placeholder="Part of a reference"
+            className={`${field} font-mono uppercase tracking-widest`} />
+        </label>
+        <label className="block max-w-xs flex-1 text-sm font-medium">
+          Show
+          <select value={outcome} onChange={(event) => setOutcome(event.target.value as OutcomeFilter)} className={field}>
+            {OUTCOME_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{`${option.label} (${counts[option.value]})`}</option>
+            ))}
+          </select>
+        </label>
+      </div>
 
-      {groups.length === 0 && <p className="text-sm text-muted">No booking matches “{query.trim()}”.</p>}
+      {groups.length === 0 && (
+        <p className="text-sm text-muted">
+          {query.trim()
+            ? `No booking matches “${query.trim()}”${outcome === "all" ? "" : " in this view"}.`
+            : `Nothing to show: no booking is in “${OUTCOME_OPTIONS.find((o) => o.value === outcome)?.label}”.`}
+        </p>
+      )}
       {groups.map((group) => (
         <ProposalGroupSection key={group.key} group={group} results={results} deselected={deselected} disabled={moving}
           onToggle={toggle} onSelect={select} />
@@ -172,8 +190,8 @@ function ProposalTable({ set }: { set: ProposalSet }) {
 
       {hiddenChosen > 0 && (
         <p className="text-sm text-muted">
-          {hiddenChosen} ticked booking{hiddenChosen === 1 ? " is" : "s are"} hidden by the search. They stay ticked but are not moved
-          until you clear it.
+          {hiddenChosen} ticked booking{hiddenChosen === 1 ? " is" : "s are"} hidden by the search or the filter. They stay ticked but
+          are not moved until you clear it.
         </p>
       )}
 
@@ -190,7 +208,7 @@ function ProposalTable({ set }: { set: ProposalSet }) {
 
       {Object.keys(results).length > 0 && (
         <p role="status" className="text-sm">
-          {counts.moved ?? 0} moved, {counts.unchanged ?? 0} already there, {counts.refused ?? 0} refused, {counts.failed ?? 0} failed.
+          {tally.moved ?? 0} moved, {tally.unchanged ?? 0} already there, {tally.refused ?? 0} refused, {tally.failed ?? 0} failed.
         </p>
       )}
     </div>
