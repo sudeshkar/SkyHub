@@ -101,8 +101,10 @@ Open http://localhost:3000. (Redis must be running; it rate-limits the site.)
 1. Go to http://localhost:3000/ops and sign in with the admin you created in part 2.
 2. **Create other staff.** There is no form for this; an administrator uses the API. Roles are `OPS`, `ADMIN` and `GATE`. In Git Bash:
    ```bash
-   TOKEN=$(curl -s -X POST http://localhost:8082/api/v1/ops/sessions -H 'Content-Type: application/json'      -d '{"username":"admin","password":"ChooseA-LongPassword-12+"}' | sed 's/.*"accessToken":"\([^"]*\)".*//')
-   curl -s -X POST http://localhost:8082/api/v1/ops/staff -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'      -d '{"username":"gate.one","password":"a-gate-password-12","role":"GATE"}'
+   TOKEN=$(curl -s -X POST http://localhost:8082/api/v1/ops/sessions -H 'Content-Type: application/json' \
+     -d '{"username":"admin","password":"ChooseA-LongPassword-12+"}' | sed 's/.*"accessToken":"\([^"]*\)".*/\1/')
+   curl -s -X POST http://localhost:8082/api/v1/ops/staff -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+     -d '{"username":"gate.one","password":"a-gate-password-12","role":"GATE"}'
    ```
    Usernames are lower case, 3 to 40 characters; passwords 12 or more. Use the password you exported in part 2. You should get `201`. Create `agent.ops` the same way with role `OPS` if you will do part 9.
 3. **Record a disruption.** Enter a flight number and date (use one you booked) and mark it delayed or cancelled. Then:
