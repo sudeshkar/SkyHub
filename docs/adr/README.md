@@ -80,3 +80,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0074](0074-boarding-passes-attached-to-the-check-in-email.md) | The boarding passes attached to the check-in email | Accepted |
 | [0075](0075-loose-ends-from-the-check-in-work.md) | Three loose ends from the check-in work | Accepted |
 | [0076](0076-boarding-a-late-passenger.md) | Boarding a passenger after the gate has closed | Accepted |
+| [0077](0077-a-boarding-window-for-a-route.md) | A boarding window for a route | Accepted |
