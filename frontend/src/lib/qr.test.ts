@@ -1,28 +1,10 @@
 import jsQR from "jsqr";
 import { describe, expect, it } from "vitest";
+import { drawPath as render } from "@/test/qr-frame";
 import { qrCode } from "./qr";
 
 /** What a boarding pass says: the signed text of ADR-0013 (the payload, a dot, and the base64url signature). */
 const PASS = "M1PERERA/PRIYA ABC234 SK501 2026-11-03 11D 0007.Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWprbA";
-
-/**
- * Draws the path the way a browser would, one pixel per module scaled up, so an independent reader (jsQR) can be pointed at what is
- * really drawn and not at the matrix it came from. Understands only the shape the encoder writes: {@code M x y h w v 1 h -w z}.
- */
-function render(path: string, size: number, scale = 6): { data: Uint8ClampedArray; width: number; height: number } {
-  const width = size * scale;
-  const data = new Uint8ClampedArray(width * width * 4).fill(255);   // opaque white
-  for (const run of path.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)) {
-    const [x, y, w] = [Number(run[1]), Number(run[2]), Number(run[3])];
-    for (let py = y * scale; py < (y + 1) * scale; py++) {
-      for (let px = x * scale; px < (x + w) * scale; px++) {
-        const at = (py * width + px) * 4;
-        data[at] = data[at + 1] = data[at + 2] = 0;   // black
-      }
-    }
-  }
-  return { data, width, height: width };
-}
 
 describe("qrCode (ADR-0071)", () => {
   it("draws a code that an independent reader decodes to exactly the pass text", () => {

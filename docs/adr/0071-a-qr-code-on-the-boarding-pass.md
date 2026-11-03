@@ -20,7 +20,7 @@ A boarding pass (ADR-0013) carries a signed line of text that the gate reads: th
 - **`qrCode(text)`** (`src/lib/qr.ts`) is a pure function: it encodes the text at error-correction level M (15% damage tolerated) and returns the size and **one path** that draws every dark module, as one run per stretch in a row. The same text always gives the same drawing, with no network and no clock.
 - **`QrCode`** (`src/components/manage/qr-code.tsx`) draws that path as an inline SVG: `role="img"` with a label a screen reader says, sharp at any size, **always black on white with the quiet zone inside the picture**, because a code drawn in a dark theme's colours often cannot be read by a scanner. The pass text is not in the markup; the card shows it once, under the code.
 - **`BoardingPassCard`** shows the code and keeps the text under it, so it can still be copied (and so the gate screen, which takes text, works as before, ADR-0062).
-- **The encoder is `uqr`** (MIT, no dependencies, from the unjs project), a runtime dependency of about 27 kilobytes. **`jsqr`** (Apache-2.0, no dependencies) is a **development** dependency only, used as a second, independent reader in the tests.
+- **The encoder is `uqr`** (MIT, no dependencies, from the unjs project), a runtime dependency of about 27 kilobytes. **`jsqr`** (Apache-2.0, no dependencies) was a **development** dependency, used as a second, independent reader in the tests; ADR-0072 made it a runtime one, for the gate's camera.
 - **Cost:** linear in the number of modules, at most 177 by 177 for the largest code; a typical pass (about 94 characters) is a version 6 code, 41 by 41 modules, and a pass of 300 characters (the longest the gate accepts) is a version 10 code, 57 by 57. These were measured with the library. Drawn on the server when the page is built, so nothing runs in the browser.
 
 ## Consequences
@@ -32,7 +32,7 @@ A boarding pass (ADR-0013) carries a signed line of text that the gate reads: th
 - Negative: **it is a QR, not the PDF417 an airline gate expects.** Existing airport hardware would need QR enabled; this project has no gate hardware.
 - Negative: **a new dependency in the website's runtime** (`uqr`, version 0.1.x, pre-1.0), and one in its tests. Both have no dependencies of their own; the lockfile pins them.
 - Negative: **a pass is long, so the code is denser than a short link's** (41 by 41 modules for a typical pass). On a small or dim screen it reads less easily; the card draws it at a size that suits a phone and lets the person enlarge the page.
-- Not done: scanning with the camera at the gate, the code in the boarding-pass email, PDF417, and a "full brightness" display for the code.
+- Not done: scanning with the camera at the gate (done, ADR-0072), the code in the boarding-pass email, PDF417, and a "full brightness" display for the code.
 
 ## Verification
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { gateScan, type GateRefusal, type GateState } from "./actions";
+import { CameraScanner } from "./camera-scanner";
 
 const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5 font-mono";
 
@@ -20,10 +21,19 @@ const REFUSALS: Record<GateRefusal, string> = {
 
 /**
  * The gate (ADR-0062): scan or paste a boarding pass, check it, and board the passenger. A scanner types the pass like a keyboard, so
- * the field is all it needs. Checking never boards anyone; boarding is its own button. The pass is not shown back and nothing is kept.
+ * the field is all it needs, and the phone's camera can fill it by reading the pass's QR code (ADR-0072). A read only fills the field:
+ * checking never boards anyone, and boarding is its own button a person presses. The pass is not shown back and nothing is kept.
  */
 export function GatePanel() {
   const [state, action, pending] = useActionState<GateState, FormData>(gateScan, { status: "idle" });
+  const [barcode, setBarcode] = useState("");
+  const [scanning, setScanning] = useState(false);
+
+  /** Sends the pass and empties the field, so the next passenger starts clean (the camera can fill it again). */
+  const send = (form: FormData) => {
+    action(form);
+    setBarcode("");
+  };
 
   return (
     <section aria-label="Gate" className="mt-10 space-y-6 border-t border-sand pt-8">
@@ -60,11 +70,27 @@ export function GatePanel() {
         </p>
       )}
 
-      <form action={action} className="max-w-md space-y-4">
+      {scanning && (
+        <CameraScanner
+          onCode={(text) => {
+            setBarcode(text);
+            setScanning(false);
+          }}
+          onClose={() => setScanning(false)}
+        />
+      )}
+
+      <form action={send} className="max-w-md space-y-4">
         <label className="block text-sm font-medium">
           Scanned boarding pass
-          <input name="barcode" required maxLength={300} autoComplete="off" autoFocus spellCheck={false} className={field} />
+          <input name="barcode" required maxLength={300} autoComplete="off" autoFocus spellCheck={false} className={field}
+            value={barcode} onChange={(event) => setBarcode(event.target.value)} />
         </label>
+        {!scanning && (
+          <button type="button" onClick={() => setScanning(true)} className="rounded-md border border-sand px-4 py-2 text-sm hover:bg-sand-soft">
+            Scan with camera
+          </button>
+        )}
         <div className="flex flex-wrap gap-3">
           <button
             type="submit"
