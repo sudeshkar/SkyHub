@@ -257,8 +257,9 @@ export interface paths {
          *     second time with `ALREADY_BOARDED`; the first scan is the one that counts, and the staff member who made it is recorded from their
          *     token. A refused pass says only why, never who it was for. Checking a pass with `verifyBoardingPass` never boards anyone.
          *     A passenger who has boarded can no longer check out.
-         *     Boarding has a window (ADR-0063): it opens 45 minutes and closes 10 minutes before the flight's expected departure (the revised
-         *     time if the flight was delayed). A good pass scanned outside it is refused with `BOARDING_NOT_OPEN` or `BOARDING_CLOSED` and
+         *     Boarding has a window (ADR-0063): by default it opens 45 minutes and closes 10 minutes before the flight's expected departure (the
+         *     revised time if the flight was delayed), and a route can have a window of its own (ADR-0077). A good pass scanned outside it is
+         *     refused with `BOARDING_NOT_OPEN` or `BOARDING_CLOSED` and
          *     nobody boards. Checking a pass has no such rule.
          */
         post: operations["boardPassenger"];

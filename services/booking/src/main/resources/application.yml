@@ -60,6 +60,16 @@ skyhub:
     retention: P7D
     # Set to true for ONE start to republish disruptions recorded before the flight topic existed (ADR-0025).
     backfill-flight-events: false
+  booking:
+    # Boarding (ADR-0063, ADR-0076, ADR-0077): the window opens and closes this long before the expected departure. A route may have its own,
+    # either end of which may be left out to keep the standard one. A route is two airport codes, origin then destination:
+    #   routes:
+    #     DXB-JFK:
+    #       opens-before: PT75M
+    #       closes-before: PT20M
+    boarding:
+      opens-before: PT45M
+      closes-before: PT10M
   flight-search:
     url: ${FLIGHT_SEARCH_URL:http://localhost:8081}
   security:

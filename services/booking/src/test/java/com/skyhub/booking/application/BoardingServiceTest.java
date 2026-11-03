@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.skyhub.booking.application.BoardingPassVerifier.Reason;
 import com.skyhub.booking.domain.BoardingWindow;
+import com.skyhub.booking.domain.BoardingWindows;
 import com.skyhub.booking.domain.CheckIn;
 import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.Disruption;
@@ -28,6 +29,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,9 +69,15 @@ class BoardingServiceTest {
     }
 
     private BoardingService serviceWithDeparture(Instant departure) {
-        FlightCatalog timetable = (flight, date) -> Optional.of(new FlightInfo(departure, Money.of("100.00", "USD")));
+        return serviceOnRoute(departure, null, null, Map.of());   // a flight whose route is not known: the standard window
+    }
+
+    /** A flight on a known route, with these route windows (ADR-0077) beside the standard 45-to-10. */
+    private BoardingService serviceOnRoute(Instant departure, String origin, String destination, Map<String, BoardingWindow> routes) {
+        FlightCatalog timetable = (flight, date) -> Optional.of(new FlightInfo(departure, Money.of("100.00", "USD"), origin, destination));
         return new BoardingService(verifier, boarded, Clock.fixed(NOW, ZoneOffset.UTC), new BoardingPassMetrics(registry),
-                new ExpectedDepartures(disruptions, timetable), new BoardingWindow(Duration.ofMinutes(45), Duration.ofMinutes(10)));
+                new ExpectedDepartures(disruptions, timetable), timetable,
+                new BoardingWindows(new BoardingWindow(Duration.ofMinutes(45), Duration.ofMinutes(10)), routes));
     }
 
     private String passOf(int passengerIndex) {
@@ -264,5 +272,40 @@ class BoardingServiceTest {
     void should_not_let_the_ordinary_gate_board_late_even_though_the_late_door_exists() {
         assertThat(lateService().board(passOf(0), "gate.one").reason()).isEqualTo(Reason.BOARDING_CLOSED);
         assertThat(boarded.rows).isEmpty();
+    }
+
+    // ---- a window for a route (ADR-0077) -------------------------------------------------------------------------------
+
+    private static final Map<String, BoardingWindow> LONG_HAUL = Map.of("DXB-JFK", new BoardingWindow(Duration.ofMinutes(120), Duration.ofMinutes(30)));
+
+    @Test
+    void should_board_a_passenger_on_a_route_whose_gate_opens_earlier_when_the_standard_gate_would_still_be_shut() {
+        Instant departure = NOW.plus(Duration.ofMinutes(90));   // 90 minutes out
+
+        assertThat(serviceOnRoute(departure, "DXB", "LHR", LONG_HAUL).board(passOf(0), "gate.one").reason()).isEqualTo(Reason.BOARDING_NOT_OPEN);
+        assertThat(serviceOnRoute(departure, "DXB", "JFK", LONG_HAUL).board(passOf(1), "gate.one").valid()).isTrue();   // open from 120 minutes
+    }
+
+    @Test
+    void should_close_a_route_by_its_own_closing_time() {
+        Instant departure = NOW.plus(Duration.ofMinutes(20));   // inside the route's last 30 minutes, outside the standard last 10
+
+        assertThat(serviceOnRoute(departure, "DXB", "JFK", LONG_HAUL).board(passOf(0), "gate.one").reason()).isEqualTo(Reason.BOARDING_CLOSED);
+        assertThat(serviceOnRoute(departure, "DXB", "LHR", LONG_HAUL).board(passOf(0), "gate.one").valid()).isTrue();
+    }
+
+    @Test
+    void should_use_the_standard_window_for_a_flight_whose_route_is_not_known() {
+        assertThat(serviceOnRoute(NOW.plus(Duration.ofMinutes(90)), null, null, LONG_HAUL).board(passOf(0), "gate.one").reason())
+                .isEqualTo(Reason.BOARDING_NOT_OPEN);
+    }
+
+    @Test
+    void should_decide_a_late_boarding_by_the_routes_closing_time_too() {
+        Instant departure = NOW.plus(Duration.ofMinutes(20));
+
+        // On the standard window this flight is still open, so the override is refused; on the long-haul window it is closed, so it works.
+        assertThat(serviceOnRoute(departure, "DXB", "LHR", LONG_HAUL).boardLate(passOf(0), "Held", "priya.ops").reason()).isEqualTo(Reason.BOARDING_STILL_OPEN);
+        assertThat(serviceOnRoute(departure, "DXB", "JFK", LONG_HAUL).boardLate(passOf(1), "Held", "priya.ops").valid()).isTrue();
     }
 }

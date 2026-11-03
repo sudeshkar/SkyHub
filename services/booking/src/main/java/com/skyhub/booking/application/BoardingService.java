@@ -3,6 +3,7 @@ package com.skyhub.booking.application;
 import com.skyhub.booking.application.BoardingPassVerifier.Reason;
 import com.skyhub.booking.application.BoardingPassVerifier.Verdict;
 import com.skyhub.booking.domain.BoardingWindow;
+import com.skyhub.booking.domain.BoardingWindows;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -27,16 +28,18 @@ public class BoardingService {
     private final Clock clock;
     private final BoardingPassMetrics metrics;
     private final ExpectedDepartures departures;
-    private final BoardingWindow window;
+    private final FlightCatalog flights;
+    private final BoardingWindows windows;
 
     public BoardingService(BoardingPassVerifier verifier, BoardedPassengers boarded, Clock clock, BoardingPassMetrics metrics,
-                           ExpectedDepartures departures, BoardingWindow window) {
+                           ExpectedDepartures departures, FlightCatalog flights, BoardingWindows windows) {
         this.verifier = verifier;
         this.boarded = boarded;
         this.clock = clock;
         this.metrics = metrics;
         this.departures = departures;
-        this.window = window;
+        this.flights = flights;
+        this.windows = windows;
     }
 
     /**
@@ -113,11 +116,21 @@ public class BoardingService {
             return Reason.FLIGHT_CANCELLED;
         }
         Instant now = clock.instant();
-        return switch (window.stateAt(departure.get(), now)) {
+        return switch (windowOf(pass).stateAt(departure.get(), now)) {
             case NOT_YET_OPEN -> Reason.BOARDING_NOT_OPEN;
             case OPEN -> Reason.BOARDING_STILL_OPEN;
             case CLOSED -> now.isBefore(departure.get()) ? null : Reason.FLIGHT_DEPARTED;
         };
+    }
+
+    /**
+     * The window of this pass's flight: the one set for its route, or the standard one when the route is not known (ADR-0077). One more
+     * answer from the timetable, which is cached, for each scan that reaches the window (never for a pass that is not good).
+     */
+    private BoardingWindow windowOf(BoardingPass pass) {
+        return flights.find(pass.flightNumber(), pass.departureDate())
+                .map(info -> windows.forRoute(info.origin(), info.destination()))
+                .orElseGet(windows::standard);
     }
 
     /** @return why boarding is shut for this pass's flight right now, or null when it is open */
@@ -127,7 +140,7 @@ public class BoardingService {
         if (departure.isEmpty()) {
             return Reason.FLIGHT_CANCELLED;
         }
-        return switch (window.stateAt(departure.get(), clock.instant())) {
+        return switch (windowOf(pass).stateAt(departure.get(), clock.instant())) {
             case NOT_YET_OPEN -> Reason.BOARDING_NOT_OPEN;
             case CLOSED -> Reason.BOARDING_CLOSED;
             case OPEN -> null;
