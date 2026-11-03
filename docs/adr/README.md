@@ -75,3 +75,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0069](0069-moving-checked-in-travellers.md) | Moving travellers who are checked in | Accepted |
 | [0070](0070-telling-a-moved-traveller-to-check-in-again.md) | Telling a moved traveller to check in again | Accepted |
 | [0071](0071-a-qr-code-on-the-boarding-pass.md) | A QR code on the boarding pass | Accepted |
+| [0072](0072-scanning-a-boarding-pass-with-the-camera.md) | Scanning a boarding pass with the phone's camera | Accepted |

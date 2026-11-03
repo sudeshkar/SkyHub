@@ -84,6 +84,7 @@ How a slice goes, every time:
 | 65 | Moving travellers who are checked in: a rebooking now moves a checked-in booking and checks the party out in the same transaction (only a boarded passenger blocks it); the database now says a boarded passenger is a checked-in one, closing a gate-versus-move race | ADR-0069 |
 | 66 | The rebooking email tells a traveller the move checked out that their old boarding passes no longer work and to check in again: a new `checkedOut` field on the `booking.rebooked` event (an addition to version 1, read as false when absent), with a second shared example | ADR-0070 |
 | 67 | A QR code on each boarding pass, drawn inline in the page (never from an address, so the signed pass stays out of logs), always black on white, with the text kept under it; checked by an independent decoder reading it back to the exact pass text | ADR-0071 |
+| 68 | Scan a boarding pass with the phone's back camera on the gate screen: reads the QR code in the browser with `jsqr`, fills the pass field and stops the camera, never boards anyone by itself; pictures are read in memory and never sent | ADR-0072 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -100,7 +101,7 @@ Ordered by how much they add to the story, not a commitment.
 
 ## Smaller loose ends
 
-- **Browser coverage:** `npm run e2e` (Playwright) drives search, the seat hold countdown, payment, finding a booking, cancelling and the refund panel in a real browser. `check-in.spec.ts` (ADR-0061) also covers check-in and check-out one passenger at a time, closing a booking so a copied token dies, and the undo-email page, against the live stack. Still not clicked through: disruption notices, the refund-pending retry and the gate's phone-camera scan (the gate screen is in the browser tests, ADR-0062). It runs by hand against a local stack, not in CI, and the website's rate-limit counters must be cleared between runs.
+- **Browser coverage:** `npm run e2e` (Playwright) drives search, the seat hold countdown, payment, finding a booking, cancelling and the refund panel in a real browser. `check-in.spec.ts` (ADR-0061) also covers check-in and check-out one passenger at a time, closing a booking so a copied token dies, and the undo-email page, against the live stack. Still not clicked through: disruption notices, the refund-pending retry and the gate's phone-camera scan (the gate screen is in the browser tests, ADR-0062; the camera scan, ADR-0072, was tried only with scripted pictures, and a Playwright run with a fake camera is the way to cover it). It runs by hand against a local stack, not in CI, and the website's rate-limit counters must be cleared between runs.
 - **Monitoring gaps:** no Next.js tracing yet. (JDBC spans: each SQL statement is a span, from `datasource-micrometer`.) (The disruptions panel exists; no alert on purpose, since recording a disruption is a deliberate operations action.)
 - **Hold abuse:** holds are limited per client at the website (6 a minute); a per-client limit at the gateway is the next step (ADR-0012).
 - **Homepage hero video:** needs a paid plan on the video-generation service; the start frame is already prepared.
