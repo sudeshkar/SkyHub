@@ -5,6 +5,7 @@ import { getProposals, type ProposalSet } from "@/lib/api/agent";
 import {
   boardPassenger,
   type BulkMoveResult,
+  getFlightBoarding as getFlightBoardingCall,
   type GateReason,
   openStaffSession,
   rebookFlights,
@@ -256,6 +257,57 @@ function toMoveResult(result: BulkMoveResult): MoveResult {
       return { locator: result.locator, status: "failed", detail: "That booking was not found." };
     default:
       return { locator: result.locator, status: "failed", detail: result.detail ?? "This move could not be completed." };
+  }
+}
+
+export type FlightBoardingRow = { locator: string; leg: number; passenger: number; by: string; at: string };
+
+export type FlightBoardingState =
+  | { status: "idle" }
+  | { status: "loaded"; flightNumber: string; departureDate: string; checkedIn: number; boarded: number; waiting: number; rows: FlightBoardingRow[] }
+  | { status: "error"; message: string; values: { flightNumber: string; departureDate: string } }
+  | { status: "signed-out" };
+
+/**
+ * Who has boarded one flight (ADR-0065). Read-only. The service counts flights and passengers from zero; the screen counts from one, the
+ * same way "Undo a boarding" asks for them, so a row can be typed straight in. Whether this person may is decided by the booking service.
+ */
+export async function loadFlightBoarding(_previous: FlightBoardingState, form: FormData): Promise<FlightBoardingState> {
+  const values = {
+    flightNumber: String(form.get("flightNumber") ?? "").trim().toUpperCase(),
+    departureDate: String(form.get("departureDate") ?? "").trim(),
+  };
+  const fail = (message: string): FlightBoardingState => ({ status: "error", message, values });
+
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return fail(`Too many requests. Please wait ${decision.retryAfterSeconds} seconds.`);
+
+  const session = await readStaffSession();
+  if (!session) return { status: "signed-out" };
+
+  if (!FLIGHT.test(values.flightNumber)) return fail("Enter a flight number such as SK501.");
+  if (!DATE.test(values.departureDate)) return fail("Enter the scheduled departure date.");
+
+  const outcome = await getFlightBoardingCall(session.token, values.flightNumber, values.departureDate);
+  switch (outcome.kind) {
+    case "ok": {
+      const { checkedIn, boarded, waiting, boardings } = outcome.flight;
+      return {
+        status: "loaded",
+        ...values,
+        checkedIn,
+        boarded,
+        waiting,
+        rows: boardings.map((b) => ({ locator: b.locator, leg: b.segmentIndex + 1, passenger: b.passengerIndex + 1, by: b.boardedBy, at: b.boardedAt })),
+      };
+    }
+    case "unauthorized":
+      await clearStaffSession(); // expired, or a role that may not see this
+      return { status: "signed-out" };
+    case "rejected":
+      return fail(outcome.detail);
+    default:
+      return fail("The booking service is not responding right now. Please try again.");
   }
 }
 

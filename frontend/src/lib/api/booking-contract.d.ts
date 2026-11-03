@@ -293,6 +293,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/flights/{flightNumber}/departures/{departureDate}/boardings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who has boarded one flight, and how many checked in are still to come
+         * @description For operations staff and administrators only (ADR-0065). A **gate agent cannot see it**, because it lists booking references
+         *     (ADR-0060). Gives how many passengers are checked in, how many have boarded and how many are still waiting, and for each
+         *     boarding the booking reference, the flight's place on the booking and the passenger's place (both from 0, exactly what
+         *     `undoBoarding` asks for), who scanned and when. It carries no names, so it can be shown on a screen or given to a tool that must
+         *     not see personal data. It is bounded by the seats on the aircraft and is not paged. A flight nobody has boarded gives zeros and an
+         *     empty list, not an error; the flight is not looked up.
+         */
+        get: operations["getFlightBoarding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/disruptions": {
         parameters: {
             query?: never;
@@ -898,6 +923,29 @@ export interface components {
             passengerIndex: number;
             /** @description Why the boarding is being taken back. Kept with the correction; never shown to the traveller. */
             reason: string;
+        };
+        FlightBoarding: {
+            flightNumber: components["schemas"]["FlightNumber"];
+            /** Format: date */
+            departureDate: string;
+            /** @description Passengers checked in on this flight, whether or not they have boarded. */
+            checkedIn: number;
+            boarded: number;
+            /** @description Checked in and not yet boarded. Never below 0. */
+            waiting: number;
+            /** @description Oldest boarding first. */
+            boardings: components["schemas"]["FlightBoardingEntry"][];
+        };
+        FlightBoardingEntry: {
+            locator: string;
+            /** @description Which flight on the booking, counting from 0. */
+            segmentIndex: number;
+            /** @description Which passenger on the booking, counting from 0. */
+            passengerIndex: number;
+            /** @description The staff member who scanned the pass. */
+            boardedBy: string;
+            /** Format: date-time */
+            boardedAt: string;
         };
         BoardingPassVerification: {
             valid: boolean;
@@ -1591,6 +1639,33 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    getFlightBoarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flightNumber: components["schemas"]["FlightNumber"];
+                /** @description Scheduled UTC departure date of the flight */
+                departureDate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The flight's boarding, possibly empty */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlightBoarding"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     recordDisruption: {

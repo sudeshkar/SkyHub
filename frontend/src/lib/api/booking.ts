@@ -338,6 +338,27 @@ export function boardPassenger(token: string, barcode: string): Promise<GateOutc
   return gateCall("/api/v1/ops/boarding-passes/boardings", token, barcode);
 }
 
+export type FlightBoarding = components["schemas"]["FlightBoarding"];
+
+export type FlightBoardingOutcome =
+  | { kind: "ok"; flight: FlightBoarding }
+  | { kind: "unauthorized" } // no staff token, or a role that may not see it (a gate agent may not)
+  | { kind: "rejected"; detail: string }
+  | { kind: "unavailable" };
+
+/** Who has boarded one flight (ADR-0065): references and places on the booking, no names. */
+export async function getFlightBoarding(token: string, flightNumber: string, departureDate: string): Promise<FlightBoardingOutcome> {
+  const response = await call(
+    `/api/v1/ops/flights/${encodeURIComponent(flightNumber)}/departures/${encodeURIComponent(departureDate)}/boardings`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) return { kind: "ok", flight: (await response.json()) as FlightBoarding };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  if (response.status === 400) return { kind: "rejected", detail: await problemDetail(response, "That was not accepted.") };
+  return { kind: "unavailable" };
+}
+
 export type UndoBoardingRequest = components["schemas"]["UndoBoardingRequest"];
 
 export type UndoBoardingOutcome =

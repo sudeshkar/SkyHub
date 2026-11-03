@@ -8,6 +8,9 @@ import com.skyhub.booking.api.model.CheckInRequestDto;
 import com.skyhub.booking.api.model.UndoBoardingRequestDto;
 import com.skyhub.booking.application.BoardingPassVerifier;
 import com.skyhub.booking.application.BoardingReversalService;
+import com.skyhub.booking.application.FlightBoardingReport;
+import com.skyhub.booking.api.model.FlightBoardingDto;
+import java.time.LocalDate;
 import com.skyhub.booking.application.BoardingService;
 import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.CheckInService;
@@ -29,12 +32,15 @@ public class CheckInController implements CheckInApi {
     private final BoardingPassVerifier verifier;
     private final BoardingService boarding;
     private final BoardingReversalService reversals;
+    private final FlightBoardingReport flightBoarding;
 
-    public CheckInController(CheckInService checkIn, BoardingPassVerifier verifier, BoardingService boarding, BoardingReversalService reversals) {
+    public CheckInController(CheckInService checkIn, BoardingPassVerifier verifier, BoardingService boarding, BoardingReversalService reversals,
+                              FlightBoardingReport flightBoarding) {
         this.checkIn = checkIn;
         this.verifier = verifier;
         this.boarding = boarding;
         this.reversals = reversals;
+        this.flightBoarding = flightBoarding;
     }
 
     @Override
@@ -77,6 +83,12 @@ public class CheckInController implements CheckInApi {
         String by = SecurityContextHolder.getContext().getAuthentication().getName();
         reversals.undo(request.getLocator(), request.getSegmentIndex(), request.getPassengerIndex(), request.getReason(), by);
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    /** A staff read for operations and administrators (SecurityConfig). No names, and never cached. */
+    @Override
+    public ResponseEntity<FlightBoardingDto> getFlightBoarding(String flightNumber, LocalDate departureDate) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(BookingDtoMapper.toDto(flightBoarding.of(flightNumber, departureDate)));
     }
 
     private static ResponseEntity<BoardingPassesDto> respond(CheckInResult result, HttpStatus status) {

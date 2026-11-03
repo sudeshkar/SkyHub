@@ -12,6 +12,7 @@ import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.BoardingPassVerifier;
 import com.skyhub.booking.application.BoardingService;
 import com.skyhub.booking.application.CheckInService;
+import com.skyhub.booking.application.FlightBoardingReport;
 import com.skyhub.booking.domain.CheckInClosedException;
 import com.skyhub.booking.domain.NotCheckedInException;
 import java.time.LocalDate;
@@ -37,6 +38,9 @@ class CheckInControllerTest {
 
     @Autowired
     private MockMvc mvc;
+
+    @MockitoBean
+    private FlightBoardingReport flightBoardingReport;
 
     @MockitoBean
     private CheckInService checkInService;
