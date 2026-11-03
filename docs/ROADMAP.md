@@ -83,6 +83,7 @@ How a slice goes, every time:
 | 64 | Windowing the proposal list on the operations page: the first 100 rows are drawn and "Show more" adds 100 at a time, while the groups, counts, ticks and moves still cover every matching booking, and the page says so | ADR-0068 |
 | 65 | Moving travellers who are checked in: a rebooking now moves a checked-in booking and checks the party out in the same transaction (only a boarded passenger blocks it); the database now says a boarded passenger is a checked-in one, closing a gate-versus-move race | ADR-0069 |
 | 66 | The rebooking email tells a traveller the move checked out that their old boarding passes no longer work and to check in again: a new `checkedOut` field on the `booking.rebooked` event (an addition to version 1, read as false when absent), with a second shared example | ADR-0070 |
+| 67 | A QR code on each boarding pass, drawn inline in the page (never from an address, so the signed pass stays out of logs), always black on white, with the text kept under it; checked by an independent decoder reading it back to the exact pass text | ADR-0071 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -94,7 +95,7 @@ Ordered by how much they add to the story, not a commitment.
 | **More notifications** | a boarding-pass attachment; SMS | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
 | **Account follow-ups** | Saved passengers (revisit ADR-0054's mailbox trust first) | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
-| **Check-in extras** | QR/PDF417 boarding pass image; a per-route boarding window and an override for a late passenger (ADR-0063) | The boarding time rule (ADR-0063), undoing a wrong scan (ADR-0064) and the who-has-boarded screen (ADR-0065) are done. Move `CheckInService`'s departure lookup onto `ExpectedDepartures` when it is next touched. |
+| **Check-in extras** | a per-route boarding window and an override for a late passenger (ADR-0063) | The boarding time rule (ADR-0063), undoing a wrong scan (ADR-0064), the who-has-boarded screen (ADR-0065) and the QR code (ADR-0071) are done. The code is the groundwork for the boarding-pass email and the gate's camera. Move `CheckInService`'s departure lookup onto `ExpectedDepartures` when it is next touched. |
 | **Gateway and deployment** | Kong gateway, containers for every service, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
 
 ## Smaller loose ends
