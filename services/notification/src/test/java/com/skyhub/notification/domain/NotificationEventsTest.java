@@ -318,4 +318,37 @@ class NotificationEventsTest {
 
         assertThat(event.toString()).doesNotContain("priya@example.com").doesNotContain(event.sealedUndoToken());
     }
+
+    // ---- the check-in confirmation (ADR-0073) ---------------------------------------------------------------------------
+
+    private static final Path CHECKED_IN = Path.of("../../api-specs/events/booking-checked-in.v1.example.json");
+
+    @Test
+    void should_read_the_checked_in_event_with_each_passengers_seat_and_boarding_number() throws Exception {
+        BookingCheckedInEvent event = EventParser.parse(Files.readString(CHECKED_IN), BookingCheckedInEvent.class);
+
+        assertThat(event.eventId()).isEqualTo(UUID.fromString("b5c8e0f2-6d35-4a79-9b21-0d3e5f7a9c66"));
+        assertThat(event.flightNumber()).isEqualTo("SK501");
+        assertThat(event.departureDate()).isEqualTo(LocalDate.of(2026, 11, 2));
+        assertThat(event.departure()).isEqualTo(Instant.parse("2026-11-02T14:30:00Z"));
+        assertThat(event.checkInCloses()).isEqualTo(Instant.parse("2026-11-02T13:30:00Z"));
+        assertThat(event.passengers()).containsExactly(new BookingCheckedInEvent.CheckedInPassenger("Priya", "Perera", "11D", 7),
+                new BookingCheckedInEvent.CheckedInPassenger("Raj", "Perera", "11E", 8));
+    }
+
+    @Test
+    void should_refuse_a_checked_in_event_missing_what_the_email_needs() throws Exception {
+        String valid = Files.readString(CHECKED_IN);
+        for (String broken : new String[] {
+                valid.replace("booking.checked-in", "booking.disrupted"),
+                valid.replaceAll("\\s*\"flightNumber\": \"SK501\",", ""),
+                valid.replaceAll("\\s*\"departure\": \"[^\"]*\",", ""),
+                valid.replaceAll("\\s*\"checkInCloses\": \"[^\"]*\",", ""),
+                valid.replaceAll("(?s)\"passengers\": \\[.*\\]", "\"passengers\": []"),
+                valid.replace("\"seat\": \"11D\"", "\"seat\": \"\""),
+                valid.replace("\"boardingNumber\": 7", "\"boardingNumber\": 0")}) {
+            assertThatExceptionOfType(InvalidEventException.class).as(broken)
+                    .isThrownBy(() -> EventParser.parse(broken, BookingCheckedInEvent.class));
+        }
+    }
 }

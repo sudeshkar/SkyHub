@@ -36,6 +36,7 @@ public class OutboxBookingEvents implements BookingEvents {
     static final String BOOKING_CHECK_IN_OPEN = "booking.check-in-open";
     static final String BOOKING_REFUND_COMPLETED = "booking.refund-completed";
     static final String BOOKING_REBOOKED = "booking.rebooked";
+    static final String BOOKING_CHECKED_IN = "booking.checked-in";
 
     private final OutboxEventRepository outbox;
     private final PiiCipher cipher;
@@ -118,6 +119,23 @@ public class OutboxBookingEvents implements BookingEvents {
         event.put("departureDate", segment.departureDate().toString());
         event.put("departure", departure.toString());
         event.put("checkInCloses", closes.toString());
+        enqueue(pnr, event);
+    }
+
+    @Override
+    public void checkedIn(Pnr pnr, PnrSegment segment, java.util.List<com.skyhub.booking.domain.CheckIn> created, java.time.Instant departure,
+                          java.time.Instant closes) {
+        Map<String, Object> event = event(BOOKING_CHECKED_IN, pnr);
+        event.put("flightNumber", segment.flightNumber());
+        event.put("departureDate", segment.departureDate().toString());
+        event.put("departure", departure.toString());
+        event.put("checkInCloses", closes.toString());
+        int leg = pnr.getSegments().indexOf(segment);
+        event.put("passengers", created.stream().map(row -> {
+            var passenger = pnr.getPassengers().get(row.getPassengerIndex());
+            return Map.of("firstName", passenger.getFirstName(), "lastName", passenger.getLastName(),
+                    "seat", passenger.getSeats().get(leg), "boardingNumber", row.getBoardingSequence());
+        }).toList());
         enqueue(pnr, event);
     }
 

@@ -315,4 +315,21 @@ class NotificationServiceTest {
         org.mockito.Mockito.verifyNoInteractions(email);
         org.mockito.Mockito.verify(sent, org.mockito.Mockito.never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
     }
+
+    @Test
+    void should_send_the_check_in_confirmation_once_even_if_the_event_is_delivered_twice() {
+        var event = new com.skyhub.notification.domain.BookingCheckedInEvent(
+                UUID.fromString("b5c8e0f2-6d35-4a79-9b21-0d3e5f7a9c66"), "booking.checked-in", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2),
+                Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z"),
+                List.of(new com.skyhub.notification.domain.BookingCheckedInEvent.CheckedInPassenger("Priya", "Perera", "11D", 7)));
+
+        service.checkedIn(event);
+        when(sent.existsByEventId(event.eventId())).thenReturn(true);   // the redelivery finds it recorded
+        service.checkedIn(event);
+
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email, org.mockito.Mockito.times(1)).send(message.capture());
+        assertThat(message.getValue().subject()).contains("checked in").contains("SK501");
+    }
 }

@@ -278,4 +278,38 @@ class EmailComposerTest {
         assertThat(message.body()).contains("p****@example.com").contains("did not make this change").contains("support");
         assertThat(message.body()).doesNotContain("http").doesNotContain("undo");
     }
+
+    // ---- the check-in confirmation (ADR-0073) ---------------------------------------------------------------------------
+
+    private static com.skyhub.notification.domain.BookingCheckedInEvent checkedIn() {
+        return new com.skyhub.notification.domain.BookingCheckedInEvent(UUID.randomUUID(), "booking.checked-in", 1,
+                Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2),
+                Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z"),
+                List.of(new com.skyhub.notification.domain.BookingCheckedInEvent.CheckedInPassenger("Priya", "Perera", "11D", 7),
+                        new com.skyhub.notification.domain.BookingCheckedInEvent.CheckedInPassenger("Raj", "Perera", "11E", 8)));
+    }
+
+    @Test
+    void should_confirm_the_check_in_with_every_passengers_seat_and_boarding_number() {
+        EmailMessage message = EmailComposer.checkedIn(checkedIn());
+
+        assertThat(message.subject()).isEqualTo("You are checked in for SkyHub flight SK501 on 2026-11-02");
+        assertThat(message.body()).contains("ABC234").contains("SK501 on 2026-11-02")
+                .contains("Priya Perera: seat 11D, boarding number 7").contains("Raj Perera: seat 11E, boarding number 8");
+    }
+
+    @Test
+    void should_say_where_the_boarding_passes_are_and_until_when_a_traveller_can_change_their_mind() {
+        String body = EmailComposer.checkedIn(checkedIn()).body();
+
+        assertThat(body).contains("Manage booking").contains("boarding pass").contains("Departure: 2026-11-02 14:30 UTC")
+                .contains("2026-11-02 13:30 UTC").contains("check out");
+    }
+
+    @Test
+    void should_carry_no_boarding_pass_text_or_secret_only_what_the_traveller_already_knows() {
+        EmailMessage message = EmailComposer.checkedIn(checkedIn());
+
+        assertThat(message.body()).doesNotContain("M1PERERA").doesNotContain("barcode");
+    }
 }

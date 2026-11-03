@@ -48,10 +48,11 @@ public class CheckInService {
     private final CheckInWindow window;
     private final CheckInMetrics metrics;
     private final BoardedPassengers boarded;
+    private final BookingEvents events;
 
     public CheckInService(PnrRepository pnrs, CheckInRepository checkIns, BoardingSequence sequence,
                           DisruptionRepository disruptions, FlightCatalog flights, BoardingPassSigner signer, Clock clock, TransactionOperations transactions,
-                          CheckInWindow window, CheckInMetrics metrics, BoardedPassengers boarded) {
+                          CheckInWindow window, CheckInMetrics metrics, BoardedPassengers boarded, BookingEvents events) {
         this.pnrs = pnrs;
         this.checkIns = checkIns;
         this.sequence = sequence;
@@ -63,6 +64,7 @@ public class CheckInService {
         this.window = window;
         this.metrics = metrics;
         this.boarded = boarded;
+        this.events = events;
     }
 
     /** Checks in everyone on the booking who is not yet in. */
@@ -96,7 +98,7 @@ public class CheckInService {
         }
 
         try {
-            List<CheckIn> created = transactions.execute(status -> create(locator, segmentIndex, flight, wanted));
+            List<CheckIn> created = transactions.execute(status -> create(locator, segmentIndex, flight, wanted, departure));
             metrics.record(Outcome.CHECKED_IN);
             log.atInfo()
                     .addKeyValue("pnr.locator", locator)
@@ -216,7 +218,7 @@ public class CheckInService {
         return new CheckInResult(passes(pnr, flight, existing), false);
     }
 
-    private List<CheckIn> create(String locator, int segmentIndex, PnrSegment flight, List<Integer> wanted) {
+    private List<CheckIn> create(String locator, int segmentIndex, PnrSegment flight, List<Integer> wanted, Instant departure) {
         // Look again inside the transaction: the booking may have been cancelled since we first read it.
         Pnr pnr = pnrs.findByLocator(locator).orElseThrow(CheckInService::notFound);
         pnr.requireActive();
@@ -228,7 +230,10 @@ public class CheckInService {
         List<CheckIn> rows = IntStream.range(0, toCheckIn.size())
                 .mapToObj(i -> CheckIn.of(locator, segmentIndex, toCheckIn.get(i), first + i, now))
                 .toList();
-        return checkIns.saveAllAndFlush(rows);
+        List<CheckIn> saved = checkIns.saveAllAndFlush(rows);
+        // Same transaction as the rows: the confirmation exists exactly when the check-in does, and not for a lost race, which throws above.
+        events.checkedIn(pnr, flight, saved, departure, departure.minus(window.closesBefore()));
+        return saved;
     }
 
     private CheckInResult replay(Pnr pnr, PnrSegment flight, List<CheckIn> existing) {

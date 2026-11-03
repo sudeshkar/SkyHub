@@ -6,6 +6,7 @@ import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingCheckInOpenEvent;
+import com.skyhub.notification.domain.BookingCheckedInEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
@@ -206,6 +207,29 @@ public final class EmailComposer {
                 To check in, open Manage booking and enter your booking reference %s and your last name. Everyone on the
                 booking checks in together, and you get your boarding passes straight away.
                 """.formatted(flight, UTC_TIME.format(event.departure()), UTC_TIME.format(event.checkInCloses()), event.locator()));
+    }
+
+    /**
+     * The confirmation of a check-in (ADR-0073): who is in, with their seat and boarding number, and until when they can change their mind.
+     * It points to the boarding pass on SkyHub and never carries one: the pass is a credential.
+     */
+    public static EmailMessage checkedIn(BookingCheckedInEvent event) {
+        String flight = event.flightNumber() + " on " + event.departureDate();
+        String who = event.passengers().stream()
+                .map(p -> "  " + p.firstName() + " " + p.lastName() + ": seat " + p.seat() + ", boarding number " + p.boardingNumber())
+                .collect(Collectors.joining("\n"));
+        return new EmailMessage(event.contactEmail(), "You are checked in for SkyHub flight " + flight, """
+                You are checked in for your flight %s (booking %s).
+
+                %s
+
+                Departure: %s
+
+                Your boarding pass, with its QR code, is on SkyHub: open Manage booking with your booking reference and the last
+                name of any passenger, and show it at the gate.
+
+                If your plans change, you can check out in Manage booking, and then change your seat, until check-in closes at %s.
+                """.formatted(flight, event.locator(), who, UTC_TIME.format(event.departure()), UTC_TIME.format(event.checkInCloses())));
     }
 
     public static EmailMessage bookingDisruptionWithdrawn(BookingDisruptionWithdrawnEvent event) {

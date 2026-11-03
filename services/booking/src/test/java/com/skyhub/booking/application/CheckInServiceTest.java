@@ -58,6 +58,7 @@ class CheckInServiceTest {
     private final HmacBoardingPassSigner signer = new HmacBoardingPassSigner("0123456789abcdef0123456789abcdef".getBytes());
     private final List<CheckIn> stored = new ArrayList<>();
     private final FakeBoardedPassengers boarded = new FakeBoardedPassengers();
+    private final BookingEvents events = mock(BookingEvents.class);
     private Optional<Instant> departure = Optional.of(DEPARTURE);
     private Pnr pnr;
     private CheckInService service;
@@ -84,7 +85,7 @@ class CheckInServiceTest {
         when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty());
         service = new CheckInService(pnrs, checkIns, sequence, disruptions, (flight, date) -> departure.map(d -> new FlightInfo(d, com.skyhub.booking.domain.Money.of("100.00", "USD"))), signer,
                 Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
-                new CheckInWindow(Duration.ofHours(24), Duration.ofMinutes(60)), new CheckInMetrics(registry), boarded);
+                new CheckInWindow(Duration.ofHours(24), Duration.ofMinutes(60)), new CheckInMetrics(registry), boarded, events);
     }
 
     private double count(String outcome) {
@@ -463,5 +464,64 @@ class CheckInServiceTest {
 
         assertThat(service.checkOut("ABC234", 0, List.of(1))).isTrue();
         assertThat(stored).extracting(CheckIn::getPassengerIndex).containsExactly(0);
+    }
+
+    // ---- telling other services who checked in (ADR-0073) --------------------------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    private List<CheckIn> checkedInEvent(int times, Instant expectedDeparture) {
+        org.mockito.ArgumentCaptor<List<CheckIn>> created = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(events, org.mockito.Mockito.times(times)).checkedIn(eq(pnr), eq(new PnrSegment("SK501", DATE)), created.capture(),
+                eq(expectedDeparture), eq(expectedDeparture.minus(Duration.ofMinutes(60))));
+        return created.getValue();
+    }
+
+    @Test
+    void should_tell_other_services_who_was_checked_in_with_their_numbers_and_when_check_in_closes() {
+        service.checkIn("ABC234", 0);
+
+        List<CheckIn> told = checkedInEvent(1, DEPARTURE);
+        assertThat(told).extracting(CheckIn::getPassengerIndex).containsExactly(0, 1);
+        assertThat(told).extracting(CheckIn::getBoardingSequence).containsExactly(7, 8);
+    }
+
+    @Test
+    void should_tell_about_only_the_passengers_newly_checked_in() {
+        when(sequence.reserve(eq("SK501"), eq(DATE), eq(1))).thenReturn(7);
+
+        service.checkIn("ABC234", 0, List.of(1));
+
+        assertThat(checkedInEvent(1, DEPARTURE)).extracting(CheckIn::getPassengerIndex).containsExactly(1);
+    }
+
+    @Test
+    void should_use_the_expected_departure_of_a_delayed_flight_for_the_closing_time() {
+        Instant later = DEPARTURE.plus(Duration.ofHours(2));
+        departure = Optional.of(later);
+
+        service.checkIn("ABC234", 0);
+
+        checkedInEvent(1, later);
+    }
+
+    @Test
+    void should_say_nothing_again_when_checking_in_twice() {
+        service.checkIn("ABC234", 0);
+        service.checkIn("ABC234", 0);
+
+        verify(events, org.mockito.Mockito.times(1)).checkedIn(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void should_say_nothing_when_the_check_in_lost_a_race_or_was_refused() {
+        doAnswer(call -> {
+            stored.add(CheckIn.of("ABC234", 0, 0, 3, NOW));
+            stored.add(CheckIn.of("ABC234", 0, 1, 4, NOW));
+            throw new DataIntegrityViolationException("uq_check_in");
+        }).when(checkIns).saveAllAndFlush(any());
+
+        service.checkIn("ABC234", 0);
+
+        verify(events, org.mockito.Mockito.never()).checkedIn(any(), any(), any(), any(), any());
     }
 }

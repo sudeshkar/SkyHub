@@ -7,6 +7,7 @@ import com.skyhub.notification.domain.AccountPasswordLinkEvent;
 import com.skyhub.notification.domain.BookingCancelledEvent;
 import com.skyhub.notification.domain.BookingConfirmedEvent;
 import com.skyhub.notification.domain.BookingCheckInOpenEvent;
+import com.skyhub.notification.domain.BookingCheckedInEvent;
 import com.skyhub.notification.domain.BookingDisruptedEvent;
 import com.skyhub.notification.domain.BookingDisruptionWithdrawnEvent;
 import com.skyhub.notification.domain.BookingRebookedEvent;
@@ -68,6 +69,8 @@ public class BookingEventsListener {
                     notifications.bookingDisrupted(EventParser.parse(message, BookingDisruptedEvent.class));
             case BookingDisruptionWithdrawnEvent.TYPE ->
                     notifications.bookingDisruptionWithdrawn(EventParser.parse(message, BookingDisruptionWithdrawnEvent.class));
+            case BookingCheckedInEvent.TYPE ->
+                    notifications.checkedIn(EventParser.parse(message, BookingCheckedInEvent.class));
             case BookingCheckInOpenEvent.TYPE ->
                     notifications.checkInOpen(EventParser.parse(message, BookingCheckInOpenEvent.class));
             case BookingRefundCompletedEvent.TYPE ->
