@@ -14,6 +14,8 @@ const REFUSALS: Record<GateRefusal, string> = {
   NOT_CHECKED_IN: "This passenger is not checked in (they may have checked out). Send them to check in.",
   SUPERSEDED: "This is an old pass; a newer one was issued after a seat change or a new check-in. Ask for the current pass.",
   ALREADY_BOARDED: "This passenger has already boarded. Do not board them again.",
+  BOARDING_NOT_OPEN: "Boarding has not opened for this flight yet. Do not board them yet; try again when boarding opens.",
+  BOARDING_CLOSED: "Boarding has closed for this flight. Do not board; send the passenger to the desk.",
 };
 
 /**

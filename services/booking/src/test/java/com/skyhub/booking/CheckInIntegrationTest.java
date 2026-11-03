@@ -33,7 +33,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * 30 hours and 30 minutes from now (see TestFlightCatalog), so the window can be tested without moving the clock.
  * Every test uses its own flight date so tests stay independent.
  */
-@SpringBootTest
+// The test flights leave in 5 hours; boarding is opened wide here so the gate tests do not depend on the time of day. The real
+// boarding window is tested in BoardingWindowIntegrationTest (ADR-0063).
+@SpringBootTest(properties = "skyhub.booking.boarding.opens-before=PT100H")
 @AutoConfigureMockMvc
 @Import({PostgresTestcontainer.class, TestFlightCatalog.class})
 class CheckInIntegrationTest {

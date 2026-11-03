@@ -1,6 +1,7 @@
 package com.skyhub.booking.config;
 
 import com.skyhub.booking.application.BoardingPassSigner;
+import com.skyhub.booking.domain.BoardingWindow;
 import com.skyhub.booking.domain.CheckInWindow;
 import com.skyhub.booking.security.HmacBoardingPassSigner;
 import java.time.Duration;
@@ -16,6 +17,13 @@ public class CheckInConfig {
     CheckInWindow checkInWindow(@Value("${skyhub.booking.check-in.opens-before:PT24H}") Duration opensBefore,
                                 @Value("${skyhub.booking.check-in.closes-before:PT60M}") Duration closesBefore) {
         return new CheckInWindow(opensBefore, closesBefore);
+    }
+
+    /** Boarding opens 45 minutes and closes 10 minutes before departure unless set otherwise (ADR-0063). */
+    @Bean
+    BoardingWindow boardingWindow(@Value("${skyhub.booking.boarding.opens-before:PT45M}") Duration opensBefore,
+                                  @Value("${skyhub.booking.boarding.closes-before:PT10M}") Duration closesBefore) {
+        return new BoardingWindow(opensBefore, closesBefore);
     }
 
     /** The service refuses to start without a proper key, rather than signing boarding passes with a weak one. */

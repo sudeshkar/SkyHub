@@ -2,6 +2,7 @@ package com.skyhub.booking.application;
 
 import com.skyhub.booking.application.BoardingPassVerifier.Reason;
 import com.skyhub.booking.application.BoardingPassVerifier.Verdict;
+import com.skyhub.booking.domain.BoardingWindow;
 import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,12 +21,17 @@ public class BoardingService {
     private final BoardedPassengers boarded;
     private final Clock clock;
     private final BoardingPassMetrics metrics;
+    private final ExpectedDepartures departures;
+    private final BoardingWindow window;
 
-    public BoardingService(BoardingPassVerifier verifier, BoardedPassengers boarded, Clock clock, BoardingPassMetrics metrics) {
+    public BoardingService(BoardingPassVerifier verifier, BoardedPassengers boarded, Clock clock, BoardingPassMetrics metrics,
+                           ExpectedDepartures departures, BoardingWindow window) {
         this.verifier = verifier;
         this.boarded = boarded;
         this.clock = clock;
         this.metrics = metrics;
+        this.departures = departures;
+        this.window = window;
     }
 
     /**
@@ -39,6 +45,12 @@ public class BoardingService {
             return verdict;
         }
         BoardingPass pass = verdict.pass();
+        // Only a good pass reaches here, so the timetable is asked about real flights only, and once per scan (never per booking).
+        Reason outOfWindow = outOfWindow(pass);
+        if (outOfWindow != null) {
+            metrics.boarded(outOfWindow.tag());
+            return Verdict.refused(outOfWindow);
+        }
         // The check and this write are two steps: a second gate scanning at the same instant loses on the primary key, not on the check.
         boolean first = boarded.board(pass.locator(), verdict.segmentIndex(), pass.passengerIndex(), by, clock.instant());
         if (!first) {
@@ -49,5 +61,14 @@ public class BoardingService {
         log.atInfo().addKeyValue("pnr.locator", pass.locator()).addKeyValue("flight", pass.flightNumber())
                 .addKeyValue("boarding.by", by).log("Passenger boarded");
         return verdict;
+    }
+
+    /** @return why boarding is shut for this pass's flight right now, or null when it is open */
+    private Reason outOfWindow(BoardingPass pass) {
+        return switch (window.stateAt(departures.of(pass.flightNumber(), pass.departureDate()), clock.instant())) {
+            case NOT_YET_OPEN -> Reason.BOARDING_NOT_OPEN;
+            case CLOSED -> Reason.BOARDING_CLOSED;
+            case OPEN -> null;
+        };
     }
 }

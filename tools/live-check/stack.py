@@ -55,10 +55,11 @@ def service_env(service, keys, mismatched_link_key=False):
 
 
 def service_args(service):
-    """Extra settings for `spring-boot:run`. Booking opens check-in 100 days before departure, so the seed flights (a few days out) can be
+    """Extra settings for `spring-boot:run`. Booking opens check-in and boarding 100 days before departure (boarding's real window is 45 minutes, ADR-0063), so the seed flights (a few days out) can be
     checked in to; the closing time is untouched. This is for the live check only: a real window is 24 hours (ADR-0013)."""
     if service == "booking":
-        return ["-Dspring-boot.run.arguments=--skyhub.booking.check-in.opens-before=PT2400H"]
+        return ["-Dspring-boot.run.arguments=--skyhub.booking.check-in.opens-before=PT2400H "
+                "--skyhub.booking.boarding.opens-before=PT2400H"]
     if service in ("notification", "flight-search"):
         return []
     raise ValueError("Unknown service: " + service)
