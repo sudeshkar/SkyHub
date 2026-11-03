@@ -43,8 +43,8 @@ class OutboxBookingEventsTest {
     private static final UUID CANCELLED_ID = UUID.fromString("7d2c1a90-5b1e-4c55-8a3a-2f9a6f1c0a22");
     private static final UUID DISRUPTED_ID = UUID.fromString("c4e1b6d2-91a7-4f3e-b0d5-5a8e2c7f9b33");
     private static final Instant NOW = Instant.parse("2026-10-30T10:00:00Z");
-    private static final com.skyhub.booking.integration.AesGcmLinkTokenSealer SEALER =
-            new com.skyhub.booking.integration.AesGcmLinkTokenSealer(com.skyhub.booking.TestLinkTokens.TEST_KEY);
+    private static final com.skyhub.booking.integration.AesGcmSecretSealer SEALER =
+            new com.skyhub.booking.integration.AesGcmSecretSealer(com.skyhub.booking.TestSealedSecrets.TEST_KEY);
     private static final UUID EVENT_ID = UUID.fromString("0b8f6f5e-3c47-4a58-9d0e-6a4f7e2f1c11");
 
     @Mock
@@ -244,8 +244,8 @@ class OutboxBookingEventsTest {
         for (int i = 0; i < 2; i++) {
             String sealed = made.get("passengers").get(i).get("sealedPass").asString();
             assertThat(sealed).startsWith("v1:").isNotEqualTo(example.get("passengers").get(i).get("sealedPass").asString());
-            assertThat(com.skyhub.booking.TestLinkTokens.open(sealed, "booking.checked-in", "priya@example.com"))
-                    .isEqualTo(com.skyhub.booking.TestLinkTokens.open(example.get("passengers").get(i).get("sealedPass").asString(),
+            assertThat(com.skyhub.booking.TestSealedSecrets.open(sealed, "booking.checked-in", "priya@example.com"))
+                    .isEqualTo(com.skyhub.booking.TestSealedSecrets.open(example.get("passengers").get(i).get("sealedPass").asString(),
                             "booking.checked-in", "priya@example.com"));
             ((tools.jackson.databind.node.ObjectNode) made.get("passengers").get(i)).remove("sealedPass");
             ((tools.jackson.databind.node.ObjectNode) example.get("passengers").get(i)).remove("sealedPass");

@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.skyhub.booking.TestLinkTokens;
+import com.skyhub.booking.TestSealedSecrets;
 import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.OutboxEvent;
 import com.skyhub.booking.persistence.OutboxEventRepository;
@@ -26,7 +26,7 @@ class OutboxAccountEmailChangeEventTest {
     private final OutboxEventRepository outbox = mock(OutboxEventRepository.class);
     private final PiiCipher cipher = new PiiCipher("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
     private final JsonMapper json = JsonMapper.builder().build();
-    private static final AesGcmLinkTokenSealer SEALER = new AesGcmLinkTokenSealer(TestLinkTokens.TEST_KEY);
+    private static final AesGcmSecretSealer SEALER = new AesGcmSecretSealer(TestSealedSecrets.TEST_KEY);
 
     @Test
     void should_write_the_email_change_event_as_the_notification_service_expects() throws Exception {
@@ -43,7 +43,7 @@ class OutboxAccountEmailChangeEventTest {
         var example = (ObjectNode) json.readTree(Files.readString(Path.of("../../api-specs/events/account-email-change-link.v1.example.json")));
         // The seal has a random IV, so it differs; what matters is that it opens, for this type and address, to the same token.
         assertThat(made.get("sealedToken").asString()).startsWith("v1:").isNotEqualTo(example.get("sealedToken").asString());
-        assertThat(TestLinkTokens.tokenOf(made)).isEqualTo(TestLinkTokens.tokenOf(example));
+        assertThat(TestSealedSecrets.tokenOf(made)).isEqualTo(TestSealedSecrets.tokenOf(example));
         assertThat(made.has("token")).as("the plain token is never in the event").isFalse();
         made.remove("sealedToken");
         example.remove("sealedToken");
@@ -76,7 +76,7 @@ class OutboxAccountEmailChangeEventTest {
         var example = (ObjectNode) json.readTree(Files.readString(Path.of("../../api-specs/events/account-email-changed.v1.example.json")));
         // The seal has a random IV, so it differs; what matters is that it opens, for this type and the OLD address, to the same token.
         assertThat(made.get("sealedUndoToken").asString()).startsWith("v1:").isNotEqualTo(example.get("sealedUndoToken").asString());
-        assertThat(TestLinkTokens.tokenOf(made, "sealedUndoToken")).isEqualTo(TestLinkTokens.tokenOf(example, "sealedUndoToken"));
+        assertThat(TestSealedSecrets.tokenOf(made, "sealedUndoToken")).isEqualTo(TestSealedSecrets.tokenOf(example, "sealedUndoToken"));
         assertThat(made.has("undoToken")).as("the plain token is never in the event").isFalse();
         made.remove("sealedUndoToken");
         example.remove("sealedUndoToken");

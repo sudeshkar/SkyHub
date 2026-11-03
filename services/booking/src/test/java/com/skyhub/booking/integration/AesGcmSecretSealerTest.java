@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
-import com.skyhub.booking.TestLinkTokens;
+import com.skyhub.booking.TestSealedSecrets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -13,10 +13,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
-class AesGcmLinkTokenSealerTest {
+class AesGcmSecretSealerTest {
 
     private static final String TOKEN = "dGVzdC10b2tlbi1ub3QtYS1yZWFsLW9uZS1hYWFhYWFhYQ";
-    private final AesGcmLinkTokenSealer sealer = new AesGcmLinkTokenSealer(TestLinkTokens.TEST_KEY);
+    private final AesGcmSecretSealer sealer = new AesGcmSecretSealer(TestSealedSecrets.TEST_KEY);
     private final JsonMapper json = JsonMapper.builder().build();
 
     @Test
@@ -31,15 +31,15 @@ class AesGcmLinkTokenSealerTest {
     void should_open_for_the_event_type_and_address_it_was_made_for() {
         String sealed = sealer.seal(TOKEN, "account.password-link", "priya@example.com");
 
-        assertThat(TestLinkTokens.open(sealed, "account.password-link", "priya@example.com")).isEqualTo(TOKEN);
+        assertThat(TestSealedSecrets.open(sealed, "account.password-link", "priya@example.com")).isEqualTo(TOKEN);
     }
 
     @Test
     void should_not_open_for_another_address_or_another_kind_of_event() {
         String sealed = sealer.seal(TOKEN, "account.password-link", "priya@example.com");
 
-        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> TestLinkTokens.open(sealed, "account.password-link", "someone.else@example.com"));
-        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> TestLinkTokens.open(sealed, "account.email-change-link", "priya@example.com"));
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> TestSealedSecrets.open(sealed, "account.password-link", "someone.else@example.com"));
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> TestSealedSecrets.open(sealed, "account.email-change-link", "priya@example.com"));
     }
 
     @Test
@@ -55,19 +55,19 @@ class AesGcmLinkTokenSealerTest {
         for (String file : new String[] {"account-password-link", "account-email-change-link"}) {
             var event = json.readTree(Files.readString(Path.of("../../api-specs/events/" + file + ".v1.example.json")));
 
-            String token = TestLinkTokens.tokenOf(event);
+            String token = TestSealedSecrets.tokenOf(event);
 
             assertThat(token).isNotBlank();
             assertThat(event.has("token")).as("the plain token is never in the event").isFalse();
             // and what the sealer makes for the same type and address opens to the same kind of value
             String made = sealer.seal(token, event.get("type").asString(), event.get("contactEmail").asString());
-            assertThat(TestLinkTokens.open(made, event.get("type").asString(), event.get("contactEmail").asString())).isEqualTo(token);
+            assertThat(TestSealedSecrets.open(made, event.get("type").asString(), event.get("contactEmail").asString())).isEqualTo(token);
         }
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"", "not base64 !!", "AAAA", "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="})
     void should_refuse_to_start_without_a_proper_256_bit_key_and_say_which_setting(String badKey) {
-        assertThatIllegalStateException().isThrownBy(() -> new AesGcmLinkTokenSealer(badKey)).withMessageContaining("SKYHUB_LINK_TOKEN_KEY");
+        assertThatIllegalStateException().isThrownBy(() -> new AesGcmSecretSealer(badKey)).withMessageContaining("SKYHUB_LINK_TOKEN_KEY");
     }
 }

@@ -16,10 +16,10 @@ import tools.jackson.databind.json.JsonMapper;
  * Opening the one-time token of a link event (ADR-0046). The shared examples were sealed by the booking side's format with a
  * test-only key (32 bytes of 0x02) and bound to their own event type and address.
  */
-class AesGcmLinkTokenOpenerTest {
+class AesGcmSecretOpenerTest {
 
     private static final String TEST_KEY = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
-    private final AesGcmLinkTokenOpener opener = new AesGcmLinkTokenOpener(TEST_KEY);
+    private final AesGcmSecretOpener opener = new AesGcmSecretOpener(TEST_KEY);
     private final JsonMapper json = JsonMapper.builder().build();
 
     private tools.jackson.databind.JsonNode example(String file) throws Exception {
@@ -60,7 +60,7 @@ class AesGcmLinkTokenOpenerTest {
     @Test
     void should_not_open_with_another_key() throws Exception {
         var event = example("account-password-link");
-        AesGcmLinkTokenOpener other = new AesGcmLinkTokenOpener("AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=");
+        AesGcmSecretOpener other = new AesGcmSecretOpener("AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=");
 
         assertThatExceptionOfType(InvalidEventException.class)
                 .isThrownBy(() -> other.open(event.get("sealedToken").asString(), "account.password-link", "priya@example.com"));
@@ -92,7 +92,7 @@ class AesGcmLinkTokenOpenerTest {
 
     @Test
     void should_start_without_a_key_but_refuse_every_token_and_say_which_setting_is_missing() throws Exception {
-        AesGcmLinkTokenOpener unconfigured = new AesGcmLinkTokenOpener("");   // booking emails do not need the key, so the service still starts
+        AesGcmSecretOpener unconfigured = new AesGcmSecretOpener("");   // booking emails do not need the key, so the service still starts
 
         assertThatExceptionOfType(InvalidEventException.class)
                 .isThrownBy(() -> unconfigured.open(example("account-password-link").get("sealedToken").asString(), "account.password-link", "priya@example.com"))
@@ -102,7 +102,7 @@ class AesGcmLinkTokenOpenerTest {
     @ParameterizedTest
     @ValueSource(strings = {"not base64 !!", "AAAA", "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="})
     void should_refuse_to_start_with_a_key_that_is_set_but_wrong_since_that_is_a_mistake_not_an_omission(String badKey) {
-        assertThatIllegalStateException().isThrownBy(() -> new AesGcmLinkTokenOpener(badKey)).withMessageContaining("SKYHUB_LINK_TOKEN_KEY");
+        assertThatIllegalStateException().isThrownBy(() -> new AesGcmSecretOpener(badKey)).withMessageContaining("SKYHUB_LINK_TOKEN_KEY");
     }
 
     @Test

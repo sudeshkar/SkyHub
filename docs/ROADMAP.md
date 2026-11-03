@@ -87,6 +87,7 @@ How a slice goes, every time:
 | 68 | Scan a boarding pass with the phone's back camera on the gate screen: reads the QR code in the browser with `jsqr`, fills the pass field and stops the camera, never boards anyone by itself; pictures are read in memory and never sent | ADR-0072 |
 | 69 | A confirmation email when someone checks in: a new `booking.checked-in` event (only those just checked in, with seat, boarding number and when check-in closes; no pass text) and an email that points to the pass on SkyHub. The first half of "a boarding-pass attachment" | ADR-0073 |
 | 70 | The boarding passes attached to the check-in email as QR pictures: each signed pass travels the topic only sealed (the link-token mechanism, bound to the event type and address), the notification service opens it, draws it with ZXing and attaches it; if a pass will not open the confirmation still goes without any, is counted and alerted | ADR-0074 |
+| 71 | Three loose ends from the check-in work: the check-in-open email stops saying everyone checks in together; check-in and check-out use `ExpectedDepartures` (one place for the delay-beats-timetable rule); the sealer and opener are named for what they do (`SecretSealer`, `SecretOpener`), with nothing on the wire changed | ADR-0075 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -98,7 +99,7 @@ Ordered by how much they add to the story, not a commitment.
 | **More notifications** | SMS (the confirmation, ADR-0073, and the QR pass attached to it, ADR-0074, are done) | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
 | **Account follow-ups** | Saved passengers (revisit ADR-0054's mailbox trust first) | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
-| **Check-in extras** | a per-route boarding window and an override for a late passenger (ADR-0063) | The boarding time rule (ADR-0063), undoing a wrong scan (ADR-0064), the who-has-boarded screen (ADR-0065) and the QR code (ADR-0071) are done. The code is the groundwork for the boarding-pass email and the gate's camera. Move `CheckInService`'s departure lookup onto `ExpectedDepartures` when it is next touched. |
+| **Check-in extras** | a per-route boarding window and an override for a late passenger (ADR-0063) | The boarding time rule (ADR-0063), undoing a wrong scan (ADR-0064), the who-has-boarded screen (ADR-0065), the QR code (ADR-0071) and the camera scan (ADR-0072) are done. |
 | **Gateway and deployment** | Kong gateway, containers for every service, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
 
 ## Smaller loose ends

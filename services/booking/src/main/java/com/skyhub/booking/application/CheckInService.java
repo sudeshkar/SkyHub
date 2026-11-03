@@ -5,9 +5,7 @@ import com.skyhub.booking.domain.AlreadyBoardedException;
 import com.skyhub.booking.domain.CheckIn;
 import com.skyhub.booking.domain.CheckInClosedException;
 import com.skyhub.booking.domain.CheckInWindow;
-import com.skyhub.booking.domain.Disruption;
 import com.skyhub.booking.domain.FlightCancelledException;
-import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.NotCheckedInException;
 import com.skyhub.booking.domain.Pnr;
@@ -15,7 +13,6 @@ import com.skyhub.booking.domain.PnrNotFoundException;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
 import com.skyhub.booking.persistence.CheckInRepository;
-import com.skyhub.booking.persistence.DisruptionRepository;
 import com.skyhub.booking.persistence.PnrRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -40,8 +37,7 @@ public class CheckInService {
     private final PnrRepository pnrs;
     private final CheckInRepository checkIns;
     private final BoardingSequence sequence;
-    private final DisruptionRepository disruptions;
-    private final FlightCatalog flights;
+    private final ExpectedDepartures departures;
     private final BoardingPassSigner signer;
     private final Clock clock;
     private final TransactionOperations transactions;
@@ -51,13 +47,12 @@ public class CheckInService {
     private final BookingEvents events;
 
     public CheckInService(PnrRepository pnrs, CheckInRepository checkIns, BoardingSequence sequence,
-                          DisruptionRepository disruptions, FlightCatalog flights, BoardingPassSigner signer, Clock clock, TransactionOperations transactions,
+                          ExpectedDepartures departures, BoardingPassSigner signer, Clock clock, TransactionOperations transactions,
                           CheckInWindow window, CheckInMetrics metrics, BoardedPassengers boarded, BookingEvents events) {
         this.pnrs = pnrs;
         this.checkIns = checkIns;
         this.sequence = sequence;
-        this.disruptions = disruptions;
-        this.flights = flights;
+        this.departures = departures;
         this.signer = signer;
         this.clock = clock;
         this.transactions = transactions;
@@ -176,12 +171,11 @@ public class CheckInService {
     }
 
     private void requireCheckInNotClosedFor(PnrSegment flight) {
-        Disruption disruption = disruptions.findByFlightNumberAndDepartureDate(flight.flightNumber(), flight.departureDate()).orElse(null);
-        if (disruption != null && disruption.isCancelled()) {
+        // A cancelled flight has no departure, and a traveller can always check out of it (ADR-0055).
+        Instant departure = departures.of(flight.flightNumber(), flight.departureDate()).orElse(null);
+        if (departure == null) {
             return;
         }
-        Instant departure = disruption != null ? disruption.getRevisedDeparture() : flights.departure(flight.flightNumber(), flight.departureDate())
-                .orElseThrow(() -> new FlightNotFoundException(flight.flightNumber() + " does not operate on " + flight.departureDate()));
         try {
             window.requireNotClosed(departure, clock.instant());
         } catch (CheckInClosedException e) {
@@ -192,19 +186,11 @@ public class CheckInService {
 
     /** A disruption beats the timetable: a cancelled flight has no check-in, a delayed one uses its revised time. */
     private Instant departureOf(PnrSegment flight) {
-        Disruption disruption = disruptions.findByFlightNumberAndDepartureDate(flight.flightNumber(), flight.departureDate())
-                .orElse(null);
-        if (disruption != null && disruption.isCancelled()) {
-            metrics.record(Outcome.REFUSED);
-            throw new FlightCancelledException(flight.flightNumber() + " on " + flight.departureDate() + " is cancelled");
-        }
-        if (disruption != null) {
-            return disruption.getRevisedDeparture();
-        }
         // Outside the transaction: this may be an HTTP call to flight-search.
-        return flights.departure(flight.flightNumber(), flight.departureDate())
-                .orElseThrow(() -> new FlightNotFoundException(
-                        flight.flightNumber() + " does not operate on " + flight.departureDate()));
+        return departures.of(flight.flightNumber(), flight.departureDate()).orElseThrow(() -> {
+            metrics.record(Outcome.REFUSED);
+            return new FlightCancelledException(flight.flightNumber() + " on " + flight.departureDate() + " is cancelled");
+        });
     }
 
     public CheckInResult boardingPasses(String locator, int segmentIndex) {

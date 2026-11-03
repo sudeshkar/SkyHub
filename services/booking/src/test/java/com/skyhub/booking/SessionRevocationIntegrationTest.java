@@ -138,7 +138,7 @@ class SessionRevocationIntegrationTest {
         for (String payload : jdbc.queryForList("SELECT payload FROM outbox_event WHERE event_type = ? ORDER BY seq DESC LIMIT 100", String.class, eventType)) {
             var event = json.readTree(cipher.decrypt(payload));
             if (email.equalsIgnoreCase(event.get("contactEmail").asString())) {
-                return TestLinkTokens.tokenOf(event);
+                return TestSealedSecrets.tokenOf(event);
             }
         }
         throw new AssertionError("No " + eventType + " was queued for " + email);

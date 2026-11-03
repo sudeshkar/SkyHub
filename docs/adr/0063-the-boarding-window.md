@@ -29,7 +29,7 @@ ADR-0060 let a gate board a passenger once, and named its own gap: *there is no 
 - Positive: a gate can no longer board a passenger a day early or after the doors are shut, and a delay moves the window by itself.
 - Positive: the lookup of a flight's real departure time lives in one class. The next rule that depends on it (for example, notifying a late passenger) reuses it.
 - Positive: a sound rule can be changed by configuration; the live check widens it (`PT2400H`) for the seed flights, as it already does for check-in.
-- Negative: **`CheckInService` still has its own copy of the "disruption beats the timetable" lookup.** It also records metrics and throws for a cancelled flight, so it was left alone in this slice; moving it onto `ExpectedDepartures` is a small follow-up.
+- Negative (fixed by ADR-0075): **`CheckInService` still has its own copy of the "disruption beats the timetable" lookup.** It also records metrics and throws for a cancelled flight, so it was left alone in this slice; moving it onto `ExpectedDepartures` is a small follow-up.
 - Negative: **one window for every flight.** A wide-body to New York would board earlier than a short hop; a per-route window would be a new `BoardingWindow` chosen by flight, not a change to this class.
 - Negative: **a closed window cannot be overridden.** A late passenger the gate agent wishes to let on cannot be, short of the database. An override would need its own role and an audit trail.
 - Negative: **it needs the catalogue.** If flight-search is down, boarding answers with the existing "timetable unavailable" error instead of guessing.

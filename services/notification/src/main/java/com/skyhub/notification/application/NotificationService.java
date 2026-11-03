@@ -40,19 +40,19 @@ public class NotificationService {
     private final Clock clock;
     private final TransactionOperations transactions;
     private final NotificationMetrics metrics;
-    private final LinkTokenOpener tokens;
+    private final SecretOpener tokens;
     private final PassImages images;
     private final String siteUrl;
 
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
-                               TransactionOperations transactions, NotificationMetrics metrics, LinkTokenOpener tokens,
+                               TransactionOperations transactions, NotificationMetrics metrics, SecretOpener tokens,
                                PassImages images) {
         this(sent, email, clock, transactions, metrics, tokens, images, "http://localhost:3000");
     }
 
     @Autowired
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
-                               TransactionOperations transactions, NotificationMetrics metrics, LinkTokenOpener tokens,
+                               TransactionOperations transactions, NotificationMetrics metrics, SecretOpener tokens,
                                PassImages images, @Value("${skyhub.notifications.site-url:http://localhost:3000}") String siteUrl) {
         this.tokens = tokens;
         this.images = images;
