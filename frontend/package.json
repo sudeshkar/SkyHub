@@ -14,6 +14,14 @@
     "api:types": "openapi-typescript ../api-specs/flight-search-api.yaml -o src/lib/api/flight-search.d.ts && openapi-typescript ../api-specs/booking-api.yaml -o src/lib/api/booking-contract.d.ts && openapi-typescript ../api-specs/disruption-agent-api.yaml -o src/lib/api/agent-contract.d.ts"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/api-logs": "^0.223.0",
+    "@opentelemetry/instrumentation": "^0.223.0",
+    "@opentelemetry/resources": "^2.12.0",
+    "@opentelemetry/sdk-logs": "^0.223.0",
+    "@opentelemetry/sdk-metrics": "^2.12.0",
+    "@opentelemetry/sdk-trace-base": "^2.12.0",
+    "@vercel/otel": "^2.2.1",
     "jsqr": "^1.4.0",
     "next": "16.4.3",
     "react": "19.3.0",

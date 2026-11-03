@@ -93,7 +93,7 @@ The full table is [`ROADMAP.md`](ROADMAP.md). The order we plan to work in (each
 
 **Account follow-ups: done.** (Saved passengers, ADR-0078, on top of the account work in ADR-0033 to ADR-0054.)
 
-**Loose ends to fold in when a slice touches them:** browser tests (Playwright) for check-in and boarding passes, disruption notices, the refund retry, the withdraw form and the account pages; Next.js tracing; manage-token revocation (account tokens are done, ADR-0041); a rotation procedure for the link-token key (the token is sealed on Kafka since ADR-0046); share the lock-out logic between staff and traveller accounts; homepage hero video (needs a paid plan); the graphify hook.
+**Loose ends to fold in when a slice touches them:** browser tests (Playwright) for check-in and boarding passes, disruption notices, the refund retry, the withdraw form and the account pages; three frontend tests that time out only when the machine is busy; manage-token revocation (account tokens are done, ADR-0041); a rotation procedure for the link-token key (the token is sealed on Kafka since ADR-0046); share the lock-out logic between staff and traveller accounts; homepage hero video (needs a paid plan); the graphify hook.
 
 **Needs the author, not code:**
 - Set `GROQ_API_KEY`, then run `python -m evals --live` and `python -m disruption_agent SK001 <date>`: the live Groq model has never been run.

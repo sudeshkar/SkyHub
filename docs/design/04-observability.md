@@ -120,6 +120,8 @@ docker compose --profile observability up -d        # Prometheus :9090, Grafana 
 # run each service with:
 #   LOG_FILE=logs/<service>.log        JSON logs, collected into Loki
 #   TRACING_EXPORT_ENABLED=true        traces to Tempo (OTLP http://localhost:4318)
+# the website takes the same settings (TRACING_EXPORT_ENABLED, OTLP_TRACES_ENDPOINT, TRACE_SAMPLING), ADR-0079;
+# `node scripts/trace-check.mjs` in frontend/ proves them against a built site
 ```
 
 Grafana login comes from `.env` (`GRAFANA_ADMIN_PASSWORD`, see `.env.example`); anonymous access is disabled.
