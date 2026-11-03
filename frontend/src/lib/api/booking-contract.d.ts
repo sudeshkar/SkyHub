@@ -639,6 +639,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/me/passengers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The names the signed-in traveller has saved to fill a booking with
+         * @description Up to ten names (ADR-0078), oldest first. **Names only**: no date of birth, passport or contact detail is held anywhere in the
+         *     system. Only the signed-in account's own names are ever returned, and they are never cached.
+         */
+        get: operations["listSavedPassengers"];
+        put?: never;
+        /**
+         * Save a name to the signed-in traveller's account
+         * @description Saving a name that is already kept (ignoring case and surrounding spaces) is harmless: it answers 200 with the one already there
+         *     and uses no second place. A new name answers 201. At most ten names are kept; the eleventh is a 409.
+         */
+        post: operations["saveMyPassenger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/me/passengers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a saved name
+         * @description A name that is not there, or that belongs to another account, is the same 404, so the answer says nothing about anyone else's.
+         */
+        delete: operations["removeSavedPassenger"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/me/bookings": {
         parameters: {
             query?: never;
@@ -839,6 +885,21 @@ export interface components {
             flightNumber: components["schemas"]["FlightNumber"];
             /** Format: date */
             departureDate: string;
+        };
+        SavedPassenger: {
+            /** Format: int64 */
+            id: number;
+            firstName: string;
+            lastName: string;
+        };
+        SavedPassengerList: {
+            passengers: components["schemas"]["SavedPassenger"][];
+            /** @description How many names an account may keep. */
+            limit: number;
+        };
+        SavedPassengerRequest: {
+            firstName: string;
+            lastName: string;
         };
         PassengerRequest: {
             firstName: string;
@@ -2098,6 +2159,104 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+        };
+    };
+    listSavedPassengers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The saved names, possibly none */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedPassengerList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    saveMyPassenger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedPassengerRequest"];
+            };
+        };
+        responses: {
+            /** @description That name was already saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedPassenger"];
+                };
+            };
+            /** @description The name is saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedPassenger"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Ten names are already saved; remove one first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    removeSavedPassenger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The name is removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description No such saved name on this account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listMyBookings: {

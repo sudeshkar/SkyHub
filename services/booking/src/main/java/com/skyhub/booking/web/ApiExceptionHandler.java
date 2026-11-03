@@ -25,6 +25,8 @@ import com.skyhub.booking.domain.FlightNotFoundException;
 import com.skyhub.booking.domain.IdempotencyKeyReusedException;
 import com.skyhub.booking.domain.InvalidBookingException;
 import com.skyhub.booking.domain.PnrNotFoundException;
+import com.skyhub.booking.domain.SavedPassengerLimitException;
+import com.skyhub.booking.domain.SavedPassengerNotFoundException;
 import com.skyhub.booking.domain.SeatUnavailableException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -121,6 +123,16 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AlreadyCheckedInException.class)
     ProblemDetail handleAlreadyCheckedIn(AlreadyCheckedInException ex) {
         return problem(HttpStatus.CONFLICT, "Already checked in", ex.getMessage());
+    }
+
+    @ExceptionHandler(SavedPassengerLimitException.class)
+    ProblemDetail handleSavedPassengerLimit(SavedPassengerLimitException ex) {
+        return problem(HttpStatus.CONFLICT, "Saved passengers full", ex.getMessage());
+    }
+
+    @ExceptionHandler(SavedPassengerNotFoundException.class)
+    ProblemDetail handleSavedPassengerNotFound(SavedPassengerNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Saved passenger not found", ex.getMessage());
     }
 
     @ExceptionHandler(AlreadyBoardedException.class)

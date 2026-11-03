@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
+import { loadSavedPassengers, type SavedName } from "@/lib/saved-passengers-client";
 import { createBooking, holdSeats, quoteTrip, releaseSeats } from "@/app/book/actions";
 import type { Pnr, QuoteOutcome, SeatMap as SeatMapData, Segment } from "@/lib/api/booking";
 import { formatPrice } from "@/lib/format";
@@ -28,6 +29,8 @@ type WizardProps = {
   segments: Segment[];
   seatMaps: SeatMapData[];
   passengerCount: number;
+  /** Where the traveller's saved names come from (ADR-0078); replaced in tests. */
+  loadSaved?: () => Promise<SavedName[]>;
 };
 
 /**
@@ -41,7 +44,7 @@ export function BookingWizard(props: WizardProps) {
   return <Wizard key={booking} {...props} />;
 }
 
-function Wizard({ segments, seatMaps, passengerCount }: WizardProps) {
+function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPassengers }: WizardProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("seats");
   const [segmentIndex, setSegmentIndex] = useState(0);
@@ -54,6 +57,8 @@ function Wizard({ segments, seatMaps, passengerCount }: WizardProps) {
     Array.from({ length: passengerCount }, () => ({ firstName: "", lastName: "" })),
   );
   const [email, setEmail] = useState("");
+  // The names this traveller has saved to their account, asked for only when they reach the passengers step (ADR-0078).
+  const [saved, setSaved] = useState<SavedName[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [booked, setBooked] = useState<{ pnr: Pnr; paid: string } | null>(null);
   // The price the server worked out for this trip; null while it is being worked out.
@@ -87,6 +92,8 @@ function Wizard({ segments, seatMaps, passengerCount }: WizardProps) {
       if (outcome.kind === "held") {
         setHold({ id: outcome.holdId, expiresAt: outcome.expiresAt });
         setStep("passengers");
+        // Not waited for, and never able to fail the booking: if it does not answer there is simply nothing to pick from.
+        loadSaved().then(setSaved, () => setSaved([]));
       } else if (outcome.kind === "seat-taken") {
         setSeats(seats.map((row) => row.map(() => "")));
         setNotice("One of your seats was just taken by another traveller. Please choose your seats again.");
@@ -276,6 +283,25 @@ function Wizard({ segments, seatMaps, passengerCount }: WizardProps) {
             <fieldset key={p} className="rounded-lg border border-sand bg-white p-5">
               <legend className="px-1 font-semibold">Passenger {p + 1}</legend>
               <p className="mb-3 text-sm text-muted">Enter names exactly as they appear on the passport.</p>
+              {saved.length > 0 && (
+                <label className="mb-3 block text-sm font-medium">
+                  Use a saved passenger
+                  <select
+                    aria-label={`Use a saved passenger for passenger ${p + 1}`}
+                    value=""
+                    onChange={(e) => {
+                      const chosen = saved[Number(e.target.value)];
+                      if (chosen) setPassengers(passengers.map((x, i) => (i === p ? { firstName: chosen.firstName, lastName: chosen.lastName } : x)));
+                    }}
+                    className="mt-1 block w-full rounded-md border border-sand px-3 py-2"
+                  >
+                    <option value="">Choose a saved passenger…</option>
+                    {saved.map((name, i) => (
+                      <option key={`${name.firstName}-${name.lastName}-${i}`} value={i}>{name.firstName} {name.lastName}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 {(["firstName", "lastName"] as const).map((field) => (
                   <label key={field} className="block text-sm font-medium">

@@ -499,6 +499,62 @@ export async function getMyAccount(token: string): Promise<MyAccountOutcome> {
   return { kind: "unavailable" };
 }
 
+export type SavedPassenger = components["schemas"]["SavedPassenger"];
+
+export type SavedPassengersOutcome =
+  | { kind: "list"; passengers: SavedPassenger[]; limit: number }
+  | { kind: "unauthorized" }
+  | { kind: "unavailable" };
+
+/** The names the signed-in traveller has saved (ADR-0078): names only. */
+export async function listSavedPassengers(token: string): Promise<SavedPassengersOutcome> {
+  const response = await call("/api/v1/accounts/me/passengers", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  if (!response) return { kind: "unavailable" };
+  if (response.ok) {
+    const list = (await response.json()) as components["schemas"]["SavedPassengerList"];
+    return { kind: "list", passengers: list.passengers, limit: list.limit };
+  }
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
+export type SaveSavedPassengerOutcome =
+  | { kind: "saved" }
+  | { kind: "already-saved" } // the name was already kept: nothing changed and no second place was used
+  | { kind: "full" } // ten names are kept
+  | { kind: "rejected"; detail: string }
+  | { kind: "unauthorized" }
+  | { kind: "unavailable" };
+
+export async function saveMyPassenger(token: string, firstName: string, lastName: string): Promise<SaveSavedPassengerOutcome> {
+  const response = await call("/api/v1/accounts/me/passengers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ firstName, lastName }),
+    cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 201) return { kind: "saved" };
+  if (response.status === 200) return { kind: "already-saved" };
+  if (response.status === 409) return { kind: "full" };
+  if (response.status === 400) return { kind: "rejected", detail: await problemDetail(response, "That name was not accepted.") };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
+export type RemoveSavedPassengerOutcome = { kind: "removed" } | { kind: "not-found" } | { kind: "unauthorized" } | { kind: "unavailable" };
+
+export async function removeSavedPassenger(token: string, id: number): Promise<RemoveSavedPassengerOutcome> {
+  const response = await call(`/api/v1/accounts/me/passengers/${id}`, {
+    method: "DELETE", headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+  });
+  if (!response) return { kind: "unavailable" };
+  if (response.status === 204) return { kind: "removed" };
+  if (response.status === 404) return { kind: "not-found" };
+  if (response.status === 401 || response.status === 403) return { kind: "unauthorized" };
+  return { kind: "unavailable" };
+}
+
 export type EmailChangeOutcome =
   | { kind: "sent" } // a link is on its way if the new address can be used; the service never says whether it can
   | { kind: "password-refused" } // wrong, missing or locked: a 403, so the session is not ended

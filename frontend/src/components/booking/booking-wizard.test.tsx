@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SeatMap as SeatMapData, Segment } from "@/lib/api/booking";
 import { BookingWizard } from "./booking-wizard";
@@ -78,5 +78,66 @@ describe("BookingWizard", () => {
     rerender(<BookingWizard segments={[{ ...OUTBOUND }]} seatMaps={[mapFor(OUTBOUND)]} passengerCount={1} />);   // new objects, same booking
 
     expect(screen.getByRole("button", { name: "Continue to passengers" })).toBeEnabled();
+  });
+});
+
+describe("BookingWizard saved passengers (ADR-0078)", () => {
+  const SAVED = [{ firstName: "Priya", lastName: "Perera" }, { firstName: "Raj", lastName: "Perera" }];
+
+  async function atPassengers(loadSaved: () => Promise<{ firstName: string; lastName: string }[]>, count = 2) {
+    const { holdSeats } = await import("@/app/book/actions");
+    vi.mocked(holdSeats).mockResolvedValue({ kind: "held", holdId: "h1", expiresAt: "2099-01-01T00:00:00Z" } as never);
+    render(<BookingWizard segments={[OUTBOUND]} seatMaps={[mapFor(OUTBOUND)]} passengerCount={count} loadSaved={loadSaved} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Seat 11A/ }));
+    if (count > 1) fireEvent.click(screen.getByRole("button", { name: /^Seat 11B/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to passengers" }));
+    await screen.findByRole("group", { name: "Passenger 1" });
+  }
+
+  it("asks for the saved names only when the traveller reaches the passengers step", async () => {
+    const loadSaved = vi.fn().mockResolvedValue(SAVED);
+    const { holdSeats } = await import("@/app/book/actions");
+    vi.mocked(holdSeats).mockResolvedValue({ kind: "held", holdId: "h1", expiresAt: "2099-01-01T00:00:00Z" } as never);
+    render(<BookingWizard segments={[OUTBOUND]} seatMaps={[mapFor(OUTBOUND)]} passengerCount={1} loadSaved={loadSaved} />);
+
+    expect(loadSaved).not.toHaveBeenCalled();   // choosing seats needs no account
+
+    fireEvent.click(screen.getByRole("button", { name: /^Seat 11A/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to passengers" }));
+    await screen.findByRole("group", { name: "Passenger 1" });
+
+    expect(loadSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("fills one passenger's names from a saved name and leaves the others alone", async () => {
+    await atPassengers(vi.fn().mockResolvedValue(SAVED));
+
+    const picker = await screen.findByLabelText("Use a saved passenger for passenger 2");
+    fireEvent.change(picker, { target: { value: "1" } });   // Raj Perera
+
+    const second = screen.getByRole("group", { name: "Passenger 2" });
+    expect(within(second).getByLabelText("First name")).toHaveValue("Raj");
+    expect(within(second).getByLabelText("Last name")).toHaveValue("Perera");
+    const first = screen.getByRole("group", { name: "Passenger 1" });
+    expect(within(first).getByLabelText("First name")).toHaveValue("");
+  });
+
+  it("lets the traveller change a name that was filled in", async () => {
+    await atPassengers(vi.fn().mockResolvedValue(SAVED), 1);
+    fireEvent.change(await screen.findByLabelText("Use a saved passenger for passenger 1"), { target: { value: "0" } });
+
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Priyanka" } });
+
+    expect(screen.getByLabelText("First name")).toHaveValue("Priyanka");
+  });
+
+  it.each([
+    ["none are saved", () => vi.fn().mockResolvedValue([])],
+    ["the names cannot be loaded", () => vi.fn().mockRejectedValue(new Error("offline"))],
+  ])("shows no picker, and nothing is missing from the form, when %s", async (_why, make) => {
+    await atPassengers(make(), 1);
+
+    expect(screen.queryByLabelText(/Use a saved passenger/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("First name")).toBeRequired();
   });
 });
