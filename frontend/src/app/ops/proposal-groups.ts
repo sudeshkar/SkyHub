@@ -13,6 +13,33 @@ export type ProposalGroup = {
   passengers: number;
 };
 
+/** How many rows are drawn at first, and added each time more are asked for (ADR-0068). */
+export const ROW_WINDOW = 100;
+
+/** One group and the rows of it that are drawn. The group keeps its true size and number of people. */
+export type WindowedSection = { group: ProposalGroup; rows: Proposal[] };
+
+export type WindowedGroups = { sections: WindowedSection[]; drawn: number; total: number };
+
+/**
+ * Cuts a long list down to the rows that are drawn (ADR-0068), in the order the groups are listed: the first `limit` bookings across the
+ * groups, never fewer than one. Every group is kept, even one with no row drawn, so its heading and its buttons are still there and say
+ * how big it really is. This only decides what is drawn, never what is selected or moved. One pass: O(n).
+ */
+export function windowGroups(groups: readonly ProposalGroup[], limit: number): WindowedGroups {
+  let left = Math.max(1, limit);
+  let drawn = 0;
+  let total = 0;
+  const sections = groups.map((group) => {
+    const rows = group.proposals.slice(0, left);
+    left -= rows.length;
+    drawn += rows.length;
+    total += group.proposals.length;
+    return { group, rows };
+  });
+  return { sections, drawn, total };
+}
+
 /** Which bookings to show by what happened to them (ADR-0067). Each booking is in exactly one of the last three, or needs a person. */
 export type OutcomeFilter = "all" | "todo" | "moved" | "problem";
 

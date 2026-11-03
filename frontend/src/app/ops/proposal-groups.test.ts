@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Proposal } from "@/lib/api/agent";
-import { groupProposals, outcomeCounts } from "./proposal-groups";
+import { groupProposals, outcomeCounts, windowGroups } from "./proposal-groups";
 
 const rebook = (locator: string, flightNumber: string, departureDate: string, passengerCount = 1): Proposal => ({
   locator, action: "REBOOK", flightNumber, departureDate, segmentIndex: 0, passengerCount, rationale: "Earliest flight that fits.",
@@ -137,5 +137,42 @@ describe("groupProposals by outcome (ADR-0067)", () => {
   it("counts each outcome in one pass, with the bookings that need a person only in the total", () => {
     expect(outcomeCounts(proposals, results)).toEqual({ all: 6, todo: 1, moved: 2, problem: 2 });
     expect(outcomeCounts([], {})).toEqual({ all: 0, todo: 0, moved: 0, problem: 0 });
+  });
+});
+
+describe("windowGroups (ADR-0068)", () => {
+  const groups = () => groupProposals([
+    rebook("AAAAAA", "SK503", "2026-11-02", 2), rebook("BBBBBB", "SK503", "2026-11-02", 1), rebook("CCCCCC", "SK503", "2026-11-02", 3),
+    rebook("DDDDDD", "SK505", "2026-11-02", 1), rebook("EEEEEE", "SK505", "2026-11-02", 1),
+    human("FFFFFF", 4),
+  ], "");   // SK503 holds 3, SK505 holds 2, then the bookings that need a person
+
+  it("draws every row when the limit is not reached", () => {
+    const window = windowGroups(groups(), 100);
+
+    expect(window.drawn).toBe(6);
+    expect(window.total).toBe(6);
+    expect(window.sections.map((s) => s.rows.length)).toEqual([3, 2, 1]);
+  });
+
+  it("stops drawing at the limit, in the order the groups are listed, and says how many are drawn of how many", () => {
+    const window = windowGroups(groups(), 4);
+
+    expect(window.sections.map((s) => s.rows.map((p) => p.locator))).toEqual([["AAAAAA", "BBBBBB", "CCCCCC"], ["DDDDDD"], []]);
+    expect(window.drawn).toBe(4);
+    expect(window.total).toBe(6);
+  });
+
+  it("keeps every group, with its true size and number of people, even when none of its rows are drawn", () => {
+    const window = windowGroups(groups(), 3);
+
+    expect(window.sections.map((s) => s.group.proposals.length)).toEqual([3, 2, 1]);
+    expect(window.sections.map((s) => s.group.passengers)).toEqual([6, 2, 4]);
+    expect(window.sections[1].rows).toEqual([]);
+  });
+
+  it("draws nothing for an empty list and at least one row for a limit below one", () => {
+    expect(windowGroups([], 100)).toEqual({ sections: [], drawn: 0, total: 0 });
+    expect(windowGroups(groups(), 0).drawn).toBe(1);
   });
 });

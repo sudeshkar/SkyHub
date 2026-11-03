@@ -279,3 +279,76 @@ describe("ProposalsPanel outcome filter (ADR-0067)", () => {
     expect(screen.getByLabelText("Show")).toHaveValue("all");
   });
 });
+
+describe("ProposalsPanel windowing (ADR-0068)", () => {
+  const many = (n: number) => Array.from({ length: n }, (_, i) => proposal(`W${String(i).padStart(5, "0")}`));
+  const rows = () => screen.getAllByRole("checkbox", { name: /Move W/ });
+
+  it("draws the first hundred rows of a long list and says how many there are", async () => {
+    showProposals(...many(250));
+
+    await screen.findByText("W00000");
+
+    expect(rows()).toHaveLength(100);
+    expect(screen.getByText("Showing 100 of 250 bookings.")).toBeInTheDocument();
+    expect(screen.getByText(/· 250 bookings · 250 people/)).toBeInTheDocument();   // the group still says how big it really is
+    expect(screen.queryByText("W00100")).not.toBeInTheDocument();
+  });
+
+  it("draws a hundred more each time it is asked, and stops offering when everything is drawn", async () => {
+    showProposals(...many(250));
+    await screen.findByText("W00000");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 100 more" }));
+    expect(rows()).toHaveLength(200);
+    fireEvent.click(screen.getByRole("button", { name: "Show 50 more" }));   // only what is left
+
+    expect(rows()).toHaveLength(250);
+    expect(screen.queryByRole("button", { name: /Show \d+ more/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Showing \d+ of/)).not.toBeInTheDocument();
+  });
+
+  it("offers nothing when the list fits in the window", async () => {
+    showProposals(...many(100));
+
+    await screen.findByText("W00000");
+
+    expect(screen.queryByRole("button", { name: /Show \d+ more/ })).not.toBeInTheDocument();
+  });
+
+  it("counts and moves every selected booking, drawn or not, and says so", async () => {
+    vi.mocked(moveBookings).mockImplementation(async (moves) => ({
+      status: "done", results: moves.map((m) => ({ locator: m.locator, status: "moved" as const, seats: ["1A"] })) }));
+    showProposals(...many(250));
+    await screen.findByText("W00000");
+
+    expect(screen.getByRole("button", { name: "Move 250 selected" })).toBeEnabled();
+    expect(screen.getByText(/buttons act on all 250/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Move 250 selected" }));
+
+    await waitFor(() => expect(moveBookings).toHaveBeenCalledTimes(5));
+    expect(vi.mocked(moveBookings).mock.calls.flatMap(([batch]) => batch)).toHaveLength(250);
+  });
+
+  it("goes back to the first hundred when the search or the filter changes", async () => {
+    showProposals(...many(250));
+    await screen.findByText("W00000");
+    fireEvent.click(screen.getByRole("button", { name: "Show 100 more" }));
+    expect(rows()).toHaveLength(200);
+
+    fireEvent.change(screen.getByLabelText("Find a booking"), { target: { value: "w00" } });
+
+    expect(rows()).toHaveLength(100);
+    fireEvent.click(screen.getByRole("button", { name: "Show 100 more" }));
+    expect(rows()).toHaveLength(200);
+    fireEvent.change(screen.getByLabelText("Show"), { target: { value: "todo" } });
+    expect(rows()).toHaveLength(100);
+  });
+
+  it("starts a fresh set of proposals at the first hundred", async () => {
+    showProposals(...many(250));
+    await screen.findByText("W00000");
+
+    expect(rows()).toHaveLength(100);
+  });
+});
