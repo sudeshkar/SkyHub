@@ -32,4 +32,4 @@ After a disruption the operations page lists one proposal per booking on the fli
 - Negative: **grouping is by destination only.** There is no grouping by party size, cabin, or reason, and no way to approve "all groups of fewer than 3 people". Cohort grouping in the agent (ADR-0022 follow-up) is a different, server-side change.
 - Negative: the search is by reference only, not by name: names are not in the proposals (they are only on the booking page, ADR-0024).
 - Negative: the choice of what is ticked is kept in the page, not saved; reloading the proposals starts again, as before.
-- Follow-up: windowing for very large flights; filter by whether a booking is already moved or was refused (done, ADR-0067).
+- Follow-up: windowing for very large flights (done, ADR-0068); filter by whether a booking is already moved or was refused (done, ADR-0067).

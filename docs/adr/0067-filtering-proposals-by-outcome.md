@@ -29,7 +29,7 @@ After a disruption staff approve moves in batches (ADR-0035), and the operations
 - Positive: no change to anything outside the page.
 - Negative: **the outcomes are kept only in the page.** Reloading the proposals starts again with no results and every booking *Not tried yet*, as before; a booking moved in an earlier session shows as not tried until its move is attempted (and is then reported as already there).
 - Negative: **a retried booking changes outcome** (a refused booking that now moves leaves *Refused or failed* and appears under *Moved*), so the list under a filter shrinks as the person works. That is the intent, and it can surprise.
-- Negative: **every row is still rendered** (ADR-0043); windowing very large flights is a separate step.
+- Negative (eased by ADR-0068): **every row is still rendered** (ADR-0043); windowing very large flights is a separate step.
 - Negative: the filter and search are not remembered across a reload.
 - Not done: windowing of very large lists; a filter by reason for a refusal; saving results on the server.
 

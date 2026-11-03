@@ -4,7 +4,9 @@ import { useActionState, useState } from "react";
 import type { Proposal, ProposalSet } from "@/lib/api/agent";
 import { loadProposals, moveBookings, type MoveResult, type ProposalsState } from "./actions";
 import { MAX_MOVES_PER_CALL as BATCH } from "./limits";
-import { groupProposals, OUTCOME_OPTIONS, outcomeCounts, type OutcomeFilter, type ProposalGroup } from "./proposal-groups";
+import {
+  groupProposals, OUTCOME_OPTIONS, outcomeCounts, ROW_WINDOW, windowGroups, type OutcomeFilter, type ProposalGroup,
+} from "./proposal-groups";
 
 const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
 
@@ -80,6 +82,7 @@ function ProposalTable({ set }: { set: ProposalSet }) {
   const [signedOut, setSignedOut] = useState(false);
   const [query, setQuery] = useState("");
   const [outcome, setOutcome] = useState<OutcomeFilter>("all");
+  const [limit, setLimit] = useState(ROW_WINDOW);
 
   const done = (p: Proposal) => results[p.locator]?.status === "moved" || results[p.locator]?.status === "unchanged";
   const movable = set.proposals.filter((p) => p.action === "REBOOK" && !done(p));
@@ -87,6 +90,8 @@ function ProposalTable({ set }: { set: ProposalSet }) {
   // What is shown is what is acted on (ADR-0043): a ticked booking that the search hides is neither counted nor moved.
   const groups = groupProposals(set.proposals, query, outcome, results);
   const counts = outcomeCounts(set.proposals, results);
+  // Only what is drawn is windowed (ADR-0068); the groups, the counts and what is ticked and moved cover every matching booking.
+  const view = windowGroups(groups, limit);
   const shown = new Set(groups.flatMap((g) => g.proposals.map((p) => p.locator)));
   const chosenShown = chosen.filter((p) => shown.has(p.locator));
   const hiddenChosen = chosen.length - chosenShown.length;
@@ -163,12 +168,14 @@ function ProposalTable({ set }: { set: ProposalSet }) {
       <div className="flex flex-wrap gap-4">
         <label className="block max-w-xs flex-1 text-sm font-medium">
           Find a booking
-          <input value={query} onChange={(event) => setQuery(event.target.value)} autoComplete="off" placeholder="Part of a reference"
+          <input value={query} onChange={(event) => { setQuery(event.target.value); setLimit(ROW_WINDOW); }} autoComplete="off"
+            placeholder="Part of a reference"
             className={`${field} font-mono uppercase tracking-widest`} />
         </label>
         <label className="block max-w-xs flex-1 text-sm font-medium">
           Show
-          <select value={outcome} onChange={(event) => setOutcome(event.target.value as OutcomeFilter)} className={field}>
+          <select value={outcome} onChange={(event) => { setOutcome(event.target.value as OutcomeFilter); setLimit(ROW_WINDOW); }}
+            className={field}>
             {OUTCOME_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>{`${option.label} (${counts[option.value]})`}</option>
             ))}
@@ -183,10 +190,23 @@ function ProposalTable({ set }: { set: ProposalSet }) {
             : `Nothing to show: no booking is in “${OUTCOME_OPTIONS.find((o) => o.value === outcome)?.label}”.`}
         </p>
       )}
-      {groups.map((group) => (
-        <ProposalGroupSection key={group.key} group={group} results={results} deselected={deselected} disabled={moving}
+      {view.sections.map(({ group, rows }) => (
+        <ProposalGroupSection key={group.key} group={group} rows={rows} results={results} deselected={deselected} disabled={moving}
           onToggle={toggle} onSelect={select} />
       ))}
+
+      {view.drawn < view.total && (
+        <div className="space-y-2">
+          <p className="text-sm">Showing {view.drawn} of {view.total} bookings.</p>
+          <p className="text-sm text-muted">
+            The buttons act on all {view.total} matching bookings, drawn or not.
+          </p>
+          <button type="button" onClick={() => setLimit((current) => current + ROW_WINDOW)}
+            className="rounded-md border border-sand px-4 py-2 text-sm hover:bg-white">
+            {`Show ${Math.min(ROW_WINDOW, view.total - view.drawn)} more`}
+          </button>
+        </div>
+      )}
 
       {hiddenChosen > 0 && (
         <p className="text-sm text-muted">
@@ -216,8 +236,8 @@ function ProposalTable({ set }: { set: ProposalSet }) {
 }
 
 /** One destination (or the bookings that need a person), with its size and, for a destination, buttons to tick or untick all of it. */
-function ProposalGroupSection({ group, results, deselected, disabled, onToggle, onSelect }: {
-  group: ProposalGroup; results: Readonly<Record<string, MoveResult>>; deselected: ReadonlySet<string>; disabled: boolean;
+function ProposalGroupSection({ group, rows, results, deselected, disabled, onToggle, onSelect }: {
+  group: ProposalGroup; rows: Proposal[]; results: Readonly<Record<string, MoveResult>>; deselected: ReadonlySet<string>; disabled: boolean;
   onToggle: (locator: string) => void; onSelect: (group: ProposalGroup, ticked: boolean) => void;
 }) {
   const person = group.kind === "person";
@@ -238,12 +258,14 @@ function ProposalGroupSection({ group, results, deselected, disabled, onToggle, 
           </span>
         )}
       </div>
-      <ul className="divide-y divide-sand border border-sand bg-white">
-        {group.proposals.map((p) => (
-          <ProposalRow key={p.locator} proposal={p} result={results[p.locator]} selected={!deselected.has(p.locator)}
-            disabled={disabled} onToggle={() => onToggle(p.locator)} />
-        ))}
-      </ul>
+      {rows.length > 0 && (
+        <ul className="divide-y divide-sand border border-sand bg-white">
+          {rows.map((p) => (
+            <ProposalRow key={p.locator} proposal={p} result={results[p.locator]} selected={!deselected.has(p.locator)}
+              disabled={disabled} onToggle={() => onToggle(p.locator)} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
