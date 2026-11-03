@@ -26,7 +26,7 @@ A staff member could check whether a scanned pass is still good (ADR-0056), but 
 
 - Positive: a pass can be used once; a second use is visible and attributed to the first scan.
 - Positive: the person at the gate holds a token that can do almost nothing if it is lost.
-- Negative: **there is no time rule on boarding.** A good pass can be boarded at any time before departure and after; real gates open and close boarding, and this does not. It is the next thing to decide, with the flight's actual boarding times.
+- Negative (fixed by ADR-0063): **there is no time rule on boarding.** A good pass can be boarded at any time before departure and after; real gates open and close boarding, and this does not. It is the next thing to decide, with the flight's actual boarding times.
 - Negative: **boarding cannot be undone.** A wrong scan has no correction short of the database. An "un-board" would need its own authority.
 - Negative: **it needs the gate to be online**, like the check (ADR-0056).
 - Negative: the ops website was built for operations staff. It turned out that it could not even hold the `GATE` role: its session parser rejected it, so a gate agent was treated as signed out. ADR-0062 fixes that and adds the gate screen.

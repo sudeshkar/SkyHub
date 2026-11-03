@@ -66,6 +66,8 @@ describe("GatePanel (ADR-0062)", () => {
     ["NOT_CHECKED_IN", /not checked in/i],
     ["SUPERSEDED", /old pass/i],
     ["ALREADY_BOARDED", /already boarded/i],
+    ["BOARDING_NOT_OPEN", /boarding has not opened.*try again/i],
+    ["BOARDING_CLOSED", /boarding has closed.*do not board/i],
   ] as const)("refuses a pass for %s in plain words, and says nothing about the passenger", async (reason, words) => {
     vi.mocked(gateScan).mockResolvedValue({ status: "refused", reason });
     render(<GatePanel />);

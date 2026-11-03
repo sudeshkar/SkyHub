@@ -66,3 +66,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0060](0060-boarding-and-the-gate-agent.md) | Boarding, and a role that can only work the gate | Accepted |
 | [0061](0061-browser-coverage-on-the-live-stack.md) | Browser coverage on the live stack | Accepted |
 | [0062](0062-the-gate-screen.md) | The gate screen | Accepted |
+| [0063](0063-the-boarding-window.md) | The boarding window | Accepted |

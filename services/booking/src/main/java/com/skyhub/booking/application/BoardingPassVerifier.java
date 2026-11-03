@@ -42,7 +42,11 @@ public class BoardingPassVerifier {
         /** A different pass is current: a new seat or a new check-in since. */
         SUPERSEDED,
         /** The pass is good but the passenger has already boarded (ADR-0060). */
-        ALREADY_BOARDED;
+        ALREADY_BOARDED,
+        /** The pass is good but boarding has not opened for this flight yet (ADR-0063). Only boarding refuses this; checking never does. */
+        BOARDING_NOT_OPEN,
+        /** The pass is good but boarding has closed for this flight (ADR-0063). */
+        BOARDING_CLOSED;
 
         String tag() {
             return name().toLowerCase(Locale.ROOT);

@@ -61,13 +61,17 @@ class WhatSettingsEachServiceIsStartedWith(unittest.TestCase):
     def test_booking_gets_a_check_in_window_wide_enough_for_the_seed_flights(self):
         args = stack.service_args("booking")
 
-        self.assertEqual(args, ["-Dspring-boot.run.arguments=--skyhub.booking.check-in.opens-before=PT2400H"])
+        self.assertEqual(args, ["-Dspring-boot.run.arguments=--skyhub.booking.check-in.opens-before=PT2400H "
+                                "--skyhub.booking.boarding.opens-before=PT2400H"])
+
+    def test_booking_also_opens_boarding_early_so_the_gate_steps_can_board_seed_flights(self):
+        self.assertIn("--skyhub.booking.boarding.opens-before=PT2400H", stack.service_args("booking")[0])
 
     def test_the_wide_window_is_a_live_check_setting_that_never_touches_the_closing_time(self):
         joined = " ".join(stack.service_args("booking"))
 
         self.assertIn("opens-before", joined)
-        self.assertNotIn("closes-before", joined)   # a flight about to leave still cannot be checked in to
+        self.assertNotIn("closes-before", joined)   # a flight about to leave still cannot be checked in to or boarded
 
     def test_the_other_services_need_no_extra_settings(self):
         self.assertEqual(stack.service_args("notification"), [])

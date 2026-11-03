@@ -8,8 +8,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.skyhub.booking.application.BoardingPassVerifier.Reason;
+import com.skyhub.booking.domain.BoardingWindow;
 import com.skyhub.booking.domain.CheckIn;
 import com.skyhub.booking.domain.ContactEmail;
+import com.skyhub.booking.domain.Disruption;
+import com.skyhub.booking.domain.Money;
 import com.skyhub.booking.domain.Pnr;
 import com.skyhub.booking.domain.PnrPassenger;
 import com.skyhub.booking.domain.PnrSegment;
@@ -19,6 +22,7 @@ import com.skyhub.booking.persistence.PnrRepository;
 import com.skyhub.booking.security.HmacBoardingPassSigner;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -57,9 +61,15 @@ class BoardingServiceTest {
         when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty());
         BoardingPassMetrics metrics = new BoardingPassMetrics(registry);
         verifier = new BoardingPassVerifier(pnrs, checkIns, disruptions, boarded, signer, metrics);
-        service = new BoardingService(verifier, boarded, Clock.fixed(NOW, ZoneOffset.UTC), metrics);
+        service = serviceWithDeparture(NOW.plus(Duration.ofMinutes(30)));   // 30 minutes out: inside the 45-to-10 window
         stored.add(CheckIn.of("ABC234", 0, 0, 7, NOW.minusSeconds(7200)));
         stored.add(CheckIn.of("ABC234", 0, 1, 8, NOW.minusSeconds(7200)));
+    }
+
+    private BoardingService serviceWithDeparture(Instant departure) {
+        FlightCatalog timetable = (flight, date) -> Optional.of(new FlightInfo(departure, Money.of("100.00", "USD")));
+        return new BoardingService(verifier, boarded, Clock.fixed(NOW, ZoneOffset.UTC), new BoardingPassMetrics(registry),
+                new ExpectedDepartures(disruptions, timetable), new BoardingWindow(Duration.ofMinutes(45), Duration.ofMinutes(10)));
     }
 
     private String passOf(int passengerIndex) {
@@ -115,6 +125,47 @@ class BoardingServiceTest {
         assertThat(boarded.rows).isEmpty();
         assertThat(count("not_checked_in")).isEqualTo(1);
         assertThat(count("bad_signature")).isEqualTo(1);
+    }
+
+    @Test
+    void should_refuse_a_good_pass_before_boarding_opens_and_board_nobody() {
+        var early = serviceWithDeparture(NOW.plus(Duration.ofHours(3))).board(passOf(0), "gate.one");
+
+        assertThat(early.valid()).isFalse();
+        assertThat(early.reason()).isEqualTo(Reason.BOARDING_NOT_OPEN);
+        assertThat(early.pass()).isNull();
+        assertThat(boarded.rows).isEmpty();
+        assertThat(count("boarding_not_open")).isEqualTo(1);
+    }
+
+    @Test
+    void should_refuse_a_good_pass_once_boarding_has_closed() {
+        var late = serviceWithDeparture(NOW.plus(Duration.ofMinutes(10))).board(passOf(0), "gate.one");
+
+        assertThat(late.reason()).isEqualTo(Reason.BOARDING_CLOSED);
+        assertThat(boarded.rows).isEmpty();
+        assertThat(count("boarding_closed")).isEqualTo(1);
+    }
+
+    @Test
+    void should_open_boarding_by_the_revised_time_when_the_flight_is_delayed() {
+        // Scheduled 30 minutes away, so open; a two-hour delay moves the opening to 75 minutes from now.
+        when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any()))
+                .thenReturn(Optional.of(Disruption.delayed("SK501", DATE, NOW.plus(Duration.ofMinutes(150)), "weather", NOW)));
+
+        assertThat(service.board(passOf(0), "gate.one").reason()).isEqualTo(Reason.BOARDING_NOT_OPEN);
+    }
+
+    @Test
+    void should_still_say_already_boarded_rather_than_a_time_reason_for_a_used_pass() {
+        service.board(passOf(0), "gate.one");
+
+        assertThat(serviceWithDeparture(NOW.plus(Duration.ofMinutes(5))).board(passOf(0), "gate.two").reason()).isEqualTo(Reason.ALREADY_BOARDED);
+    }
+
+    @Test
+    void should_not_apply_the_time_rule_to_only_checking_a_pass() {
+        assertThat(verifier.verify(passOf(0)).valid()).isTrue();   // checking is read-only and has no clock (ADR-0056)
     }
 
     @Test
