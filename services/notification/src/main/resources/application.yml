@@ -48,9 +48,16 @@ skyhub:
       # smtp (default) sends through the mail server above; log only writes the email to the log.
       mode: ${SKYHUB_EMAIL_MODE:smtp}
       from: ${SKYHUB_EMAIL_FROM:SkyHub <no-reply@skyhub.example>}
-    # A message that fails is tried again this many times in total, this far apart, then parked on <topic>.DLT.
-    retry-attempts: 4
-    retry-interval: PT2S
+    # A message that fails moves to a delayed retry topic and is tried again, each time after a longer wait, then parked on <topic>.DLT
+    # (ADR-0065). With these defaults: 5 attempts in all, waiting about 10 s, 1 min, 6 min, then 15 min (the cap), about 22 minutes in total.
+    retry:
+      attempts: 5
+      delay-ms: 10000
+      multiplier: 6.0
+      max-delay-ms: 900000
+      jitter-ms: 1000
+      # As many partitions as the events topic has (the broker default is 3), because a retried message keeps its partition number.
+      partitions: 3
 
 management:
   health:
