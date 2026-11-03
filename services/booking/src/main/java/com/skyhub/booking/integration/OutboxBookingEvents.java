@@ -42,17 +42,17 @@ public class OutboxBookingEvents implements BookingEvents {
     private final PiiCipher cipher;
     private final JsonMapper json;
     private final Clock clock;
-    private final com.skyhub.booking.application.LinkTokenSealer sealer;
+    private final com.skyhub.booking.application.SecretSealer sealer;
     private final Supplier<UUID> ids;
 
     @Autowired
     public OutboxBookingEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock,
-                               com.skyhub.booking.application.LinkTokenSealer sealer) {
+                               com.skyhub.booking.application.SecretSealer sealer) {
         this(outbox, cipher, json, clock, sealer, UUID::randomUUID);
     }
 
     OutboxBookingEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock,
-                        com.skyhub.booking.application.LinkTokenSealer sealer, Supplier<UUID> ids) {
+                        com.skyhub.booking.application.SecretSealer sealer, Supplier<UUID> ids) {
         this.sealer = sealer;
         this.outbox = outbox;
         this.cipher = cipher;

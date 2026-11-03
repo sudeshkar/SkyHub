@@ -52,7 +52,7 @@ class AccountsIntegrationTest {
         for (String payload : payloads) {
             var event = json.readTree(cipher.decrypt(payload));
             if (email.equalsIgnoreCase(event.get("contactEmail").asString())) {
-                return TestLinkTokens.tokenOf(event);
+                return TestSealedSecrets.tokenOf(event);
             }
         }
         throw new AssertionError("No link was queued for " + email);

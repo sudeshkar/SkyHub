@@ -33,7 +33,7 @@ ADR-0073 sent a confirmation when someone checks in, and deliberately left the p
 - Negative: **the sealed pass is bound to the address and the event type, not to the booking.** A person who can write to the topic can copy a sealed pass into another check-in event for the same address; they gain nothing they could not already do, and cannot move it to another address. Binding to the booking reference as well would need a change to the sealer's interface.
 - Negative: **one key does two jobs.** The shared key now also opens passes. A leaked key reveals passes still on a retained topic (the topic's retention window) and links; the event-type binding stops confusion between them, not a leak.
 - Negative: **a key mismatch is easy to miss.** Emails keep going out and only the attachments disappear; the alert and the counter are what notice it.
-- Negative: **the port and adapter are still named for link tokens** (`LinkTokenSealer`, `LinkTokenOpener`). They now seal passes too; renaming them is a mechanical change left out of this slice.
+- Negative (fixed by ADR-0075): **the port and adapter were still named for link tokens** (`LinkTokenSealer`, `LinkTokenOpener`) though they now seal passes too.
 - Negative: **it was decoded by ZXing's own reader and the website's `jsqr` read the browser's code, not this picture.** No phone camera or gate hardware has read an attached image.
 - Negative: **images may be blocked or not shown inline by a mail client**; they are attachments, so a person opens them.
 - Not done: SMS, an inline picture in the HTML body, an opt-out, and a PDF.

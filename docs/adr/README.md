@@ -78,3 +78,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0072](0072-scanning-a-boarding-pass-with-the-camera.md) | Scanning a boarding pass with the phone's camera | Accepted |
 | [0073](0073-check-in-confirmation-email.md) | A confirmation email when someone checks in | Accepted |
 | [0074](0074-boarding-passes-attached-to-the-check-in-email.md) | The boarding passes attached to the check-in email | Accepted |
+| [0075](0075-loose-ends-from-the-check-in-work.md) | Three loose ends from the check-in work | Accepted |

@@ -48,7 +48,7 @@ class NotificationServiceTest {
     private EmailSender email;
 
     @Mock
-    private LinkTokenOpener opener;
+    private SecretOpener opener;
 
     @Mock
     private PassImages images;
@@ -308,7 +308,7 @@ class NotificationServiceTest {
     @Test
     void should_send_nothing_and_record_nothing_when_the_token_does_not_open_so_the_event_is_retried_then_parked() {
         when(opener.open("v1:sealed", "account.password-link", "priya@example.com"))
-                .thenThrow(new com.skyhub.notification.domain.InvalidEventException("The link token could not be opened"));
+                .thenThrow(new com.skyhub.notification.domain.InvalidEventException("The sealed value could not be opened"));
 
         org.assertj.core.api.Assertions.assertThatExceptionOfType(com.skyhub.notification.domain.InvalidEventException.class)
                 .isThrownBy(() -> service.passwordLink(new com.skyhub.notification.domain.AccountPasswordLinkEvent(

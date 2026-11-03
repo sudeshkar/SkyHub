@@ -1,6 +1,6 @@
 package com.skyhub.booking.integration;
 
-import com.skyhub.booking.application.LinkTokenSealer;
+import com.skyhub.booking.application.SecretSealer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * is not the personal-data key; the service refuses to start without a proper one.
  */
 @Component
-public class AesGcmLinkTokenSealer implements LinkTokenSealer {
+public class AesGcmSecretSealer implements SecretSealer {
 
     private static final String VERSION = "v1:";
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
@@ -31,7 +31,7 @@ public class AesGcmLinkTokenSealer implements LinkTokenSealer {
     private final SecretKey key;
     private final SecureRandom random = new SecureRandom();
 
-    public AesGcmLinkTokenSealer(@Value("${skyhub.security.link-token-key:}") String base64Key) {
+    public AesGcmSecretSealer(@Value("${skyhub.security.link-token-key:}") String base64Key) {
         byte[] bytes;
         try {
             bytes = Base64.getDecoder().decode(base64Key);
@@ -46,7 +46,7 @@ public class AesGcmLinkTokenSealer implements LinkTokenSealer {
     }
 
     @Override
-    public String seal(String token, String eventType, String address) {
+    public String seal(String secret, String eventType, String address) {
         try {
             byte[] iv = new byte[IV_BYTES];
             random.nextBytes(iv);
@@ -54,10 +54,10 @@ public class AesGcmLinkTokenSealer implements LinkTokenSealer {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
             cipher.updateAAD((eventType + "|" + address).getBytes(StandardCharsets.UTF_8));
-            byte[] sealed = cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
+            byte[] sealed = cipher.doFinal(secret.getBytes(StandardCharsets.UTF_8));
             return VERSION + Base64.getEncoder().encodeToString(ByteBuffer.allocate(iv.length + sealed.length).put(iv).put(sealed).array());
         } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Sealing the link token failed", e);
+            throw new IllegalStateException("Sealing the secret failed", e);
         }
     }
 }

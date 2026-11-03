@@ -1,6 +1,6 @@
 package com.skyhub.notification.integration;
 
-import com.skyhub.notification.application.LinkTokenOpener;
+import com.skyhub.notification.application.SecretOpener;
 import com.skyhub.notification.domain.InvalidEventException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -23,9 +23,9 @@ import org.springframework.stereotype.Component;
  * set but wrong is a mistake, and stops the service from starting.
  */
 @Component
-public class AesGcmLinkTokenOpener implements LinkTokenOpener {
+public class AesGcmSecretOpener implements SecretOpener {
 
-    private static final Logger log = LoggerFactory.getLogger(AesGcmLinkTokenOpener.class);
+    private static final Logger log = LoggerFactory.getLogger(AesGcmSecretOpener.class);
     private static final String VERSION = "v1:";
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
     private static final int IV_BYTES = 12;
@@ -35,7 +35,7 @@ public class AesGcmLinkTokenOpener implements LinkTokenOpener {
     /** Null when no key was configured. */
     private final SecretKey key;
 
-    public AesGcmLinkTokenOpener(@Value("${skyhub.security.link-token-key:}") String base64Key) {
+    public AesGcmSecretOpener(@Value("${skyhub.security.link-token-key:}") String base64Key) {
         if (base64Key == null || base64Key.isBlank()) {
             this.key = null;
             log.atWarn().log("SKYHUB_LINK_TOKEN_KEY is not set: sign-up, reset and address-change links will be refused and parked; booking emails are unaffected");
@@ -55,17 +55,17 @@ public class AesGcmLinkTokenOpener implements LinkTokenOpener {
     }
 
     @Override
-    public String open(String sealedToken, String eventType, String address) {
+    public String open(String sealed, String eventType, String address) {
         if (key == null) {
-            throw new InvalidEventException("Link tokens cannot be opened: SKYHUB_LINK_TOKEN_KEY is not set on the notification service");
+            throw new InvalidEventException("Sealed values cannot be opened: SKYHUB_LINK_TOKEN_KEY is not set on the notification service");
         }
-        if (sealedToken == null || !sealedToken.startsWith(VERSION)) {
-            throw new InvalidEventException("The link token is not sealed in a format this service knows");
+        if (sealed == null || !sealed.startsWith(VERSION)) {
+            throw new InvalidEventException("The sealed value is not in a format this service knows");
         }
         try {
-            byte[] packed = Base64.getDecoder().decode(sealedToken.substring(VERSION.length()));
+            byte[] packed = Base64.getDecoder().decode(sealed.substring(VERSION.length()));
             if (packed.length < IV_BYTES + TAG_BITS / 8) {
-                throw new InvalidEventException("The link token is too short to be sealed");
+                throw new InvalidEventException("The sealed value is too short to be one");
             }
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, packed, 0, IV_BYTES));
@@ -73,7 +73,7 @@ public class AesGcmLinkTokenOpener implements LinkTokenOpener {
             return new String(cipher.doFinal(packed, IV_BYTES, packed.length - IV_BYTES), StandardCharsets.UTF_8);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             // Neither the sealed value nor the address goes in the message: it ends up in logs and in the parked-message listing.
-            throw new InvalidEventException("The link token could not be opened: wrong key, changed value, or not made for this event", e);
+            throw new InvalidEventException("The sealed value could not be opened: wrong key, changed value, or not made for this event", e);
         }
     }
 }

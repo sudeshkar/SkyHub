@@ -159,7 +159,7 @@ class AccountUndoEmailChangeIntegrationTest {
         for (String payload : jdbc.queryForList("SELECT payload FROM outbox_event WHERE event_type = 'account.email-changed' ORDER BY seq DESC LIMIT 100", String.class)) {
             var event = json.readTree(cipher.decrypt(payload));
             if (oldEmail.equalsIgnoreCase(event.get("contactEmail").asString())) {
-                return TestLinkTokens.tokenOf(event, "sealedUndoToken");
+                return TestSealedSecrets.tokenOf(event, "sealedUndoToken");
             }
         }
         throw new AssertionError("No notice was queued for " + oldEmail);
@@ -169,7 +169,7 @@ class AccountUndoEmailChangeIntegrationTest {
         for (String payload : jdbc.queryForList("SELECT payload FROM outbox_event WHERE event_type = ? ORDER BY seq DESC LIMIT 100", String.class, eventType)) {
             var event = json.readTree(cipher.decrypt(payload));
             if (email.equalsIgnoreCase(event.get("contactEmail").asString())) {
-                return TestLinkTokens.tokenOf(event);
+                return TestSealedSecrets.tokenOf(event);
             }
         }
         throw new AssertionError("No " + eventType + " was queued for " + email);

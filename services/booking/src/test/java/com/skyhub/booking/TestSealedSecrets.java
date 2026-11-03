@@ -13,12 +13,12 @@ import tools.jackson.databind.JsonNode;
  * follow the link a person would be sent. Written against the JDK directly rather than the code under test, so a mistake in the
  * sealer cannot hide itself by being undone by a matching mistake here.
  */
-public final class TestLinkTokens {
+public final class TestSealedSecrets {
 
     /** Test-only: 32 bytes of 0x02. The real key is the SKYHUB_LINK_TOKEN_KEY environment variable. */
     public static final String TEST_KEY = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
 
-    private TestLinkTokens() {
+    private TestSealedSecrets() {
     }
 
     /** The plain token inside a link event's sealed one. */

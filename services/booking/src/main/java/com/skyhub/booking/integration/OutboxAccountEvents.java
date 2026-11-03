@@ -1,7 +1,7 @@
 package com.skyhub.booking.integration;
 
 import com.skyhub.booking.application.AccountEvents;
-import com.skyhub.booking.application.LinkTokenSealer;
+import com.skyhub.booking.application.SecretSealer;
 import com.skyhub.booking.application.PasswordLinkPurpose;
 import com.skyhub.booking.domain.ContactEmail;
 import com.skyhub.booking.domain.OutboxEvent;
@@ -32,15 +32,15 @@ public class OutboxAccountEvents implements AccountEvents {
     private final PiiCipher cipher;
     private final JsonMapper json;
     private final Clock clock;
-    private final LinkTokenSealer sealer;
+    private final SecretSealer sealer;
     private final Supplier<UUID> ids;
 
     @Autowired
-    public OutboxAccountEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock, LinkTokenSealer sealer) {
+    public OutboxAccountEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock, SecretSealer sealer) {
         this(outbox, cipher, json, clock, sealer, UUID::randomUUID);
     }
 
-    OutboxAccountEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock, LinkTokenSealer sealer,
+    OutboxAccountEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock, SecretSealer sealer,
                         Supplier<UUID> ids) {
         this.sealer = sealer;
         this.outbox = outbox;
