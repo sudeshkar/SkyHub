@@ -28,16 +28,27 @@ public record ParkedMessage(int partition, long offset, long timestamp, String o
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Pattern ADDRESS = Pattern.compile("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+");
     private static final int MAX_ERROR = 200;
+    private static final String[] ORIGINAL_TOPIC = {"kafka_original-topic", "kafka_dlt-original-topic"};
+    private static final String[] EXCEPTION_MESSAGE = {"kafka_exception-message", "kafka_dlt-exception-message"};
 
     static ParkedMessage of(ConsumerRecord<String, String> record) {
         return new ParkedMessage(record.partition(), record.offset(), record.timestamp(),
-                header(record, "kafka_dlt-original-topic", "unknown"), typeOf(record.value()),
-                clean(header(record, "kafka_dlt-exception-message", "no reason recorded")));
+                header(record, "unknown", ORIGINAL_TOPIC), typeOf(record.value()),
+                clean(header(record, "no reason recorded", EXCEPTION_MESSAGE)));
     }
 
-    private static String header(ConsumerRecord<String, String> record, String name, String fallback) {
-        Header header = record.headers().lastHeader(name);
-        return header == null || header.value() == null ? fallback : new String(header.value(), StandardCharsets.UTF_8);
+    /**
+     * Spring Kafka 4 writes {@code kafka_original-topic} and {@code kafka_exception-message}; earlier versions (and messages put there by
+     * hand) used {@code kafka_dlt-} names. The first name present wins (ADR-0065).
+     */
+    private static String header(ConsumerRecord<String, String> record, String fallback, String... names) {
+        for (String name : names) {
+            Header header = record.headers().lastHeader(name);
+            if (header != null && header.value() != null) {
+                return new String(header.value(), StandardCharsets.UTF_8);
+            }
+        }
+        return fallback;
     }
 
     private static String typeOf(String value) {

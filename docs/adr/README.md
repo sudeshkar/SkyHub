@@ -69,3 +69,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0063](0063-the-boarding-window.md) | The boarding window | Accepted |
 | [0064](0064-undoing-a-boarding.md) | Undoing a wrong boarding | Accepted |
 | [0065](0065-who-has-boarded-a-flight.md) | Who has boarded a flight | Accepted |
+| [0066](0066-non-blocking-retry-topics.md) | Non-blocking retry topics for notifications | Accepted |

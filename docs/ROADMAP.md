@@ -78,6 +78,7 @@ How a slice goes, every time:
 | 59 | A boarding window: a good pass is boarded only from 45 to 10 minutes before the flight's expected departure (delays move it); `BOARDING_NOT_OPEN` / `BOARDING_CLOSED` at the gate; checking a pass has no clock | ADR-0063 |
 | 60 | Undo a wrong boarding scan: operations and administrators (never the gate agent) take a boarding back with a reason; the passenger stays checked in and can board again; the correction is kept in an append-only table; a form on `/ops` | ADR-0064 |
 | 61 | Who has boarded a flight: counts of checked in, boarded and waiting, and each boarding's reference and place on the booking (no names), for operations and administrators only; a panel on `/ops` whose numbers go straight into the undo form | ADR-0065 |
+| 62 | Non-blocking retry topics: a failed email moves to delayed retry topics instead of holding up the partition, and an outage of about 22 minutes is ridden out without a person; the parked-message tooling keeps working; a new early-warning alert; fixes the replay tool not reading Spring Kafka 4's header names | ADR-0066 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -86,7 +87,7 @@ Ordered by how much they add to the story, not a commitment.
 | Slice | What it adds | Notes |
 |---|---|---|
 | **Fuller rebooking** | Windowing very large proposal lists, and filtering by moved or refused; moving checked-in travellers; cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline (needs a Groq key; `python -m evals --live`) | Approval and rebooking exist (ADR-0022, 0023, 0024). Run `python -m evals --live` with a Groq key first: the live model has not been run yet. |
-| **More notifications** | a boarding-pass attachment; SMS; non-blocking retry topics | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
+| **More notifications** | a boarding-pass attachment; SMS | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
 | **Account follow-ups** | Saved passengers (revisit ADR-0054's mailbox trust first) | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
 | **Check-in extras** | QR/PDF417 boarding pass image; a per-route boarding window and an override for a late passenger (ADR-0063) | The boarding time rule (ADR-0063), undoing a wrong scan (ADR-0064) and the who-has-boarded screen (ADR-0065) are done. Move `CheckInService`'s departure lookup onto `ExpectedDepartures` when it is next touched. |

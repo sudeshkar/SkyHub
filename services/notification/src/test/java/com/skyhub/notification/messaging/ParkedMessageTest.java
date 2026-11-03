@@ -17,6 +17,32 @@ class ParkedMessageTest {
                 org.apache.kafka.common.record.TimestampType.CREATE_TIME, 0, 0, "ABC234", value, headers, java.util.Optional.empty());
     }
 
+    /** The headers Spring Kafka 4 writes when it parks a message: no "dlt" in their names (ADR-0065). */
+    private static ConsumerRecord<String, String> parkedBySpringKafka4(String value, String exception) {
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("kafka_exception-message", exception.getBytes(StandardCharsets.UTF_8));
+        headers.add("kafka_original-topic", "skyhub.booking.events".getBytes(StandardCharsets.UTF_8));
+        return new ConsumerRecord<>("skyhub.booking.events.DLT", 1, 5L, 1_700_000_000_000L,
+                org.apache.kafka.common.record.TimestampType.CREATE_TIME, 0, 0, "ABC234", value, headers, java.util.Optional.empty());
+    }
+
+    @Test
+    void should_read_the_reason_and_the_original_topic_from_the_headers_the_library_really_writes() {
+        ParkedMessage parked = ParkedMessage.of(parkedBySpringKafka4("{\"type\":\"booking.confirmed\"}", "Mail server did not answer"));
+
+        assertThat(parked.originalTopic()).isEqualTo("skyhub.booking.events");
+        assertThat(parked.error()).isEqualTo("Mail server did not answer");
+    }
+
+    @Test
+    void should_still_read_the_older_header_names_and_say_so_when_there_are_none() {
+        assertThat(ParkedMessage.of(record("{\"type\":\"booking.confirmed\"}", "Old style")).error()).isEqualTo("Old style");
+
+        ConsumerRecord<String, String> bare = new ConsumerRecord<>("skyhub.booking.events.DLT", 0, 1L, "ABC234", "{}");
+        assertThat(ParkedMessage.of(bare).error()).isEqualTo("no reason recorded");
+        assertThat(ParkedMessage.of(bare).originalTopic()).isEqualTo("unknown");
+    }
+
     @Test
     void should_describe_where_the_message_is_why_it_was_parked_and_what_kind_of_event_it_was() {
         ParkedMessage parked = ParkedMessage.of(record("{\"type\":\"booking.confirmed\",\"contactEmail\":\"priya@example.com\"}",

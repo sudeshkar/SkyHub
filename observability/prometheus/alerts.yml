@@ -131,6 +131,16 @@ groups:
           summary: "Booking events have been waiting to reach Kafka for 10 minutes: travellers are not being notified"
           runbook: "docs/runbooks/README.md#outboxbacklog"
 
+      # Retries now take about 22 minutes before a message is parked (ADR-0066), so the dead-letter alert alone would be that late. Each
+      # failed attempt is counted; one message that keeps failing makes 3 inside 7 minutes, a one-off blip makes 1 or 2 and stays quiet.
+      - alert: NotificationSendsFailing
+        expr: increase(skyhub_notifications_total{outcome="failed"}[15m]) >= 3
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Emails keep failing to send (3 failed attempts in 15 minutes): they are being retried, nothing is parked yet"
+          runbook: "docs/runbooks/README.md#notificationsendsfailing"
+
       - alert: NotificationDeadLettered
         expr: increase(skyhub_notifications_dead_lettered_total[10m]) > 0
         for: 0m
