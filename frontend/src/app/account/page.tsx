@@ -4,7 +4,8 @@ import { Suspense } from "react";
 import { readAccountSession } from "@/lib/account-session";
 import { MyBookings, parseBookingsFilter } from "@/components/account/my-bookings";
 import { SignOutEverywhere } from "@/components/account/sign-out-everywhere";
-import { getMyAccount, listMyBookings } from "@/lib/api/booking";
+import { SavedPassengers } from "@/components/account/saved-passengers";
+import { getMyAccount, listMyBookings, listSavedPassengers } from "@/lib/api/booking";
 import { signOut } from "./actions";
 import { SignInForm } from "./sign-in-form";
 
@@ -69,6 +70,7 @@ async function AccountContent({ searchParams }: { searchParams: AccountSearchPar
         <Link href="/account/change-email" className="underline">Change email address</Link>
       </p>
       <MyBookingsSection token={session.token} {...(await searchParams)} />
+      <SavedPassengers result={await listSavedPassengers(session.token)} problem={(await searchParams).problem} />
       <p className="mt-8 text-sm text-muted">
         Booked with a different address? Use <Link href="/manage" className="underline">Manage booking</Link> with its reference and your last name.
       </p>

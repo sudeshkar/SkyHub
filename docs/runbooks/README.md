@@ -163,6 +163,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** the pass is good (`Check pass` on the gate screen has no clock). The flight has not left: boarding opens 45 and closes 10 minutes before the **expected** departure, which is the revised time if the flight was delayed. `skyhub_boarding_pass_boardings_total{outcome="boarded_late"}` counts late boardings; `flight_departed` and `boarding_still_open` count the refusals of the override.
 **Mitigate:** on `/ops`, "Board late": the pass, a reason, and the tick-box. The passenger boards once; their reason, your name and the time are kept, and the flight's "Who has boarded" list marks them `late`. To see who and why: `SELECT locator, passenger_index, boarded_by, boarded_at, late_reason FROM boarded_passenger WHERE late_reason IS NOT NULL ORDER BY boarded_at`; a correction keeps the reason in `boarding_reversal.late_reason`. `FLIGHT_DEPARTED` means the flight is due to have left: rebook the passenger. If it was boarded by mistake, "Undo a boarding" (ADR-0064). There is no alert on purpose; a rising `boarded_late` is for a supervisor to look at, not to page.
 
+## A traveller cannot save a passenger (no alert)
+
+**Means:** a signed-in traveller says "Save passenger" does nothing, or says all 10 places are used (ADR-0078).
+**Confirm:** `skyhub_saved_passengers_total` by `outcome`: `added`, `already_saved` (the same name typed again, nothing changed), `removed`, `full` (the tenth place was already used: the traveller must remove a name first), `not_found` (an id that is not theirs, or already gone). A name is never in a log, a label or an event. Only the count of an account's names can be checked in the database: `SELECT count(*) FROM saved_passenger WHERE account_id = ...`; the names are encrypted and are not read by hand.
+**Mitigate:** `full`: ask the traveller to remove a name on the account page. A booking page that shows no picker: the picker loads names only when the traveller reaches the passengers step, from `/account/saved-passengers`, which answers an empty list when the session has ended, when they are not signed in, or when the booking service does not answer; sign in again on `/account`. There is nothing to replay and no alert.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.
