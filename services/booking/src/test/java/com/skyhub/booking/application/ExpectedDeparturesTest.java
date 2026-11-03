@@ -35,7 +35,7 @@ class ExpectedDeparturesTest {
     void should_use_the_timetable_when_the_flight_is_on_time() {
         when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty());
 
-        assertThat(withTimetable(Optional.of(SCHEDULED)).of("SK501", DATE)).isEqualTo(SCHEDULED);
+        assertThat(withTimetable(Optional.of(SCHEDULED)).of("SK501", DATE)).contains(SCHEDULED);
     }
 
     @Test
@@ -44,7 +44,17 @@ class ExpectedDeparturesTest {
                 .thenReturn(Optional.of(Disruption.delayed("SK501", DATE, REVISED, "weather", SCHEDULED)));
         FlightCatalog neverAsked = mock(FlightCatalog.class);
 
-        assertThat(new ExpectedDepartures(disruptions, neverAsked).of("SK501", DATE)).isEqualTo(REVISED);
+        assertThat(new ExpectedDepartures(disruptions, neverAsked).of("SK501", DATE)).contains(REVISED);
+        verifyNoInteractions(neverAsked);
+    }
+
+    @Test
+    void should_say_there_is_no_departure_for_a_cancelled_flight_without_asking_the_timetable() {
+        when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any()))
+                .thenReturn(Optional.of(Disruption.cancelled("SK501", DATE, "Aircraft grounded", SCHEDULED)));
+        FlightCatalog neverAsked = mock(FlightCatalog.class);
+
+        assertThat(new ExpectedDepartures(disruptions, neverAsked).of("SK501", DATE)).isEmpty();   // it will not leave: callers decide what that means
         verifyNoInteractions(neverAsked);
     }
 

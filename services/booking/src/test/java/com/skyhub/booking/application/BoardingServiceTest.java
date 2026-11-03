@@ -164,6 +164,20 @@ class BoardingServiceTest {
     }
 
     @Test
+    void should_refuse_as_cancelled_when_the_flight_is_cancelled_between_checking_the_pass_and_the_window() {
+        // The check saw no disruption; the window's own lookup, a moment later, sees the cancellation.
+        when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty(),
+                Optional.of(Disruption.cancelled("SK501", DATE, "Aircraft grounded", NOW)));
+
+        var verdict = service.board(passOf(0), "gate.one");
+
+        assertThat(verdict.valid()).isFalse();
+        assertThat(verdict.reason()).isEqualTo(Reason.FLIGHT_CANCELLED);
+        assertThat(boarded.rows).isEmpty();
+        assertThat(count("flight_cancelled")).isEqualTo(1);
+    }
+
+    @Test
     void should_not_apply_the_time_rule_to_only_checking_a_pass() {
         assertThat(verifier.verify(passOf(0)).valid()).isTrue();   // checking is read-only and has no clock (ADR-0056)
     }

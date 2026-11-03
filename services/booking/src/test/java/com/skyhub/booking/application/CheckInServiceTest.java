@@ -83,7 +83,7 @@ class CheckInServiceTest {
         });
         when(sequence.reserve(eq("SK501"), eq(DATE), eq(2))).thenReturn(7);
         when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty());
-        service = new CheckInService(pnrs, checkIns, sequence, disruptions, (flight, date) -> departure.map(d -> new FlightInfo(d, com.skyhub.booking.domain.Money.of("100.00", "USD"))), signer,
+        service = new CheckInService(pnrs, checkIns, sequence, new ExpectedDepartures(disruptions, (flight, date) -> departure.map(d -> new FlightInfo(d, com.skyhub.booking.domain.Money.of("100.00", "USD")))), signer,
                 Clock.fixed(NOW, ZoneOffset.UTC), TransactionOperations.withoutTransaction(),
                 new CheckInWindow(Duration.ofHours(24), Duration.ofMinutes(60)), new CheckInMetrics(registry), boarded, events);
     }

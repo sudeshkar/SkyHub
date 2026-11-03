@@ -4,6 +4,8 @@ import com.skyhub.booking.application.BoardingPassVerifier.Reason;
 import com.skyhub.booking.application.BoardingPassVerifier.Verdict;
 import com.skyhub.booking.domain.BoardingWindow;
 import java.time.Clock;
+import java.time.Instant;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -65,7 +67,12 @@ public class BoardingService {
 
     /** @return why boarding is shut for this pass's flight right now, or null when it is open */
     private Reason outOfWindow(BoardingPass pass) {
-        return switch (window.stateAt(departures.of(pass.flightNumber(), pass.departureDate()), clock.instant())) {
+        // A flight cancelled in the moment since the pass was checked has no departure: refuse it as the check would have.
+        Optional<Instant> departure = departures.of(pass.flightNumber(), pass.departureDate());
+        if (departure.isEmpty()) {
+            return Reason.FLIGHT_CANCELLED;
+        }
+        return switch (window.stateAt(departure.get(), clock.instant())) {
             case NOT_YET_OPEN -> Reason.BOARDING_NOT_OPEN;
             case CLOSED -> Reason.BOARDING_CLOSED;
             case OPEN -> null;
