@@ -5,12 +5,13 @@ import {
   openStaffSession,
   rebookFlights,
   recordDisruption as recordCall,
+  undoBoarding as undoCall,
   verifyBoardingPass,
   withdrawDisruption as withdrawCall,
 } from "@/lib/api/booking";
 import { rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
-import { gateScan, loadProposals, logOut, moveBookings, recordDisruption, staffLogin, withdrawDisruption } from "./actions";
+import { gateScan, loadProposals, logOut, moveBookings, recordDisruption, staffLogin, undoBoarding, withdrawDisruption } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: { staffLogin: {}, manage: {} }, rateLimit: vi.fn() }));
 vi.mock("@/lib/staff-session", () => ({
@@ -20,7 +21,7 @@ vi.mock("@/lib/staff-session", () => ({
 }));
 vi.mock("@/lib/api/booking", () => ({
   openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlights: vi.fn(), withdrawDisruption: vi.fn(),
-  verifyBoardingPass: vi.fn(), boardPassenger: vi.fn(),
+  verifyBoardingPass: vi.fn(), boardPassenger: vi.fn(), undoBoarding: vi.fn(),
 }));
 vi.mock("@/lib/api/agent", () => ({ getProposals: vi.fn() }));
 // redirect() works by throwing; the real one is not available outside a request.
@@ -438,5 +439,69 @@ describe("gateScan (ADR-0062)", () => {
 
     expect(await gateScan({ status: "idle" }, form({ barcode: BARCODE, intent: "board" }))).toMatchObject({ status: "error", message: expect.stringContaining("7 seconds") });
     expect(boardPassenger).not.toHaveBeenCalled();
+  });
+});
+
+describe("undoBoarding (ADR-0064)", () => {
+  const request = { locator: "abc234", leg: "1", passenger: "2", reason: "  Scanned the wrong passenger  ", confirm: "yes" };
+
+  beforeEach(() => {
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+  });
+
+  it("takes the boarding back with the staff member's own token, counting from zero on the wire and from one on the screen", async () => {
+    vi.mocked(undoCall).mockResolvedValue({ kind: "undone" });
+
+    const result = await undoBoarding({ status: "idle" }, form(request));
+
+    expect(undoCall).toHaveBeenCalledWith(SESSION.token, { locator: "ABC234", segmentIndex: 0, passengerIndex: 1, reason: "Scanned the wrong passenger" });
+    expect(result).toEqual({ status: "undone", locator: "ABC234", leg: 1, passenger: 2 });
+  });
+
+  it("does nothing until the person has ticked the confirmation", async () => {
+    const result = await undoBoarding({ status: "idle" }, form({ ...request, confirm: "" }));
+
+    expect(result).toMatchObject({ status: "error", message: expect.stringContaining("confirm") });
+    expect(undoCall).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a reference that is not six letters and digits", { locator: "ABC" }],
+    ["a leg number below one", { leg: "0" }],
+    ["a leg that is not a number", { leg: "x" }],
+    ["a passenger number below one", { passenger: "0" }],
+    ["a missing reason", { reason: "   " }],
+    ["a reason over 200 characters", { reason: "x".repeat(201) }],
+  ])("refuses %s before calling the service, and keeps what was typed", async (_why, change) => {
+    const result = await undoBoarding({ status: "idle" }, form({ ...request, ...change }));
+
+    expect(result).toMatchObject({ status: "error", values: expect.objectContaining({ passenger: expect.any(String) }) });
+    expect(undoCall).not.toHaveBeenCalled();
+  });
+
+  it("sends the person back to log in when there is no session or the token or role was refused", async () => {
+    vi.mocked(readStaffSession).mockResolvedValue(null);
+    expect(await undoBoarding({ status: "idle" }, form(request))).toEqual({ status: "signed-out" });
+    expect(undoCall).not.toHaveBeenCalled();
+
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+    vi.mocked(undoCall).mockResolvedValue({ kind: "unauthorized" });
+    expect(await undoBoarding({ status: "idle" }, form(request))).toEqual({ status: "signed-out" });
+    expect(clearStaffSession).toHaveBeenCalled();
+  });
+
+  it("shows the service's reason when there is nothing to undo, and says nothing was changed when it does not answer", async () => {
+    vi.mocked(undoCall).mockResolvedValueOnce({ kind: "refused", detail: "That passenger has not boarded this flight, so there is nothing to undo" });
+    expect(await undoBoarding({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("not boarded") });
+
+    vi.mocked(undoCall).mockResolvedValueOnce({ kind: "unavailable" });
+    expect(await undoBoarding({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("not responding") });
+  });
+
+  it("is rate limited", async () => {
+    vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 9 });
+
+    expect(await undoBoarding({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("9 seconds") });
+    expect(undoCall).not.toHaveBeenCalled();
   });
 });

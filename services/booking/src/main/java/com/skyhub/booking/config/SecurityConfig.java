@@ -68,6 +68,7 @@ public class SecurityConfig {
                         .requestMatchers(POST, "/api/v1/ops/staff").access(StaffAuthorization.createsStaff())
                         .requestMatchers(POST, "/api/v1/ops/boarding-passes/verification").access(StaffAuthorization.verifiesBoardingPasses())
                         .requestMatchers(POST, "/api/v1/ops/boarding-passes/boardings").access(StaffAuthorization.boardsPassengers())
+                        .requestMatchers(POST, "/api/v1/ops/boardings/reversals").access(StaffAuthorization.undoesBoarding())
                         .requestMatchers(GET, "/api/v1/ops/flights/{flightNumber}/departures/{departureDate}/bookings")
                                 .access(StaffAuthorization.viewsAffectedBookings())
                         .requestMatchers(POST, "/api/v1/ops/pnrs/{locator}/rebooking").access(StaffAuthorization.rebooks())

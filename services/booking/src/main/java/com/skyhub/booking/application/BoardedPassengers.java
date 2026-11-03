@@ -16,4 +16,12 @@ public interface BoardedPassengers {
 
     /** Whether any of these passengers has boarded this flight: someone on the aircraft cannot check out. */
     boolean anyBoarded(String locator, int segmentIndex, Collection<Integer> passengerIndexes);
+
+    /**
+     * Takes a boarding back and keeps a record of the correction (ADR-0064): who scanned and when, who took it back, when and why. The
+     * boarding and its record change together or not at all, and when two requests race exactly one of them wins.
+     *
+     * @return false if that passenger had not boarded (or was already taken back), in which case nothing changes
+     */
+    boolean undo(String locator, int segmentIndex, int passengerIndex, String by, String reason, Instant at);
 }

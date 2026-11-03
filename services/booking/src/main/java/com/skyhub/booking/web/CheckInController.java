@@ -5,7 +5,9 @@ import com.skyhub.booking.api.model.BoardingPassVerificationDto;
 import com.skyhub.booking.api.model.BoardingPassVerificationRequestDto;
 import com.skyhub.booking.api.model.BoardingPassesDto;
 import com.skyhub.booking.api.model.CheckInRequestDto;
+import com.skyhub.booking.api.model.UndoBoardingRequestDto;
 import com.skyhub.booking.application.BoardingPassVerifier;
+import com.skyhub.booking.application.BoardingReversalService;
 import com.skyhub.booking.application.BoardingService;
 import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.CheckInService;
@@ -26,11 +28,13 @@ public class CheckInController implements CheckInApi {
     private final CheckInService checkIn;
     private final BoardingPassVerifier verifier;
     private final BoardingService boarding;
+    private final BoardingReversalService reversals;
 
-    public CheckInController(CheckInService checkIn, BoardingPassVerifier verifier, BoardingService boarding) {
+    public CheckInController(CheckInService checkIn, BoardingPassVerifier verifier, BoardingService boarding, BoardingReversalService reversals) {
         this.checkIn = checkIn;
         this.verifier = verifier;
         this.boarding = boarding;
+        this.reversals = reversals;
     }
 
     @Override
@@ -65,6 +69,14 @@ public class CheckInController implements CheckInApi {
         String by = SecurityContextHolder.getContext().getAuthentication().getName();
         BoardingPassVerifier.Verdict verdict = boarding.board(request.getBarcode(), by);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(BookingDtoMapper.toDto(verdict));
+    }
+
+    /** A staff action for operations and administrators only (SecurityConfig): the person is recorded from the token, never from the request (ADR-0064). */
+    @Override
+    public ResponseEntity<Void> undoBoarding(UndoBoardingRequestDto request) {
+        String by = SecurityContextHolder.getContext().getAuthentication().getName();
+        reversals.undo(request.getLocator(), request.getSegmentIndex(), request.getPassengerIndex(), request.getReason(), by);
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
 
     private static ResponseEntity<BoardingPassesDto> respond(CheckInResult result, HttpStatus status) {

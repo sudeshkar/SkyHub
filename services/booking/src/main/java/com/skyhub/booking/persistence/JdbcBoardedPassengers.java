@@ -26,6 +26,21 @@ class JdbcBoardedPassengers implements BoardedPassengers {
                 + "ON CONFLICT DO NOTHING", locator, segmentIndex, passengerIndex, by, Timestamp.from(at)) == 1;
     }
 
+    /**
+     * One statement, so no transaction is needed: the DELETE removes the boarding and hands its row to the INSERT. Two racing requests both
+     * try to delete the same row; the database lets one of them have it, so exactly one reversal is recorded (ADR-0064).
+     */
+    @Override
+    public boolean undo(String locator, int segmentIndex, int passengerIndex, String by, String reason, Instant at) {
+        return jdbc.update("""
+                WITH gone AS (
+                    DELETE FROM boarded_passenger WHERE locator = ? AND segment_index = ? AND passenger_index = ?
+                    RETURNING locator, segment_index, passenger_index, boarded_by, boarded_at)
+                INSERT INTO boarding_reversal (locator, segment_index, passenger_index, boarded_by, boarded_at, reversed_by, reversed_at, reason)
+                SELECT locator, segment_index, passenger_index, boarded_by, boarded_at, ?, ?, ? FROM gone""",
+                locator, segmentIndex, passengerIndex, by, Timestamp.from(at), reason) == 1;
+    }
+
     @Override
     public boolean isBoarded(String locator, int segmentIndex, int passengerIndex) {
         return Boolean.TRUE.equals(jdbc.queryForObject(

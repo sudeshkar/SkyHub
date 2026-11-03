@@ -268,6 +268,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/boardings/reversals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take back a boarding that was recorded by mistake
+         * @description For operations staff and administrators only (ADR-0064): a **gate agent cannot undo a scan**, so the person who made a mistake
+         *     is never the one who erases it. The passenger is named by booking reference, flight (leg number, from 0) and passenger number
+         *     (from 0), because a boarded pass says nothing about who it was for. A reason is required (1 to 200 characters).
+         *     The correction is **audited**: who scanned, when, who took it back, when and why are kept in an append-only table.
+         *     The passenger stays checked in, so they can board again with the same pass while boarding is open (ADR-0063).
+         *     Asking twice is answered with 404 the second time: there is nothing left to undo.
+         */
+        post: operations["undoBoarding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/disruptions": {
         parameters: {
             query?: never;
@@ -864,6 +889,15 @@ export interface components {
         BoardingPassVerificationRequest: {
             /** @description The text scanned from the pass, as printed in `barcode` of the boarding pass. */
             barcode: string;
+        };
+        UndoBoardingRequest: {
+            locator: string;
+            /** @description Which flight on the booking, counting from 0. */
+            segmentIndex: number;
+            /** @description Which passenger on the booking, counting from 0. */
+            passengerIndex: number;
+            /** @description Why the boarding is being taken back. Kept with the correction; never shown to the traveller. */
+            reason: string;
         };
         BoardingPassVerification: {
             valid: boolean;
@@ -1523,6 +1557,40 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    undoBoarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UndoBoardingRequest"];
+            };
+        };
+        responses: {
+            /** @description The boarding was taken back and the reversal recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description That passenger has not boarded that flight, so there is nothing to undo */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     recordDisruption: {

@@ -96,6 +96,20 @@ class StaffAuthorizationTest {
     }
 
     @Test
+    void should_let_operations_and_admins_undo_a_boarding_but_never_a_gate_agent_a_traveller_or_nobody() {
+        Authentication ops = authenticate(staffTokens.issue("priya.ops", StaffRole.OPS).value());
+        Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
+        Authentication gate = authenticate(staffTokens.issue("gate.one", StaffRole.GATE).value());
+        Authentication traveller = authenticate(manageTokens.issue("ABC234", 0).value());
+
+        assertThat(granted(StaffAuthorization.undoesBoarding(), ops)).isTrue();
+        assertThat(granted(StaffAuthorization.undoesBoarding(), admin)).isTrue();
+        assertThat(granted(StaffAuthorization.undoesBoarding(), gate)).isFalse();   // the person who made the scan cannot take it back (ADR-0064)
+        assertThat(granted(StaffAuthorization.undoesBoarding(), traveller)).isFalse();
+        assertThat(granted(StaffAuthorization.undoesBoarding(), null)).isFalse();
+    }
+
+    @Test
     void should_let_an_admin_do_both() {
         Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
 

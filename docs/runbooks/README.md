@@ -133,6 +133,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** ask which address the confirmation email went to. Loki `{service="booking"} |= "addresses could not be read"` is one line per start with how many bookings the backfill skipped (`backfill.unreadable`) and the first five ids (`pnr.ids`), and `skyhub_contact_index_unreadable_total` counts them: usually a changed `SKYHUB_PII_KEY`, which also breaks reading those bookings. `SELECT count(*) FROM pnr WHERE contact_email_index IS NULL;` should be 0 once the booking service has started after the upgrade. `skyhub_contact_index_backfilled_total` counts what the last start indexed.
 **Mitigate:** a different address: use Manage booking with the reference and last name (the booking is not theirs to list). Unindexed rows: restart the booking service (the backfill runs at every start and skips nothing it can read); if the key was changed, restore the old key. `skyhub_my_bookings_total{outcome="denied"}` rising fast is someone trying references that are not theirs: the edge rate limit applies, and an account token already needs a confirmed password.
 
+## A passenger was boarded by mistake (no alert)
+
+**Means:** a gate scanned the wrong pass, so the real passenger is refused with `ALREADY_BOARDED` or the record is wrong (ADR-0064). Undoing is a deliberate act by operations or an administrator; a gate agent cannot do it.
+**Confirm:** you need the booking reference, the flight's place on the booking (1 for the first flight) and the passenger's place. Who scanned and when is in `boarded_passenger` (`boarded_by`, `boarded_at`). Loki `{service="booking"} |= "Passenger boarded"` has the reference and the scanner.
+**Mitigate:** on `/ops`, "Undo a boarding": reference, flight, passenger, a reason, and the tick-box. The passenger stays checked in and can board again with the same pass while boarding is open (ADR-0063). Every undo is a row in `boarding_reversal` (who scanned, who undid it, when, and why): `SELECT * FROM boarding_reversal WHERE locator = '...' ORDER BY reversed_at`. `skyhub_boarding_pass_reversals_total{outcome="not_boarded"}` rising means people are trying to undo boardings that never happened (a wrong reference or passenger number). There is no alert on purpose.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.

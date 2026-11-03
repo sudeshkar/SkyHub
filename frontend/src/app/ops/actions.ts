@@ -10,6 +10,7 @@ import {
   rebookFlights,
   recordDisruption as recordDisruptionCall,
   type RecordDisruptionRequest,
+  undoBoarding as undoBoardingCall,
   verifyBoardingPass,
   withdrawDisruption as withdrawDisruptionCall,
 } from "@/lib/api/booking";
@@ -255,6 +256,58 @@ function toMoveResult(result: BulkMoveResult): MoveResult {
       return { locator: result.locator, status: "failed", detail: "That booking was not found." };
     default:
       return { locator: result.locator, status: "failed", detail: result.detail ?? "This move could not be completed." };
+  }
+}
+
+export type UndoBoardingValues = { locator: string; leg: string; passenger: string; reason: string };
+
+export type UndoBoardingState =
+  | { status: "idle" }
+  | { status: "undone"; locator: string; leg: number; passenger: number }
+  | { status: "error"; message: string; values: UndoBoardingValues }
+  | { status: "signed-out" };
+
+const POSITIVE_INTEGER = /^[1-9]\d{0,2}$/;
+
+/**
+ * Takes a wrong boarding back (ADR-0064). The screen counts flights and passengers from one, the service from zero. A reason is required
+ * and an explicit confirmation, because the correction is kept on record under the staff member's name. Whether this person may is decided
+ * by the booking service from their token: a gate agent is refused there, and never sees this form.
+ */
+export async function undoBoarding(_previous: UndoBoardingState, form: FormData): Promise<UndoBoardingState> {
+  const values: UndoBoardingValues = {
+    locator: String(form.get("locator") ?? "").trim().toUpperCase(),
+    leg: String(form.get("leg") ?? "").trim(),
+    passenger: String(form.get("passenger") ?? "").trim(),
+    reason: String(form.get("reason") ?? "").trim(),
+  };
+  const fail = (message: string): UndoBoardingState => ({ status: "error", message, values });
+
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return fail(`Too many requests. Please wait ${decision.retryAfterSeconds} seconds.`);
+
+  const session = await readStaffSession();
+  if (!session) return { status: "signed-out" };
+
+  if (!LOCATOR.test(values.locator)) return fail("Enter the six-character booking reference.");
+  if (!POSITIVE_INTEGER.test(values.leg)) return fail("Enter the flight number on the booking, counting from 1.");
+  if (!POSITIVE_INTEGER.test(values.passenger)) return fail("Enter the passenger number on the booking, counting from 1.");
+  if (values.reason.length === 0 || values.reason.length > MAX_REASON) return fail(`Give a reason of up to ${MAX_REASON} characters.`);
+  if (!form.get("confirm")) return fail("Please confirm that you want to undo this boarding.");
+
+  const leg = Number(values.leg);
+  const passenger = Number(values.passenger);
+  const outcome = await undoBoardingCall(session.token, { locator: values.locator, segmentIndex: leg - 1, passengerIndex: passenger - 1, reason: values.reason });
+  switch (outcome.kind) {
+    case "undone":
+      return { status: "undone", locator: values.locator, leg, passenger };
+    case "unauthorized":
+      await clearStaffSession(); // expired, or a role that may not do this
+      return { status: "signed-out" };
+    case "refused":
+      return fail(outcome.detail);
+    default:
+      return fail("The booking service is not responding right now, so nothing was changed. Please try again.");
   }
 }
 
