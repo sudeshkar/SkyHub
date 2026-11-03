@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { readStaffSession } from "@/lib/staff-session";
 import { DisruptionForm } from "./disruption-form";
+import { BoardedPanel } from "./boarded-panel";
 import { GatePanel } from "./gate-panel";
 import { UndoBoardingForm } from "./undo-boarding-form";
 import { WithdrawForm } from "./withdraw-form";
@@ -58,6 +59,7 @@ async function OpsContent() {
           <ProposalsPanel />
           <WithdrawForm />
           <GatePanel />
+          <BoardedPanel />
           <UndoBoardingForm />
         </>
       )}

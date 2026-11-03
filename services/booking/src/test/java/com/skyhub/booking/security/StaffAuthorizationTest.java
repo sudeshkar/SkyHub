@@ -110,6 +110,20 @@ class StaffAuthorizationTest {
     }
 
     @Test
+    void should_let_operations_and_admins_see_who_has_boarded_a_flight_but_not_a_gate_agent_a_traveller_or_nobody() {
+        Authentication ops = authenticate(staffTokens.issue("priya.ops", StaffRole.OPS).value());
+        Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
+        Authentication gate = authenticate(staffTokens.issue("gate.one", StaffRole.GATE).value());
+        Authentication traveller = authenticate(manageTokens.issue("ABC234", 0).value());
+
+        assertThat(granted(StaffAuthorization.viewsFlightBoarding(), ops)).isTrue();
+        assertThat(granted(StaffAuthorization.viewsFlightBoarding(), admin)).isTrue();
+        assertThat(granted(StaffAuthorization.viewsFlightBoarding(), gate)).isFalse();   // it lists booking references (ADR-0065)
+        assertThat(granted(StaffAuthorization.viewsFlightBoarding(), traveller)).isFalse();
+        assertThat(granted(StaffAuthorization.viewsFlightBoarding(), null)).isFalse();
+    }
+
+    @Test
     void should_let_an_admin_do_both() {
         Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
 

@@ -4,6 +4,8 @@ import com.skyhub.booking.api.model.CabinDto;
 import com.skyhub.booking.api.model.CreatePnrRequestDto;
 import com.skyhub.booking.api.model.AffectedBookingDto;
 import com.skyhub.booking.api.model.AffectedBookingsDto;
+import com.skyhub.booking.api.model.FlightBoardingDto;
+import com.skyhub.booking.api.model.FlightBoardingEntryDto;
 import com.skyhub.booking.api.model.BookingDisruptionsDto;
 import com.skyhub.booking.api.model.DisruptionDto;
 import com.skyhub.booking.api.model.DisruptionTypeDto;
@@ -26,6 +28,7 @@ import com.skyhub.booking.api.model.SeatMapDto;
 import com.skyhub.booking.api.model.SeatStatusDto;
 import com.skyhub.booking.api.model.SegmentDto;
 import com.skyhub.booking.application.AffectedBooking;
+import com.skyhub.booking.application.FlightBoarding;
 import com.skyhub.booking.application.BookingDisruption;
 import com.skyhub.booking.application.CheckInResult;
 import com.skyhub.booking.application.RecordDisruptionCommand;
@@ -84,6 +87,14 @@ final class BookingDtoMapper {
                 .map(b -> new AffectedBookingDto(b.locator(), b.passengerCount(), b.segmentIndex(), b.segments().stream()
                         .map(s -> new SegmentDto(s.flightNumber(), s.departureDate())).toList()))
                 .toList());
+    }
+
+    static FlightBoardingDto toDto(FlightBoarding flight) {
+        return new FlightBoardingDto(flight.flightNumber(), flight.departureDate(), flight.checkedIn(), flight.boarded(), flight.waiting(),
+                flight.boardings().stream()
+                        .map(b -> new FlightBoardingEntryDto(b.locator(), b.segmentIndex(), b.passengerIndex(), b.boardedBy(),
+                                b.boardedAt().atOffset(ZoneOffset.UTC)))
+                        .toList());
     }
 
     static BookingDisruptionsDto toDto(List<BookingDisruption> disruptions) {

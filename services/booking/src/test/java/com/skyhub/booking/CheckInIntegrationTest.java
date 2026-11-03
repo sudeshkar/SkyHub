@@ -544,4 +544,57 @@ class CheckInIntegrationTest {
         mvc.perform(get("/api/v1/pnrs/{l}/check-ins/0", locator).header("Authorization", token)).andExpect(status().isOk());   // still checked in
         verify(barcode, ops).andExpect(jsonPath("$.reason").value("ALREADY_BOARDED"));
     }
+
+    // ---- who has boarded a flight (ADR-0065) ---------------------------------------------------------------------------
+
+    private org.springframework.test.web.servlet.ResultActions flightBoarding(String flight, String date, String authorization) throws Exception {
+        var request = get("/api/v1/ops/flights/{f}/departures/{d}/boardings", flight, date);
+        return mvc.perform(authorization == null ? request : request.header("Authorization", authorization));
+    }
+
+    @Test
+    void should_list_who_has_boarded_a_flight_with_counts_leave_out_other_dates_and_follow_an_undo() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String gate = gateAgent("gate.board.list", ops);
+        String locator = bookTwo("2029-12-01");
+        String token = tokenFor(locator);
+        String both = mvc.perform(post("/api/v1/pnrs/{l}/check-ins", locator).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        board(JsonPath.read(both, "$.passes[0].barcode"), gate).andExpect(jsonPath("$.valid").value(true));
+        // Another date: checked in and boarded, but not on this flight.
+        String other = bookTwo("2029-12-02");
+        String otherBoth = mvc.perform(post("/api/v1/pnrs/{l}/check-ins", other).header("Authorization", tokenFor(other)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"segmentIndex\":0}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        board(JsonPath.read(otherBoth, "$.passes[0].barcode"), gate).andExpect(jsonPath("$.valid").value(true));
+
+        flightBoarding("SK501", "2029-12-01", ops).andExpect(status().isOk())
+                .andExpect(jsonPath("$.checkedIn").value(2))
+                .andExpect(jsonPath("$.boarded").value(1))
+                .andExpect(jsonPath("$.waiting").value(1))
+                .andExpect(jsonPath("$.boardings.length()").value(1))
+                .andExpect(jsonPath("$.boardings[0].locator").value(locator))
+                .andExpect(jsonPath("$.boardings[0].segmentIndex").value(0))
+                .andExpect(jsonPath("$.boardings[0].passengerIndex").value(0))
+                .andExpect(jsonPath("$.boardings[0].boardedBy").value("gate.board.list"));
+
+        mvc.perform(post("/api/v1/ops/boardings/reversals").header("Authorization", ops).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"locator\":\"%s\",\"segmentIndex\":0,\"passengerIndex\":0,\"reason\":\"wrong passenger\"}".formatted(locator)))
+                .andExpect(status().isNoContent());
+
+        flightBoarding("SK501", "2029-12-01", ops).andExpect(jsonPath("$.boarded").value(0)).andExpect(jsonPath("$.waiting").value(2))
+                .andExpect(jsonPath("$.boardings.length()").value(0));
+    }
+
+    @Test
+    void should_answer_an_empty_list_for_a_flight_nobody_boarded_and_refuse_a_gate_agent_a_traveller_and_nobody() throws Exception {
+        String ops = TestStaff.adminBearer(mvc);
+        String gate = gateAgent("gate.board.list.two", ops);
+        String locator = bookTwo("2029-12-03");
+
+        flightBoarding("SK501", "2029-12-03", ops).andExpect(status().isOk()).andExpect(jsonPath("$.checkedIn").value(0))
+                .andExpect(jsonPath("$.boarded").value(0)).andExpect(jsonPath("$.boardings.length()").value(0));
+        flightBoarding("SK501", "2029-12-03", gate).andExpect(status().isForbidden());
+        flightBoarding("SK501", "2029-12-03", tokenFor(locator)).andExpect(status().isForbidden());
+        flightBoarding("SK501", "2029-12-03", null).andExpect(status().isUnauthorized());
+    }
 }

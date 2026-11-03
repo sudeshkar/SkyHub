@@ -30,7 +30,7 @@ ADR-0060 let a passenger board once and named its own gap: *boarding cannot be u
 
 - Positive: a wrong scan can be corrected without database access, by someone accountable, and the correction is kept.
 - Positive: the gate agent's token stays nearly powerless (ADR-0060), and the pass-lookup rule of ADR-0056 is untouched.
-- Negative: **the person doing the undo needs the booking reference and the passenger and flight numbers.** A boarded pass shows none of these to a refused scan; the ops page does not yet show who has boarded. A screen listing boarded passengers per flight would make this easier.
+- Negative (eased by ADR-0065): **the person doing the undo needs the booking reference and the passenger and flight numbers.** A boarded pass shows none of these to a refused scan; the ops page does not yet show who has boarded. A screen listing boarded passengers per flight would make this easier.
 - Negative: **a corrected boarding leaves no trace on the pass or the booking.** Only `boarding_reversal` shows it.
 - Negative: **the reason is free text** kept in the database as typed (it can hold personal data if staff write it there). It is not logged or sent anywhere else.
 - Negative: **there is no limit on how often one boarding can be undone and redone**, and no alert on it. A person doing so repeatedly is visible only in the table.

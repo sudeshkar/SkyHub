@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProposals } from "@/lib/api/agent";
 import {
   boardPassenger,
+  getFlightBoarding as boardingCall,
   openStaffSession,
   rebookFlights,
   recordDisruption as recordCall,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/api/booking";
 import { rateLimit } from "@/lib/rate-limit";
 import { clearStaffSession, readStaffSession, saveStaffSession } from "@/lib/staff-session";
-import { gateScan, loadProposals, logOut, moveBookings, recordDisruption, staffLogin, undoBoarding, withdrawDisruption } from "./actions";
+import { gateScan, loadFlightBoarding, loadProposals, logOut, moveBookings, recordDisruption, staffLogin, undoBoarding, withdrawDisruption } from "./actions";
 
 vi.mock("@/lib/rate-limit", () => ({ POLICIES: { staffLogin: {}, manage: {} }, rateLimit: vi.fn() }));
 vi.mock("@/lib/staff-session", () => ({
@@ -21,7 +22,7 @@ vi.mock("@/lib/staff-session", () => ({
 }));
 vi.mock("@/lib/api/booking", () => ({
   openStaffSession: vi.fn(), recordDisruption: vi.fn(), rebookFlights: vi.fn(), withdrawDisruption: vi.fn(),
-  verifyBoardingPass: vi.fn(), boardPassenger: vi.fn(), undoBoarding: vi.fn(),
+  verifyBoardingPass: vi.fn(), boardPassenger: vi.fn(), undoBoarding: vi.fn(), getFlightBoarding: vi.fn(),
 }));
 vi.mock("@/lib/api/agent", () => ({ getProposals: vi.fn() }));
 // redirect() works by throwing; the real one is not available outside a request.
@@ -503,5 +504,70 @@ describe("undoBoarding (ADR-0064)", () => {
 
     expect(await undoBoarding({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("9 seconds") });
     expect(undoCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("loadFlightBoarding (ADR-0065)", () => {
+  const request = { flightNumber: "sk501", departureDate: "2026-11-03" };
+  const FLIGHT = {
+    flightNumber: "SK501",
+    departureDate: "2026-11-03",
+    checkedIn: 3,
+    boarded: 1,
+    waiting: 2,
+    boardings: [{ locator: "ABC234", segmentIndex: 0, passengerIndex: 1, boardedBy: "gate.one", boardedAt: "2026-11-03T09:00:00Z" }],
+  };
+
+  beforeEach(() => {
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+  });
+
+  it("shows the counts and each boarding, counting flights and passengers from one as the undo form does", async () => {
+    vi.mocked(boardingCall).mockResolvedValue({ kind: "ok", flight: FLIGHT });
+
+    const result = await loadFlightBoarding({ status: "idle" }, form(request));
+
+    expect(boardingCall).toHaveBeenCalledWith(SESSION.token, "SK501", "2026-11-03");
+    expect(result).toEqual({
+      status: "loaded",
+      flightNumber: "SK501",
+      departureDate: "2026-11-03",
+      checkedIn: 3,
+      boarded: 1,
+      waiting: 2,
+      rows: [{ locator: "ABC234", leg: 1, passenger: 2, by: "gate.one", at: "2026-11-03T09:00:00Z" }],
+    });
+  });
+
+  it("refuses a malformed flight or date before calling the service", async () => {
+    expect(await loadFlightBoarding({ status: "idle" }, form({ ...request, flightNumber: "nope" }))).toMatchObject({ status: "error" });
+    expect(await loadFlightBoarding({ status: "idle" }, form({ ...request, departureDate: "" }))).toMatchObject({ status: "error" });
+    expect(boardingCall).not.toHaveBeenCalled();
+  });
+
+  it("sends the person back to log in when there is no session or the token or role was refused", async () => {
+    vi.mocked(readStaffSession).mockResolvedValue(null);
+    expect(await loadFlightBoarding({ status: "idle" }, form(request))).toEqual({ status: "signed-out" });
+    expect(boardingCall).not.toHaveBeenCalled();
+
+    vi.mocked(readStaffSession).mockResolvedValue(SESSION);
+    vi.mocked(boardingCall).mockResolvedValue({ kind: "unauthorized" });
+    expect(await loadFlightBoarding({ status: "idle" }, form(request))).toEqual({ status: "signed-out" });
+    expect(clearStaffSession).toHaveBeenCalled();
+  });
+
+  it("says so when the booking service does not answer or does not accept the request", async () => {
+    vi.mocked(boardingCall).mockResolvedValueOnce({ kind: "unavailable" });
+    expect(await loadFlightBoarding({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("not responding") });
+
+    vi.mocked(boardingCall).mockResolvedValueOnce({ kind: "rejected", detail: "Not a valid flight" });
+    expect(await loadFlightBoarding({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: "Not a valid flight" });
+  });
+
+  it("is rate limited", async () => {
+    vi.mocked(rateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 4 });
+
+    expect(await loadFlightBoarding({ status: "idle" }, form(request))).toMatchObject({ status: "error", message: expect.stringContaining("4 seconds") });
+    expect(boardingCall).not.toHaveBeenCalled();
   });
 });

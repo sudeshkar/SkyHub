@@ -12,6 +12,7 @@ import com.skyhub.booking.application.BoardingPassVerifier;
 import com.skyhub.booking.application.BoardingReversalService;
 import com.skyhub.booking.application.BoardingService;
 import com.skyhub.booking.application.CheckInService;
+import com.skyhub.booking.application.FlightBoardingReport;
 import com.skyhub.booking.application.ManageTokenIssuer;
 import com.skyhub.booking.application.StaffTokenIssuer;
 import com.skyhub.booking.domain.NotBoardedException;
@@ -44,6 +45,9 @@ class BoardingReversalControllerTest {
 
     @MockitoBean
     private BoardingReversalService reversals;
+
+    @MockitoBean
+    private FlightBoardingReport flightBoardingReport;
 
     @MockitoBean
     private CheckInService checkInService;

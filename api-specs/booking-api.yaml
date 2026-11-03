@@ -488,6 +488,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /api/v1/ops/flights/{flightNumber}/departures/{departureDate}/boardings:
+    get:
+      tags: [CheckIn]
+      operationId: getFlightBoarding
+      summary: Who has boarded one flight, and how many checked in are still to come
+      description: |
+        For operations staff and administrators only (ADR-0065). A **gate agent cannot see it**, because it lists booking references
+        (ADR-0060). Gives how many passengers are checked in, how many have boarded and how many are still waiting, and for each
+        boarding the booking reference, the flight's place on the booking and the passenger's place (both from 0, exactly what
+        `undoBoarding` asks for), who scanned and when. It carries no names, so it can be shown on a screen or given to a tool that must
+        not see personal data. It is bounded by the seats on the aircraft and is not paged. A flight nobody has boarded gives zeros and an
+        empty list, not an error; the flight is not looked up.
+      security:
+        - staffToken: []
+      parameters:
+        - name: flightNumber
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/FlightNumber'
+        - name: departureDate
+          in: path
+          required: true
+          description: Scheduled UTC departure date of the flight
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The flight's boarding, possibly empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlightBoarding'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/v1/ops/disruptions:
     post:
       tags: [Disruptions]
@@ -1543,6 +1584,54 @@ components:
           minLength: 1
           maxLength: 200
           description: Why the boarding is being taken back. Kept with the correction; never shown to the traveller.
+
+    FlightBoarding:
+      type: object
+      required: [flightNumber, departureDate, checkedIn, boarded, waiting, boardings]
+      properties:
+        flightNumber:
+          $ref: '#/components/schemas/FlightNumber'
+        departureDate:
+          type: string
+          format: date
+        checkedIn:
+          type: integer
+          minimum: 0
+          description: Passengers checked in on this flight, whether or not they have boarded.
+        boarded:
+          type: integer
+          minimum: 0
+        waiting:
+          type: integer
+          minimum: 0
+          description: Checked in and not yet boarded. Never below 0.
+        boardings:
+          type: array
+          description: Oldest boarding first.
+          items:
+            $ref: '#/components/schemas/FlightBoardingEntry'
+
+    FlightBoardingEntry:
+      type: object
+      required: [locator, segmentIndex, passengerIndex, boardedBy, boardedAt]
+      properties:
+        locator:
+          type: string
+          pattern: '^[A-Z0-9]{6}$'
+        segmentIndex:
+          type: integer
+          minimum: 0
+          description: Which flight on the booking, counting from 0.
+        passengerIndex:
+          type: integer
+          minimum: 0
+          description: Which passenger on the booking, counting from 0.
+        boardedBy:
+          type: string
+          description: The staff member who scanned the pass.
+        boardedAt:
+          type: string
+          format: date-time
 
     BoardingPassVerification:
       type: object

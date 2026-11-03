@@ -77,6 +77,7 @@ How a slice goes, every time:
 | 58 | A gate screen on `/ops`: scan or paste a pass, check it, board the passenger; a gate agent sees only the gate. Fixes the website treating the GATE role as signed out | ADR-0062 |
 | 59 | A boarding window: a good pass is boarded only from 45 to 10 minutes before the flight's expected departure (delays move it); `BOARDING_NOT_OPEN` / `BOARDING_CLOSED` at the gate; checking a pass has no clock | ADR-0063 |
 | 60 | Undo a wrong boarding scan: operations and administrators (never the gate agent) take a boarding back with a reason; the passenger stays checked in and can board again; the correction is kept in an append-only table; a form on `/ops` | ADR-0064 |
+| 61 | Who has boarded a flight: counts of checked in, boarded and waiting, and each boarding's reference and place on the booking (no names), for operations and administrators only; a panel on `/ops` whose numbers go straight into the undo form | ADR-0065 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -88,7 +89,7 @@ Ordered by how much they add to the story, not a commitment.
 | **More notifications** | a boarding-pass attachment; SMS; non-blocking retry topics | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
 | **Account follow-ups** | Saved passengers (revisit ADR-0054's mailbox trust first) | Accounts and My bookings exist (ADR-0033, 0034). Changing an address must prove the new one with a link, as signing up does. |
-| **Check-in extras** | QR/PDF417 boarding pass image; a per-route boarding window and an override for a late passenger (ADR-0063); a screen of who has boarded a flight | The boarding time rule (ADR-0063) and undoing a wrong scan (ADR-0064) are done. Move `CheckInService`'s departure lookup onto `ExpectedDepartures` when it is next touched. |
+| **Check-in extras** | QR/PDF417 boarding pass image; a per-route boarding window and an override for a late passenger (ADR-0063) | The boarding time rule (ADR-0063), undoing a wrong scan (ADR-0064) and the who-has-boarded screen (ADR-0065) are done. Move `CheckInService`'s departure lookup onto `ExpectedDepartures` when it is next touched. |
 | **Gateway and deployment** | Kong gateway, containers for every service, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
 
 ## Smaller loose ends

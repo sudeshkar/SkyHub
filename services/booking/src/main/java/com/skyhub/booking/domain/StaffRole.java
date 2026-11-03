@@ -49,6 +49,14 @@ public enum StaffRole {
         return runsOperations;
     }
 
+    /**
+     * See who has boarded a flight (ADR-0065). It lists booking references, so a gate agent does not get it (ADR-0060). Written out like
+     * the others so the next role has to decide.
+     */
+    public boolean mayViewFlightBoarding() {
+        return runsOperations;
+    }
+
     public boolean mayCreateStaff() {
         return createsStaff;
     }
