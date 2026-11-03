@@ -16,6 +16,8 @@ final class FakeBoardedPassengers implements BoardedPassengers {
     }
 
     final List<Row> rows = new ArrayList<>();
+    /** Why each late boarding was allowed (ADR-0076), by who boarded and what: only boardings made after the gate closed have one. */
+    final java.util.Map<Row, String> lateReasons = new java.util.HashMap<>();
     final List<Reversal> reversals = new ArrayList<>();
 
     @Override
@@ -24,6 +26,15 @@ final class FakeBoardedPassengers implements BoardedPassengers {
             return false;
         }
         rows.add(new Row(locator, segmentIndex, passengerIndex, by, at));
+        return true;
+    }
+
+    @Override
+    public boolean boardLate(String locator, int segmentIndex, int passengerIndex, String by, Instant at, String reason) {
+        if (!board(locator, segmentIndex, passengerIndex, by, at)) {
+            return false;
+        }
+        lateReasons.put(new Row(locator, segmentIndex, passengerIndex, by, at), reason);
         return true;
     }
 

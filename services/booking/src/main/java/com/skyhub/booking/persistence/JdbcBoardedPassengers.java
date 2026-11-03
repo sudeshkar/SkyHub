@@ -21,6 +21,12 @@ class JdbcBoardedPassengers implements BoardedPassengers {
     }
 
     @Override
+    public boolean boardLate(String locator, int segmentIndex, int passengerIndex, String by, Instant at, String reason) {
+        return jdbc.update("INSERT INTO boarded_passenger (locator, segment_index, passenger_index, boarded_by, boarded_at, late_reason) "
+                + "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING", locator, segmentIndex, passengerIndex, by, Timestamp.from(at), reason) == 1;
+    }
+
+    @Override
     public boolean board(String locator, int segmentIndex, int passengerIndex, String by, Instant at) {
         return jdbc.update("INSERT INTO boarded_passenger (locator, segment_index, passenger_index, boarded_by, boarded_at) VALUES (?, ?, ?, ?, ?) "
                 + "ON CONFLICT DO NOTHING", locator, segmentIndex, passengerIndex, by, Timestamp.from(at)) == 1;
@@ -35,9 +41,9 @@ class JdbcBoardedPassengers implements BoardedPassengers {
         return jdbc.update("""
                 WITH gone AS (
                     DELETE FROM boarded_passenger WHERE locator = ? AND segment_index = ? AND passenger_index = ?
-                    RETURNING locator, segment_index, passenger_index, boarded_by, boarded_at)
-                INSERT INTO boarding_reversal (locator, segment_index, passenger_index, boarded_by, boarded_at, reversed_by, reversed_at, reason)
-                SELECT locator, segment_index, passenger_index, boarded_by, boarded_at, ?, ?, ? FROM gone""",
+                    RETURNING locator, segment_index, passenger_index, boarded_by, boarded_at, late_reason)
+                INSERT INTO boarding_reversal (locator, segment_index, passenger_index, boarded_by, boarded_at, late_reason, reversed_by, reversed_at, reason)
+                SELECT locator, segment_index, passenger_index, boarded_by, boarded_at, late_reason, ?, ?, ? FROM gone""",
                 locator, segmentIndex, passengerIndex, by, Timestamp.from(at), reason) == 1;
     }
 

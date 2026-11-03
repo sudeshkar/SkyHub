@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getProposals, type ProposalSet } from "@/lib/api/agent";
 import {
+  boardLatePassenger as boardLateCall,
   boardPassenger,
   type BulkMoveResult,
   getFlightBoarding as getFlightBoardingCall,
@@ -260,7 +261,7 @@ function toMoveResult(result: BulkMoveResult): MoveResult {
   }
 }
 
-export type FlightBoardingRow = { locator: string; leg: number; passenger: number; by: string; at: string };
+export type FlightBoardingRow = { locator: string; leg: number; passenger: number; by: string; at: string; late: boolean };
 
 export type FlightBoardingState =
   | { status: "idle" }
@@ -298,7 +299,7 @@ export async function loadFlightBoarding(_previous: FlightBoardingState, form: F
         checkedIn,
         boarded,
         waiting,
-        rows: boardings.map((b) => ({ locator: b.locator, leg: b.segmentIndex + 1, passenger: b.passengerIndex + 1, by: b.boardedBy, at: b.boardedAt })),
+        rows: boardings.map((b) => ({ locator: b.locator, leg: b.segmentIndex + 1, passenger: b.passengerIndex + 1, by: b.boardedBy, at: b.boardedAt, late: b.late })),
       };
     }
     case "unauthorized":
@@ -360,6 +361,48 @@ export async function undoBoarding(_previous: UndoBoardingState, form: FormData)
       return fail(outcome.detail);
     default:
       return fail("The booking service is not responding right now, so nothing was changed. Please try again.");
+  }
+}
+
+export type LateBoardingState =
+  | { status: "idle" }
+  | { status: "boarded"; pass: GatePass }
+  | { status: "refused"; reason: GateRefusal }
+  | { status: "error"; message: string }
+  | { status: "signed-out" };
+
+/**
+ * Boards a passenger after the gate has closed (ADR-0076). Needs a reason and an explicit confirmation, because the boarding is kept with
+ * the staff member's name. Whether this person may (operations and administrators, never a gate agent), and whether the gate is closed and
+ * the flight not yet gone, is decided by the booking service from their token. The pass text is passed on and never logged or sent back.
+ */
+export async function boardLate(_previous: LateBoardingState, form: FormData): Promise<LateBoardingState> {
+  const barcode = String(form.get("barcode") ?? "").trim();
+  const reason = String(form.get("reason") ?? "").trim();
+  const decision = await rateLimit(POLICIES.manage);
+  if (!decision.allowed) return { status: "error", message: `Too many requests. Please wait ${decision.retryAfterSeconds} seconds.` };
+  if (barcode.length === 0 || barcode.length > MAX_PASS) return { status: "error", message: "Scan or paste a boarding pass." };
+  if (reason.length === 0 || reason.length > MAX_REASON) return { status: "error", message: `Give a reason of up to ${MAX_REASON} characters.` };
+  if (!form.get("confirm")) return { status: "error", message: "Please confirm that you want to board this passenger after the gate has closed." };
+
+  const session = await readStaffSession();
+  if (!session) return { status: "signed-out" };
+
+  const outcome = await boardLateCall(session.token, barcode, reason);
+  switch (outcome.kind) {
+    case "good": {
+      const { passengerName, flightNumber, departureDate, seatNumber, sequence } = outcome.pass;
+      return { status: "boarded", pass: { passengerName, flightNumber, departureDate, seatNumber, sequence } };
+    }
+    case "refused":
+      return { status: "refused", reason: outcome.reason };
+    case "unauthorized":
+      await clearStaffSession(); // expired, or a role that may not do this: a gate agent
+      return { status: "signed-out" };
+    case "rejected":
+      return { status: "error", message: outcome.detail };
+    default:
+      return { status: "error", message: "The booking service is not responding right now, so nobody was boarded. Please try again." };
   }
 }
 

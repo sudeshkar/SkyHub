@@ -157,6 +157,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** `skyhub_rebookings_total{outcome="refused"}`; the "Who has boarded" panel on `/ops` (ADR-0065) lists the boardings of the flight with the booking reference. `skyhub_rebooking_check_ins_released_total` counts passengers a move checked out.
 **Mitigate:** if the boarding was a mistake, take it back with "Undo a boarding" (ADR-0064) and move the booking again. If the passenger really boarded, the booking is not moved by this tool; handle it by hand. A passenger who was moved is told by the rebooking email that their old passes no longer work and to check in again (ADR-0070); they check in for the new flight when it opens.
 
+## A passenger reached the gate after boarding closed (no alert)
+
+**Means:** a good boarding pass is refused with `BOARDING_CLOSED` because the gate closed 10 minutes before departure (ADR-0063), and the flight has not left. Operations or an administrator may board the passenger anyway (ADR-0076); a gate agent cannot.
+**Confirm:** the pass is good (`Check pass` on the gate screen has no clock). The flight has not left: boarding opens 45 and closes 10 minutes before the **expected** departure, which is the revised time if the flight was delayed. `skyhub_boarding_pass_boardings_total{outcome="boarded_late"}` counts late boardings; `flight_departed` and `boarding_still_open` count the refusals of the override.
+**Mitigate:** on `/ops`, "Board late": the pass, a reason, and the tick-box. The passenger boards once; their reason, your name and the time are kept, and the flight's "Who has boarded" list marks them `late`. To see who and why: `SELECT locator, passenger_index, boarded_by, boarded_at, late_reason FROM boarded_passenger WHERE late_reason IS NOT NULL ORDER BY boarded_at`; a correction keeps the reason in `boarding_reversal.late_reason`. `FLIGHT_DEPARTED` means the flight is due to have left: rebook the passenger. If it was boarded by mistake, "Undo a boarding" (ADR-0064). There is no alert on purpose; a rising `boarded_late` is for a supervisor to look at, not to page.
+
 ## ServiceDown
 
 **Means:** Prometheus cannot scrape a service for 1 minute.

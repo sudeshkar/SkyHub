@@ -154,4 +154,18 @@ class StaffAuthorizationTest {
         assertThat(granted(StaffAuthorization.recordsDisruptions(),
                 new TestingAuthenticationToken("x", "y", new SimpleGrantedAuthority("SCOPE_staff")))).isFalse();
     }
+
+    @Test
+    void should_let_operations_and_admins_board_a_late_passenger_but_never_a_gate_agent_a_traveller_or_nobody() {
+        Authentication ops = authenticate(staffTokens.issue("priya.ops", StaffRole.OPS).value());
+        Authentication admin = authenticate(staffTokens.issue("root.admin", StaffRole.ADMIN).value());
+        Authentication gate = authenticate(staffTokens.issue("gate.one", StaffRole.GATE).value());
+        Authentication traveller = authenticate(manageTokens.issue("ABC234", 0).value());
+
+        assertThat(granted(StaffAuthorization.boardsLatePassengers(), ops)).isTrue();
+        assertThat(granted(StaffAuthorization.boardsLatePassengers(), admin)).isTrue();
+        assertThat(granted(StaffAuthorization.boardsLatePassengers(), gate)).isFalse();   // the person at the gate cannot overrule the gate (ADR-0076)
+        assertThat(granted(StaffAuthorization.boardsLatePassengers(), traveller)).isFalse();
+        assertThat(granted(StaffAuthorization.boardsLatePassengers(), null)).isFalse();
+    }
 }

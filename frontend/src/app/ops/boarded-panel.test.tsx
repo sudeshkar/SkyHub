@@ -18,9 +18,12 @@ const LOADED = {
   flightNumber: "SK501",
   departureDate: "2026-11-03",
   checkedIn: 3,
-  boarded: 1,
-  waiting: 2,
-  rows: [{ locator: "ABC234", leg: 1, passenger: 2, by: "gate.one", at: "2026-11-03T09:00:00Z" }],
+  boarded: 2,
+  waiting: 1,
+  rows: [
+    { locator: "ABC234", leg: 1, passenger: 2, by: "gate.one", at: "2026-11-03T09:00:00Z", late: false },
+    { locator: "DEF567", leg: 1, passenger: 1, by: "priya.ops", at: "2026-11-03T09:20:00Z", late: true },
+  ],
 };
 
 describe("BoardedPanel (ADR-0065)", () => {
@@ -40,8 +43,8 @@ describe("BoardedPanel (ADR-0065)", () => {
     const summary = await screen.findByRole("status");
     expect(summary).toHaveTextContent("SK501 on 2026-11-03");
     expect(summary).toHaveTextContent(/3 checked in/i);
-    expect(summary).toHaveTextContent(/1 boarded/i);
-    expect(summary).toHaveTextContent(/2 waiting/i);
+    expect(summary).toHaveTextContent(/2 boarded/i);
+    expect(summary).toHaveTextContent(/1 waiting/i);
     const row = within(screen.getByRole("table")).getByText("ABC234").closest("tr")!;
     expect(row).toHaveTextContent(/flight 1/i);
     expect(row).toHaveTextContent(/passenger 2/i);
@@ -79,5 +82,19 @@ describe("BoardedPanel (ADR-0065)", () => {
     submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/session has ended|role cannot/i);
+  });
+});
+
+describe("BoardedPanel late boardings (ADR-0076)", () => {
+  it("marks a passenger boarded after the gate closed and says nothing of the sort for the others", async () => {
+    vi.mocked(loadFlightBoarding).mockResolvedValue(LOADED);
+    render(<BoardedPanel />);
+
+    submit();
+
+    await screen.findByRole("status");
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("DEF567").closest("tr")).toHaveTextContent(/late/i);
+    expect(within(table).getByText("ABC234").closest("tr")).not.toHaveTextContent(/late/i);
   });
 });

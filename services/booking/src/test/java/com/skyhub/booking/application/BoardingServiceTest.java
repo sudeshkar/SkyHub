@@ -193,4 +193,76 @@ class BoardingServiceTest {
         assertThat(verifier.verify(passOf(1)).valid()).isTrue();   // checking never boards anyone
         assertThat(boarded.rows).hasSize(1);
     }
+
+    // ---- a late passenger (ADR-0076) -----------------------------------------------------------------------------------
+
+    /** Boarding closed 10 minutes before departure: five minutes before it leaves is closed and not yet gone. */
+    private BoardingService lateService() {
+        return serviceWithDeparture(NOW.plus(Duration.ofMinutes(5)));
+    }
+
+    @Test
+    void should_board_a_passenger_after_the_gate_has_closed_when_a_reason_is_given_and_keep_it_with_who_and_when() {
+        var verdict = lateService().boardLate(passOf(0), "  Held at security, flight still on the stand  ", "priya.ops");
+
+        assertThat(verdict.valid()).isTrue();
+        assertThat(verdict.pass().passengerName()).isEqualTo("PERERA/PRIYA");
+        assertThat(boarded.rows).containsExactly(new FakeBoardedPassengers.Row("ABC234", 0, 0, "priya.ops", NOW));
+        assertThat(boarded.lateReasons.values()).containsExactly("Held at security, flight still on the stand");
+        assertThat(count("boarded_late")).isEqualTo(1);
+    }
+
+    @Test
+    void should_ask_for_a_reason_of_reasonable_length_and_board_nobody_without_one() {
+        for (String reason : new String[] {null, "", "   ", "x".repeat(201)}) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> lateService().boardLate(passOf(0), reason, "priya.ops"))
+                    .isInstanceOf(com.skyhub.booking.domain.InvalidBookingException.class);
+        }
+        assertThat(boarded.rows).isEmpty();
+    }
+
+    @Test
+    void should_refuse_a_late_boarding_while_boarding_is_still_open_so_the_override_is_not_used_when_it_is_not_needed() {
+        var verdict = service.boardLate(passOf(0), "In a hurry", "priya.ops");   // 30 minutes out: open
+
+        assertThat(verdict.reason()).isEqualTo(Reason.BOARDING_STILL_OPEN);
+        assertThat(boarded.rows).isEmpty();
+        assertThat(count("boarding_still_open")).isEqualTo(1);
+    }
+
+    @Test
+    void should_refuse_a_late_boarding_before_boarding_opens_and_after_the_flight_has_left() {
+        assertThat(serviceWithDeparture(NOW.plus(Duration.ofHours(3))).boardLate(passOf(0), "Early", "priya.ops").reason())
+                .isEqualTo(Reason.BOARDING_NOT_OPEN);
+        assertThat(serviceWithDeparture(NOW).boardLate(passOf(0), "At departure", "priya.ops").reason()).isEqualTo(Reason.FLIGHT_DEPARTED);
+        assertThat(serviceWithDeparture(NOW.minus(Duration.ofHours(1))).boardLate(passOf(0), "Gone", "priya.ops").reason())
+                .isEqualTo(Reason.FLIGHT_DEPARTED);
+
+        assertThat(boarded.rows).isEmpty();
+        assertThat(count("flight_departed")).isEqualTo(2);
+    }
+
+    @Test
+    void should_refuse_a_late_boarding_for_a_flight_cancelled_in_the_meantime() {
+        when(disruptions.findByFlightNumberAndDepartureDate(anyString(), any())).thenReturn(Optional.empty(),
+                Optional.of(Disruption.cancelled("SK501", DATE, "Aircraft grounded", NOW)));
+
+        assertThat(lateService().boardLate(passOf(0), "Late", "priya.ops").reason()).isEqualTo(Reason.FLIGHT_CANCELLED);
+        assertThat(boarded.rows).isEmpty();
+    }
+
+    @Test
+    void should_still_refuse_a_pass_that_is_not_good_or_has_been_used_even_late() {
+        assertThat(lateService().boardLate("garbage", "Late", "priya.ops").reason()).isEqualTo(Reason.BAD_SIGNATURE);
+        lateService().boardLate(passOf(0), "Late", "priya.ops");
+
+        assertThat(lateService().boardLate(passOf(0), "Late again", "priya.ops").reason()).isEqualTo(Reason.ALREADY_BOARDED);
+        assertThat(boarded.rows).hasSize(1);   // the first one counts
+    }
+
+    @Test
+    void should_not_let_the_ordinary_gate_board_late_even_though_the_late_door_exists() {
+        assertThat(lateService().board(passOf(0), "gate.one").reason()).isEqualTo(Reason.BOARDING_CLOSED);
+        assertThat(boarded.rows).isEmpty();
+    }
 }
