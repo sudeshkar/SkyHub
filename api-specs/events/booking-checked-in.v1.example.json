@@ -10,7 +10,9 @@
   "departure": "2026-11-02T14:30:00Z",
   "checkInCloses": "2026-11-02T13:30:00Z",
   "passengers": [
-    { "firstName": "Priya", "lastName": "Perera", "seat": "11D", "boardingNumber": 7 },
-    { "firstName": "Raj", "lastName": "Perera", "seat": "11E", "boardingNumber": 8 }
+    { "firstName": "Priya", "lastName": "Perera", "seat": "11D", "boardingNumber": 7,
+      "sealedPass": "v1:LI5tup3NJQnnWs3/8rpnuH6h/qs02owo8xgD6IlDKKiibmMDPB1j/NC6FmAtwpDsUKFGAiTmbT9o8vfp+NLiA0zCHK5FMthfnCUkwJ52lfw+90Iamy63OQ/UCJc+dufmu0+s9FczuyQNcz9M65Z2oyOeCARHuiY5NNLl" },
+    { "firstName": "Raj", "lastName": "Perera", "seat": "11E", "boardingNumber": 8,
+      "sealedPass": "v1:0g5h4pMq+3cpFDJsT1aM1RGrorwdU94E0/HZ7Fi0dSqUPjNerg2G2U9XJmFJBDLfAMG8/iPpeIaOjUdnGPvZUegCARy7d4sBbbh+fVa6UBbki8Yc35h+edw9E1CW+bz4VyqDsZY/zHUGOBu77h9SOH7sySCRtfTPFQ==" }
   ]
 }

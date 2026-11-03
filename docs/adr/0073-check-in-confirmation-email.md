@@ -16,7 +16,7 @@ The ROADMAP listed "a boarding-pass attachment" under More notifications. Today 
 ## Decision
 
 - **A new event, `booking.checked-in` (version 1),** written by the booking service in the same transaction as the check-in rows (so it exists exactly when the check-in does, and not for a lost race, a refusal or a repeat). It lists **only the passengers that check-in checked in** (a party member checking in later gets their own), with first name, last name, seat and boarding number, plus the flight, the expected departure (revised if the flight was delayed) and when check-in closes. The shared example `booking-checked-in.v1.example.json` is read by both services' tests, so the two cannot drift.
-- **No boarding pass text, barcode or signature is in the event or the email.** Only what the traveller already knows. The pass stays behind the booking's own session.
+- **No boarding pass text, barcode or signature is in the event or the email.** Only what the traveller already knows. The pass stays behind the booking's own session. (Superseded in part by ADR-0074: the pass now travels in the event **sealed**, and is attached to the email as a QR picture.)
 - **The email** ("You are checked in for SkyHub flight SK501 on 2026-11-02") lists each passenger with seat and boarding number, gives the departure time, says the boarding pass with its QR code is in Manage booking (booking reference and any passenger's last name), and says they can check out, and then change their seat, until check-in closes. Its HTML form is derived as for every email (ADR-0050).
 - **The consumer is the existing one:** it records each event id once, so a redelivery or a retry (ADR-0066) sends one email.
 - **Efficiency:** no extra query. The service already has the booking, the flight, the new rows and the departure time; the event is built from them, one outbox row per check-in.
@@ -31,7 +31,7 @@ The ROADMAP listed "a boarding-pass attachment" under More notifications. Today 
 - Negative: **the "check-in open" email still says everyone checks in together**, which stopped being true when passengers could check in one at a time (ADR-0058). Noticed here, not changed here.
 - Negative: **an email is sent even if the traveller checked in a second ago and can see the page.** There is no setting to turn it off.
 - Negative: if the flight is delayed after check-in, the email's "check-in closes" time is the one at the moment of check-in; the delay email (ADR-0020) carries the new one.
-- Not done: the QR pass as an attachment, an opt-out, and SMS.
+- Not done: the QR pass as an attachment (done, ADR-0074), an opt-out, and SMS.
 
 ## Verification
 

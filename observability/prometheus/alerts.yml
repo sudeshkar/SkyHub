@@ -141,6 +141,16 @@ groups:
           summary: "Emails keep failing to send (3 failed attempts in 15 minutes): they are being retried, nothing is parked yet"
           runbook: "docs/runbooks/README.md#notificationsendsfailing"
 
+      # The check-in email still goes when a boarding pass cannot be attached (ADR-0074), so nothing else shows it. Almost always the two
+      # services have different SKYHUB_LINK_TOKEN_KEY values.
+      - alert: NotificationAttachmentsDropped
+        expr: increase(skyhub_notification_attachments_total{outcome="dropped"}[15m]) > 0
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "A check-in email went out without its boarding passes: the sealed pass would not open or the picture could not be drawn"
+          runbook: "docs/runbooks/README.md#notificationattachmentsdropped"
+
       - alert: NotificationDeadLettered
         expr: increase(skyhub_notifications_dead_lettered_total[10m]) > 0
         for: 0m

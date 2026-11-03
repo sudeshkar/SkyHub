@@ -43,6 +43,8 @@ class OutboxBookingEventsTest {
     private static final UUID CANCELLED_ID = UUID.fromString("7d2c1a90-5b1e-4c55-8a3a-2f9a6f1c0a22");
     private static final UUID DISRUPTED_ID = UUID.fromString("c4e1b6d2-91a7-4f3e-b0d5-5a8e2c7f9b33");
     private static final Instant NOW = Instant.parse("2026-10-30T10:00:00Z");
+    private static final com.skyhub.booking.integration.AesGcmLinkTokenSealer SEALER =
+            new com.skyhub.booking.integration.AesGcmLinkTokenSealer(com.skyhub.booking.TestLinkTokens.TEST_KEY);
     private static final UUID EVENT_ID = UUID.fromString("0b8f6f5e-3c47-4a58-9d0e-6a4f7e2f1c11");
 
     @Mock
@@ -56,7 +58,7 @@ class OutboxBookingEventsTest {
     }
 
     private OutboxBookingEvents events(UUID id) {
-        return new OutboxBookingEvents(outbox, cipher, json, Clock.fixed(NOW, ZoneOffset.UTC), () -> id);
+        return new OutboxBookingEvents(outbox, cipher, json, Clock.fixed(NOW, ZoneOffset.UTC), SEALER, () -> id);
     }
 
     private OutboxEvent saved() {
@@ -220,21 +222,47 @@ class OutboxBookingEventsTest {
         assertThat(stored).doesNotContain("priya@example.com").doesNotContain("Perera").doesNotContain("ABC234");
     }
 
+    private static com.skyhub.booking.application.BoardingPass pass(String name, int index, String seat, int sequence, String barcode) {
+        return new com.skyhub.booking.application.BoardingPass(name, index, "ABC234", "SK501", LocalDate.of(2026, 11, 2), seat, sequence, barcode);
+    }
+
     @Test
-    void should_write_the_checked_in_event_with_each_passengers_seat_and_boarding_number_as_the_notification_service_expects() throws Exception {
+    void should_write_the_checked_in_event_with_each_pass_sealed_and_everything_else_as_the_notification_service_expects() throws Exception {
         PnrSegment flight = new PnrSegment("SK501", LocalDate.of(2026, 11, 2));
         Pnr booked = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(flight),
                 List.of(new PnrPassenger("Priya", "Perera", List.of("11D")), new PnrPassenger("Raj", "Perera", List.of("11E"))),
                 NOW, "keyhash", "fingerprint");
 
         events(UUID.fromString("b5c8e0f2-6d35-4a79-9b21-0d3e5f7a9c66")).checkedIn(booked, flight,
-                List.of(com.skyhub.booking.domain.CheckIn.of("ABC234", 0, 0, 7, NOW), com.skyhub.booking.domain.CheckIn.of("ABC234", 0, 1, 8, NOW)),
+                List.of(pass("PERERA/PRIYA", 0, "11D", 7, "M1PERERA/PRIYA ABC234 SK501 2026-11-02 11D 0007.dGVzdC1zaWduYXR1cmUtb25lLW5vdC1yZWFsLWFhYWFhYWE"), pass("PERERA/RAJ", 1, "11E", 8, "M1PERERA/RAJ ABC234 SK501 2026-11-02 11E 0008.dGVzdC1zaWduYXR1cmUtdHdvLW5vdC1yZWFsLWFhYWFhYWE")),
                 Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z"));
 
-        OutboxEvent event = saved();
-        assertThat(event.getEventType()).isEqualTo("booking.checked-in");
-        assertThat(event.getAggregateId()).isEqualTo("ABC234");
-        assertThat(json.readTree(cipher.decrypt(event.getPayload())))
-                .isEqualTo(json.readTree(Files.readString(Path.of("../../api-specs/events/booking-checked-in.v1.example.json"))));
+        var made = (tools.jackson.databind.node.ObjectNode) json.readTree(cipher.decrypt(saved().getPayload()));
+        var example = (tools.jackson.databind.node.ObjectNode) json.readTree(Files.readString(Path.of("../../api-specs/events/booking-checked-in.v1.example.json")));
+        assertThat(saved().getEventType()).isEqualTo("booking.checked-in");
+        // The seals have random IVs, so they differ; what matters is that each opens, for this type and address, to the same pass (ADR-0074).
+        for (int i = 0; i < 2; i++) {
+            String sealed = made.get("passengers").get(i).get("sealedPass").asString();
+            assertThat(sealed).startsWith("v1:").isNotEqualTo(example.get("passengers").get(i).get("sealedPass").asString());
+            assertThat(com.skyhub.booking.TestLinkTokens.open(sealed, "booking.checked-in", "priya@example.com"))
+                    .isEqualTo(com.skyhub.booking.TestLinkTokens.open(example.get("passengers").get(i).get("sealedPass").asString(),
+                            "booking.checked-in", "priya@example.com"));
+            ((tools.jackson.databind.node.ObjectNode) made.get("passengers").get(i)).remove("sealedPass");
+            ((tools.jackson.databind.node.ObjectNode) example.get("passengers").get(i)).remove("sealedPass");
+        }
+        assertThat(made).isEqualTo(example);   // everything else is exactly the shared example
+    }
+
+    @Test
+    void should_keep_the_pass_text_out_of_the_event_in_the_clear_even_after_it_is_decrypted_for_the_topic() {
+        PnrSegment flight = new PnrSegment("SK501", LocalDate.of(2026, 11, 2));
+        Pnr booked = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(flight),
+                List.of(new PnrPassenger("Priya", "Perera", List.of("11D"))), NOW, "keyhash", "fingerprint");
+
+        events().checkedIn(booked, flight, List.of(pass("PERERA/PRIYA", 0, "11D", 7, "M1PERERA/PRIYA ABC234 SK501 2026-11-02 11D 0007.dGVzdC1zaWduYXR1cmUtb25lLW5vdC1yZWFsLWFhYWFhYWE")),
+                Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z"));
+
+        // As the relay publishes it to the topic: decrypted, but the pass is only sealed there.
+        assertThat(cipher.decrypt(saved().getPayload())).doesNotContain("M1PERERA").doesNotContain("dGVzdC1zaWduYXR1cmU").contains("sealedPass");
     }
 }

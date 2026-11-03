@@ -213,8 +213,13 @@ public final class EmailComposer {
      * The confirmation of a check-in (ADR-0073): who is in, with their seat and boarding number, and until when they can change their mind.
      * It points to the boarding pass on SkyHub and never carries one: the pass is a credential.
      */
-    public static EmailMessage checkedIn(BookingCheckedInEvent event) {
+    public static EmailMessage checkedIn(BookingCheckedInEvent event, boolean attached) {
         String flight = event.flightNumber() + " on " + event.departureDate();
+        String pass = attached
+                ? "Your boarding passes are attached to this email as pictures, one for each passenger: open the picture and show its QR code\n"
+                  + "at the gate. They are also in Manage booking (booking reference and the last name of any passenger)."
+                : "Your boarding pass, with its QR code, is on SkyHub: open Manage booking with your booking reference and the last\n"
+                  + "name of any passenger, and show it at the gate.";
         String who = event.passengers().stream()
                 .map(p -> "  " + p.firstName() + " " + p.lastName() + ": seat " + p.seat() + ", boarding number " + p.boardingNumber())
                 .collect(Collectors.joining("\n"));
@@ -225,11 +230,10 @@ public final class EmailComposer {
 
                 Departure: %s
 
-                Your boarding pass, with its QR code, is on SkyHub: open Manage booking with your booking reference and the last
-                name of any passenger, and show it at the gate.
+                %s
 
                 If your plans change, you can check out in Manage booking, and then change your seat, until check-in closes at %s.
-                """.formatted(flight, event.locator(), who, UTC_TIME.format(event.departure()), UTC_TIME.format(event.checkInCloses())));
+                """.formatted(flight, event.locator(), who, UTC_TIME.format(event.departure()), pass, UTC_TIME.format(event.checkInCloses())));
     }
 
     public static EmailMessage bookingDisruptionWithdrawn(BookingDisruptionWithdrawnEvent event) {

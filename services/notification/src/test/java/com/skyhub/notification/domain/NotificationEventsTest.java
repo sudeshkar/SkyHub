@@ -332,8 +332,9 @@ class NotificationEventsTest {
         assertThat(event.departureDate()).isEqualTo(LocalDate.of(2026, 11, 2));
         assertThat(event.departure()).isEqualTo(Instant.parse("2026-11-02T14:30:00Z"));
         assertThat(event.checkInCloses()).isEqualTo(Instant.parse("2026-11-02T13:30:00Z"));
-        assertThat(event.passengers()).containsExactly(new BookingCheckedInEvent.CheckedInPassenger("Priya", "Perera", "11D", 7),
-                new BookingCheckedInEvent.CheckedInPassenger("Raj", "Perera", "11E", 8));
+        assertThat(event.passengers()).extracting(BookingCheckedInEvent.CheckedInPassenger::seat).containsExactly("11D", "11E");
+        assertThat(event.passengers()).extracting(BookingCheckedInEvent.CheckedInPassenger::boardingNumber).containsExactly(7, 8);
+        assertThat(event.passengers()).extracting(BookingCheckedInEvent.CheckedInPassenger::sealedPass).allSatisfy(sealed -> assertThat(sealed).startsWith("v1:"));
     }
 
     @Test
@@ -350,5 +351,16 @@ class NotificationEventsTest {
             assertThatExceptionOfType(InvalidEventException.class).as(broken)
                     .isThrownBy(() -> EventParser.parse(broken, BookingCheckedInEvent.class));
         }
+    }
+
+    @Test
+    void should_read_an_older_checked_in_event_with_no_sealed_passes_and_refuse_a_blank_one() throws Exception {
+        String valid = Files.readString(CHECKED_IN);
+        String older = valid.replaceAll(",\\s*\"sealedPass\": \"[^\"]*\"", "");
+        assertThat(older).doesNotContain("sealedPass");
+
+        assertThat(EventParser.parse(older, BookingCheckedInEvent.class).passengers()).allSatisfy(p -> assertThat(p.sealedPass()).isNull());
+        assertThatExceptionOfType(InvalidEventException.class)
+                .isThrownBy(() -> EventParser.parse(valid.replaceFirst("\"sealedPass\": \"[^\"]*\"", "\"sealedPass\": \" \""), BookingCheckedInEvent.class));
     }
 }

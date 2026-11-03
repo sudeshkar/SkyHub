@@ -80,4 +80,46 @@ class SmtpEmailSenderTest {
         assertThatExceptionOfType(EmailUnavailableException.class).isThrownBy(() -> sender.send(MESSAGE))
                 .satisfies(e -> assertThat(e.getMessage()).doesNotContain("priya@example.com").doesNotContain("confirmed"));
     }
+
+    // ---- attachments (ADR-0074) --------------------------------------------------------------------------------------------
+
+    private static void collectAttachments(Object content, java.util.List<jakarta.mail.BodyPart> found) throws Exception {
+        if (content instanceof Multipart parts) {
+            for (int i = 0; i < parts.getCount(); i++) {
+                jakarta.mail.BodyPart part = parts.getBodyPart(i);
+                if (jakarta.mail.Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
+                    found.add(part);
+                } else {
+                    collectAttachments(part.getContent(), found);
+                }
+            }
+        }
+    }
+
+    @Test
+    void should_attach_each_picture_with_its_name_and_type_beside_the_text_and_html() throws Exception {
+        EmailMessage.Attachment one = new EmailMessage.Attachment("boarding-pass-SK501-11D.png", "image/png", new byte[] {1, 2, 3});
+        EmailMessage.Attachment two = new EmailMessage.Attachment("boarding-pass-SK501-11E.png", "image/png", new byte[] {4, 5});
+
+        sender.send(MESSAGE.withAttachments(java.util.List.of(one, two)));
+
+        MimeMessage sent = sentMessage();
+        sent.saveChanges();   // what the real sender does just before it sends: the headers are written
+        java.util.List<jakarta.mail.BodyPart> attached = new java.util.ArrayList<>();
+        collectAttachments(sent.getContent(), attached);
+        assertThat(attached).extracting(part -> part.getFileName()).containsExactly("boarding-pass-SK501-11D.png", "boarding-pass-SK501-11E.png");
+        assertThat(attached).allSatisfy(part -> assertThat(part.getContentType()).startsWith("image/png"));
+        assertThat(attached.get(0).getDataHandler().getInputStream().readAllBytes()).containsExactly(1, 2, 3);
+        assertThat(attached.get(1).getDataHandler().getInputStream().readAllBytes()).containsExactly(4, 5);
+        assertThat(textOf(sent.getContent())).contains("Your booking is confirmed.").contains("<p>Your booking is confirmed.</p>");
+    }
+
+    @Test
+    void should_attach_nothing_to_a_message_that_has_no_pictures() throws Exception {
+        sender.send(MESSAGE);
+
+        java.util.List<jakarta.mail.BodyPart> attached = new java.util.ArrayList<>();
+        collectAttachments(sentMessage().getContent(), attached);
+        assertThat(attached).isEmpty();
+    }
 }

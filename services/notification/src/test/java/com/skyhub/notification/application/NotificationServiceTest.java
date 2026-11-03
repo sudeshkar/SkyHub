@@ -50,6 +50,9 @@ class NotificationServiceTest {
     @Mock
     private LinkTokenOpener opener;
 
+    @Mock
+    private PassImages images;
+
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private NotificationService service;
     private BookingConfirmedEvent event;
@@ -57,7 +60,7 @@ class NotificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new NotificationService(sent, email, Clock.fixed(NOW, ZoneOffset.UTC),
-                TransactionOperations.withoutTransaction(), new NotificationMetrics(registry), opener);
+                TransactionOperations.withoutTransaction(), new NotificationMetrics(registry), opener, images);
         event = new BookingConfirmedEvent(EVENT_ID, "booking.confirmed", 1, Instant.parse("2026-10-30T10:00:00Z"),
                 "ABC234", "priya@example.com", List.of(new BookingConfirmedEvent.Passenger("Priya", "Perera")),
                 List.of(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2))),
@@ -331,5 +334,80 @@ class NotificationServiceTest {
         ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
         verify(email, org.mockito.Mockito.times(1)).send(message.capture());
         assertThat(message.getValue().subject()).contains("checked in").contains("SK501");
+    }
+
+    // ---- the passes attached to the check-in email (ADR-0074) ---------------------------------------------------------
+
+    private static com.skyhub.notification.domain.BookingCheckedInEvent checkedInWith(String sealedOne, String sealedTwo) {
+        return new com.skyhub.notification.domain.BookingCheckedInEvent(UUID.fromString("b5c8e0f2-6d35-4a79-9b21-0d3e5f7a9c66"),
+                "booking.checked-in", 1, Instant.parse("2026-10-30T10:00:00Z"), "ABC234", "priya@example.com", "SK501",
+                LocalDate.of(2026, 11, 2), Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z"),
+                List.of(new com.skyhub.notification.domain.BookingCheckedInEvent.CheckedInPassenger("Priya", "Perera", "11D", 7, sealedOne),
+                        new com.skyhub.notification.domain.BookingCheckedInEvent.CheckedInPassenger("Raj", "Perera", "11E", 8, sealedTwo)));
+    }
+
+    private double attachments(String outcome) {
+        var counter = registry.find("skyhub.notification.attachments").tag("outcome", outcome).counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    private EmailMessage sentMessage() {
+        ArgumentCaptor<EmailMessage> message = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email).send(message.capture());
+        return message.getValue();
+    }
+
+    @Test
+    void should_attach_each_passengers_boarding_pass_as_a_qr_picture_named_by_flight_and_seat() {
+        when(opener.open("sealed-1", "booking.checked-in", "priya@example.com")).thenReturn("PASS-ONE");
+        when(opener.open("sealed-2", "booking.checked-in", "priya@example.com")).thenReturn("PASS-TWO");
+        when(images.qrPng("PASS-ONE")).thenReturn(new byte[] {1});
+        when(images.qrPng("PASS-TWO")).thenReturn(new byte[] {2});
+
+        service.checkedIn(checkedInWith("sealed-1", "sealed-2"));
+
+        EmailMessage message = sentMessage();
+        assertThat(message.attachments()).extracting(EmailMessage.Attachment::fileName)
+                .containsExactly("boarding-pass-SK501-11D.png", "boarding-pass-SK501-11E.png");   // no names in the file names
+        assertThat(message.attachments()).extracting(EmailMessage.Attachment::contentType).containsOnly("image/png");
+        assertThat(message.attachments().get(0).content()).containsExactly(1);
+        assertThat(message.body()).contains("attached");
+        assertThat(attachments("attached")).isEqualTo(2);
+    }
+
+    @Test
+    void should_still_send_the_confirmation_without_attachments_when_a_pass_cannot_be_opened_and_count_it() {
+        when(opener.open("sealed-1", "booking.checked-in", "priya@example.com")).thenReturn("PASS-ONE");
+        when(opener.open("sealed-2", "booking.checked-in", "priya@example.com"))
+                .thenThrow(new com.skyhub.notification.domain.InvalidEventException("The sealed value does not open"));
+        when(images.qrPng("PASS-ONE")).thenReturn(new byte[] {1});
+
+        service.checkedIn(checkedInWith("sealed-1", "sealed-2"));
+
+        EmailMessage message = sentMessage();
+        assertThat(message.attachments()).isEmpty();   // all or none, so the email never claims passes it does not have
+        assertThat(message.body()).doesNotContain("attached").contains("Manage booking");
+        assertThat(attachments("dropped")).isEqualTo(1);
+        assertThat(attachments("attached")).isZero();
+    }
+
+    @Test
+    void should_still_send_the_confirmation_when_a_picture_cannot_be_drawn() {
+        when(opener.open(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn("PASS");
+        when(images.qrPng(org.mockito.ArgumentMatchers.anyString())).thenThrow(new IllegalStateException("no picture"));
+
+        service.checkedIn(checkedInWith("sealed-1", "sealed-2"));
+
+        assertThat(sentMessage().attachments()).isEmpty();
+        assertThat(attachments("dropped")).isEqualTo(1);
+    }
+
+    @Test
+    void should_send_a_plain_confirmation_for_an_event_with_no_sealed_passes_and_touch_nothing() {
+        service.checkedIn(checkedInWith(null, null));
+
+        assertThat(sentMessage().attachments()).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(opener, images);
+        assertThat(attachments("dropped")).isZero();
     }
 }

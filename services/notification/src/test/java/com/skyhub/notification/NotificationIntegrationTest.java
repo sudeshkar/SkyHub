@@ -38,7 +38,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * becomes exactly one recorded email, however many times it is delivered, and a message that can never be handled
  * ends up on the dead-letter topic instead of blocking everything behind it.
  */
-@SpringBootTest(properties = {"skyhub.notifications.retry.delay-ms=300", "skyhub.notifications.retry.multiplier=1.0",
+@SpringBootTest(properties = {"skyhub.security.link-token-key=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+        "skyhub.notifications.retry.delay-ms=300", "skyhub.notifications.retry.multiplier=1.0",
         "skyhub.notifications.retry.jitter-ms=0", "skyhub.notifications.retry.attempts=3", "skyhub.notifications.email.mode=log"})
 @EmbeddedKafka(topics = {"skyhub.booking.events", "skyhub.booking.events.DLT"},
         bootstrapServersProperty = "spring.kafka.bootstrap-servers")
@@ -190,5 +191,23 @@ class NotificationIntegrationTest {
         await().atMost(Duration.ofSeconds(30)).until(() -> rows(checkedIn) == 1);
         assertThat(jdbc.queryForObject("SELECT subject FROM sent_notification WHERE event_id = ?", String.class, checkedIn))
                 .isEqualTo("You are checked in for SkyHub flight SK501 on 2026-11-02");
+    }
+
+    @Test
+    void should_attach_the_boarding_passes_of_a_check_in_as_qr_pictures_that_read_back_to_the_signed_pass() throws Exception {
+        UUID checkedIn = UUID.randomUUID();
+        String message = Files.readString(Path.of("../../api-specs/events/booking-checked-in.v1.example.json"))
+                .replace("b5c8e0f2-6d35-4a79-9b21-0d3e5f7a9c66", checkedIn.toString());
+
+        kafka.send(TOPIC, "ABC234", message);
+
+        await().atMost(Duration.ofSeconds(30)).until(() -> rows(checkedIn) == 1);
+        org.mockito.ArgumentCaptor<EmailMessage> sent = org.mockito.ArgumentCaptor.forClass(EmailMessage.class);
+        verify(email, org.mockito.Mockito.atLeastOnce()).send(sent.capture());
+        EmailMessage withPasses = sent.getAllValues().stream().filter(m -> m.subject().contains("checked in")).findFirst().orElseThrow();
+        assertThat(withPasses.attachments()).hasSize(2);
+        assertThat(withPasses.attachments().stream().map(a -> QrReader.textOf(a.content())).toList()).satisfiesExactly(
+                first -> assertThat(first).startsWith("M1PERERA/PRIYA ABC234 SK501 2026-11-02 11D 0007."),
+                second -> assertThat(second).startsWith("M1PERERA/RAJ ABC234 SK501 2026-11-02 11E 0008."));
     }
 }

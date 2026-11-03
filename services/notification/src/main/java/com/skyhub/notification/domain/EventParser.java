@@ -85,6 +85,7 @@ public final class EventParser {
                 require(e.departure() != null && e.checkInCloses() != null, "no times");
                 require(e.passengers() != null && !e.passengers().isEmpty()
                         && e.passengers().stream().allMatch(p -> notBlank(p.seat()) && p.boardingNumber() > 0), "no seats or boarding numbers");
+                require(e.passengers().stream().allMatch(p -> p.sealedPass() == null || notBlank(p.sealedPass())), "blank sealed pass");
             }
             case BookingCheckInOpenEvent e -> {
                 require(BookingCheckInOpenEvent.TYPE.equals(e.type()), "wrong type");

@@ -16,6 +16,8 @@ import com.skyhub.notification.domain.NotificationEvent;
 import com.skyhub.notification.domain.SentNotification;
 import com.skyhub.notification.persistence.SentNotificationRepository;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,18 +41,21 @@ public class NotificationService {
     private final TransactionOperations transactions;
     private final NotificationMetrics metrics;
     private final LinkTokenOpener tokens;
+    private final PassImages images;
     private final String siteUrl;
 
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
-                               TransactionOperations transactions, NotificationMetrics metrics, LinkTokenOpener tokens) {
-        this(sent, email, clock, transactions, metrics, tokens, "http://localhost:3000");
+                               TransactionOperations transactions, NotificationMetrics metrics, LinkTokenOpener tokens,
+                               PassImages images) {
+        this(sent, email, clock, transactions, metrics, tokens, images, "http://localhost:3000");
     }
 
     @Autowired
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
                                TransactionOperations transactions, NotificationMetrics metrics, LinkTokenOpener tokens,
-                               @Value("${skyhub.notifications.site-url:http://localhost:3000}") String siteUrl) {
+                               PassImages images, @Value("${skyhub.notifications.site-url:http://localhost:3000}") String siteUrl) {
         this.tokens = tokens;
+        this.images = images;
         this.siteUrl = siteUrl;
         this.sent = sent;
         this.email = email;
@@ -101,7 +106,36 @@ public class NotificationService {
     }
 
     public void checkedIn(BookingCheckedInEvent event) {
-        deliver(event, EmailComposer.checkedIn(event));
+        List<EmailMessage.Attachment> passes = passAttachments(event);
+        deliver(event, EmailComposer.checkedIn(event, !passes.isEmpty()).withAttachments(passes));
+    }
+
+    /**
+     * A QR picture of each passenger's pass (ADR-0074), or none at all: the confirmation is what matters, and the pass is on SkyHub either
+     * way, so a pass that will not open (usually a key that differs between the services) or a picture that cannot be drawn sends the email
+     * without any, counts it, and says so in the log. All or none, so the email never claims passes it does not carry. The pass text, the
+     * picture and the address are never logged.
+     */
+    private List<EmailMessage.Attachment> passAttachments(BookingCheckedInEvent event) {
+        if (event.passengers().stream().anyMatch(p -> p.sealedPass() == null)) {
+            return List.of();   // from before passes were attached
+        }
+        try {
+            List<EmailMessage.Attachment> attachments = new ArrayList<>();
+            for (BookingCheckedInEvent.CheckedInPassenger passenger : event.passengers()) {
+                String pass = tokens.open(passenger.sealedPass(), event.type(), event.contactEmail());
+                attachments.add(new EmailMessage.Attachment("boarding-pass-" + event.flightNumber() + "-" + passenger.seat() + ".png",
+                        "image/png", images.qrPng(pass)));
+            }
+            metrics.attachments("attached", attachments.size());
+            return attachments;
+        } catch (RuntimeException e) {
+            metrics.attachments("dropped", 1);
+            log.atWarn().addKeyValue("event.id", event.eventId()).addKeyValue("event.type", event.type())
+                    .addKeyValue("pnr.locator", event.locator()).addKeyValue("failure", e.getClass().getSimpleName())
+                    .log("Boarding passes not attached; the confirmation is sent without them");
+            return List.of();
+        }
     }
 
     public void bookingRebooked(BookingRebookedEvent event) {

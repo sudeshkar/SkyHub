@@ -42,14 +42,18 @@ public class OutboxBookingEvents implements BookingEvents {
     private final PiiCipher cipher;
     private final JsonMapper json;
     private final Clock clock;
+    private final com.skyhub.booking.application.LinkTokenSealer sealer;
     private final Supplier<UUID> ids;
 
     @Autowired
-    public OutboxBookingEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock) {
-        this(outbox, cipher, json, clock, UUID::randomUUID);
+    public OutboxBookingEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock,
+                               com.skyhub.booking.application.LinkTokenSealer sealer) {
+        this(outbox, cipher, json, clock, sealer, UUID::randomUUID);
     }
 
-    OutboxBookingEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock, Supplier<UUID> ids) {
+    OutboxBookingEvents(OutboxEventRepository outbox, PiiCipher cipher, JsonMapper json, Clock clock,
+                        com.skyhub.booking.application.LinkTokenSealer sealer, Supplier<UUID> ids) {
+        this.sealer = sealer;
         this.outbox = outbox;
         this.cipher = cipher;
         this.json = json;
@@ -123,18 +127,21 @@ public class OutboxBookingEvents implements BookingEvents {
     }
 
     @Override
-    public void checkedIn(Pnr pnr, PnrSegment segment, java.util.List<com.skyhub.booking.domain.CheckIn> created, java.time.Instant departure,
-                          java.time.Instant closes) {
+    public void checkedIn(Pnr pnr, PnrSegment segment, java.util.List<com.skyhub.booking.application.BoardingPass> passes,
+                          java.time.Instant departure, java.time.Instant closes) {
         Map<String, Object> event = event(BOOKING_CHECKED_IN, pnr);
         event.put("flightNumber", segment.flightNumber());
         event.put("departureDate", segment.departureDate().toString());
         event.put("departure", departure.toString());
         event.put("checkInCloses", closes.toString());
         int leg = pnr.getSegments().indexOf(segment);
-        event.put("passengers", created.stream().map(row -> {
-            var passenger = pnr.getPassengers().get(row.getPassengerIndex());
+        String address = pnr.getContactEmail().value();
+        event.put("passengers", passes.stream().map(pass -> {
+            var passenger = pnr.getPassengers().get(pass.passengerIndex());
+            // The signed pass is a credential for boarding: on the topic it is only ever sealed, for this type and address (ADR-0074).
             return Map.of("firstName", passenger.getFirstName(), "lastName", passenger.getLastName(),
-                    "seat", passenger.getSeats().get(leg), "boardingNumber", row.getBoardingSequence());
+                    "seat", passenger.getSeats().get(leg), "boardingNumber", pass.sequence(),
+                    "sealedPass", sealer.seal(pass.barcode(), BOOKING_CHECKED_IN, address));
         }).toList());
         enqueue(pnr, event);
     }
