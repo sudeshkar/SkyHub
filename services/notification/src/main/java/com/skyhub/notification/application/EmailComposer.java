@@ -204,8 +204,8 @@ public final class EmailComposer {
                 Departure: %s
                 Check-in closes: %s
 
-                To check in, open Manage booking and enter your booking reference %s and your last name. Everyone on the
-                booking checks in together, and you get your boarding passes straight away.
+                To check in, open Manage booking and enter your booking reference %s and the last name of any passenger. You can
+                check in everyone on the booking at once, or one passenger at a time, and you get each boarding pass straight away.
                 """.formatted(flight, UTC_TIME.format(event.departure()), UTC_TIME.format(event.checkInCloses()), event.locator()));
     }
 

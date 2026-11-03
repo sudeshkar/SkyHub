@@ -160,6 +160,16 @@ class EmailComposerTest {
     }
 
     @Test
+    void should_say_that_passengers_can_check_in_together_or_one_at_a_time_since_they_can_ADR_0058() {
+        String body = EmailComposer.checkInOpen(new BookingCheckInOpenEvent(UUID.randomUUID(), "booking.check-in-open", 1,
+                Instant.parse("2026-11-01T14:30:00Z"), "ABC234", "priya@example.com", "SK501", LocalDate.of(2026, 11, 2),
+                Instant.parse("2026-11-02T14:30:00Z"), Instant.parse("2026-11-02T13:30:00Z"))).body();
+
+        assertThat(body).contains("one passenger at a time").contains("last name of any passenger");
+        assertThat(body).doesNotContain("checks in together");   // no longer true: ADR-0058
+    }
+
+    @Test
     void should_tell_the_traveller_a_cancellation_was_withdrawn_and_that_a_cancelled_booking_stays_cancelled() {
         EmailMessage message = EmailComposer.bookingDisruptionWithdrawn(withdrawn("CANCELLED"));
 
