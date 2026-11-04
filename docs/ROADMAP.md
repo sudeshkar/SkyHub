@@ -111,4 +111,4 @@ Ordered by how much they add to the story, not a commitment.
 - **Hold abuse:** holds are limited per client at the website (6 a minute); a per-client limit at the gateway is the next step (ADR-0012).
 - **Homepage hero video:** needs a paid plan on the video-generation service; the start frame is already prepared.
 - **Dev setup:** the Java extension's auto-build is off in this machine's local `.vscode/settings.json` (`java.autobuild.enabled: false`); `.vscode/` is not committed, so set it again on a new machine. Auto-build can overwrite `target/classes` and make a slice test fail for no code reason.
-- **Knowledge graph:** `graphify` is installed; adding its hook and a note in `CLAUDE.md` was offered, not done.
+- **Knowledge graph:** done: the git hooks are installed per machine (`graphify hook install`) and `CLAUDE.md` says how to use the graph.
