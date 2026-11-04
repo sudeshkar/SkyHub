@@ -142,6 +142,8 @@ docker compose --profile observability up -d          # Grafana at http://localh
 
 Set `GRAFANA_ADMIN_PASSWORD` first (see `.env.example`). Open the *SkyHub overview* dashboard.
 
+A step-by-step walk-through of the whole system (traveller, staff, gate, assistant) is in [`docs/TESTING-LOCALLY.md`](docs/TESTING-LOCALLY.md).
+
 ## Tests
 
 ```bash
