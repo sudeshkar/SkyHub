@@ -152,7 +152,14 @@ The three Java services build from one Dockerfile, from the repository root:
 docker build -f docker/service.Dockerfile --build-arg SERVICE=booking -t skyhub/booking .
 ```
 
-`SERVICE` is `flight-search`, `booking` or `notification`. The image holds no key: pass `SKYHUB_PII_KEY` and the others from `.env.example` as environment variables when you start a container. The disruption agent, the website and a compose profile that runs everything are not done yet.
+`SERVICE` is `flight-search`, `booking` or `notification`. The image holds no key: pass `SKYHUB_PII_KEY` and the others from `.env.example` as environment variables when you start a container. The agent and the website have their own recipes, each built from its own folder (ADR-0082):
+
+```bash
+docker build -f docker/disruption-agent.Dockerfile -t skyhub/disruption-agent services/disruption-agent
+docker build -f docker/website.Dockerfile -t skyhub/website frontend
+```
+
+A compose profile that runs everything is not done yet.
 
 ## Tests
 

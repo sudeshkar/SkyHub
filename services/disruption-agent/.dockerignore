@@ -1,0 +1,11 @@
+# What never goes into the agent's build context (and so never into an image layer). See ADR-0081 and ADR-0082.
+.env
+.env.*
+**/.env
+**/.venv
+**/__pycache__
+**/*.egg-info
+.pytest_cache
+# The tests and evals run in CI, not in the image.
+tests
+evals
