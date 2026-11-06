@@ -86,3 +86,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0080](0080-first-live-run-of-the-language-model.md) | The first live run of the language model | Accepted |
 | [0081](0081-service-images.md) | Container images for the Java services | Accepted |
 | [0082](0082-agent-and-website-images.md) | Container images for the disruption agent and the website | Accepted |
+| [0083](0083-the-whole-stack-in-containers.md) | The whole stack in containers | Accepted |

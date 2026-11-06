@@ -95,6 +95,7 @@ How a slice goes, every time:
 | 76 | The first live run of the language model: the default model had been retired; the model was shown the flight it was leaving; one typo in a tool call crashed a run. All three fixed. Groq 100% on the easy case, 11% on a full day against first-fit's 56%, nothing unsafe. A380 row not yet measured | ADR-0080 |
 | 77 | Container images for the three Java services: one parameterised multi-stage Dockerfile, layered, non-root, no secret in any layer (`.dockerignore` and guard tests), built by a new CI job; `flight-search` booted in a container and healthy | ADR-0081 |
 | 78 | Container images for the disruption agent (Python, virtual environment copied into a slim runtime) and the website (Next.js `output: "standalone"`, about 270 MB): non-root, no secret in a layer, addresses read at run time; both started in a container and checked; the guard tests now cover every image | ADR-0082 |
+| 79 | The whole stack in containers: `docker-compose.app.yml` beside the infrastructure file starts the five parts with health checks and start order, only the website published, every key from the environment and a missing one stopping the start; Kafka gets an internal listener; the website gets a `/healthz` route. The account journey (41 checks) and booking journey (83 checks) of the live check passed against it; one run of five missed a check that was not captured | ADR-0083 |
 
 ## Next slices (pick one at a time; each is independent)
 
@@ -105,7 +106,7 @@ Ordered by how much they add to the story, not a commitment.
 | **Fuller rebooking** | cohort grouping so a 500-booking flight needs fewer model calls; multi-leg re-routing; a recorded live eval baseline (needs a Groq key; `python -m evals --live`) | Approval and rebooking exist (ADR-0022, 0023, 0024). The live model has been run once (ADR-0080): safe, but it packs far worse than first-fit (11% against 56% on a full day). Measure the A380 row with `--only`, and decide the packing objective (bookings or passengers) before any hybrid planner. |
 | **More notifications** | SMS (the confirmation, ADR-0073, and the QR pass attached to it, ADR-0074, are done) | The outbox, Kafka, the notification service and an SMTP adapter exist (ADR-0019, 0020, 0021); each new message is one event type plus one email. |
 | **Real payment provider** | Adapter for a real provider, webhooks, 3-D Secure | Option 3 in ADR-0015. |
-| **Gateway and deployment** | (The images are done, ADR-0081 and ADR-0082.) A compose profile for the whole stack with health checks, Kong gateway, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
+| **Gateway and deployment** | (Images and a compose file for the whole stack are done, ADR-0081 to ADR-0083.) Kong gateway, Kubernetes + Helm, SonarQube quality gate | Was slice 8 in the first plan. |
 
 ## Smaller loose ends
 

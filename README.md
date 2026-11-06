@@ -159,7 +159,15 @@ docker build -f docker/disruption-agent.Dockerfile -t skyhub/disruption-agent se
 docker build -f docker/website.Dockerfile -t skyhub/website frontend
 ```
 
-A compose profile that runs everything is not done yet.
+### The whole stack in containers (ADR-0083)
+
+Put the keys in `.env` (every one in `.env.example` that is not commented out, plus the agent's token and account), then:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.app.yml up -d --build
+```
+
+The website is at <http://localhost:3000>; emails are caught by Mailpit at <http://localhost:8025>. Only the website is published: the services are reachable from each other, not from outside. Compose stops with a message naming any key that is missing. The first start builds five images and takes several minutes. The infrastructure alone (`docker compose up -d`) is unchanged and asks for none of these keys.
 
 ## Tests
 

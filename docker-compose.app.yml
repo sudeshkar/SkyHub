@@ -1,0 +1,111 @@
+# The five parts of SkyHub as containers, added to the infrastructure in docker-compose.yml (ADR-0083):
+#   docker compose -f docker-compose.yml -f docker-compose.app.yml up -d --build
+# It is a second file, not a profile, because compose demands every required variable in a file even for a service that is
+# not wanted: with this in the main file, starting only the infrastructure would ask for all of the keys below.
+# Only the website is published. The services and the agent are reachable from each other, not from outside.
+# Every key comes from the environment (.env.example lists them); nothing here holds a value, and a missing one stops the start.
+
+x-java-service: &java-service
+  depends_on: &java-needs
+    postgres: {condition: service_healthy}
+    kafka: {condition: service_healthy}
+  restart: unless-stopped
+
+services:
+  flight-search:
+    <<: *java-service
+    image: skyhub/flight-search:local
+    build: {context: ., dockerfile: docker/service.Dockerfile, args: {SERVICE: flight-search}}
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/flightsearch
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    healthcheck: &java-health
+      # The runtime image has no curl, but it has bash: ask the management port directly.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9081 && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+  booking:
+    <<: *java-service
+    image: skyhub/booking:local
+    build: {context: ., dockerfile: docker/service.Dockerfile, args: {SERVICE: booking}}
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/booking
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      FLIGHT_SEARCH_URL: http://flight-search:8081
+      SKYHUB_PII_KEY: ${SKYHUB_PII_KEY:?set it in .env (openssl rand -base64 32)}
+      SKYHUB_MANAGE_TOKEN_KEY: ${SKYHUB_MANAGE_TOKEN_KEY:?set it in .env (a different key)}
+      SKYHUB_BOARDING_PASS_KEY: ${SKYHUB_BOARDING_PASS_KEY:?set it in .env (a different key)}
+      SKYHUB_LINK_TOKEN_KEY: ${SKYHUB_LINK_TOKEN_KEY:?set it in .env (the same value as the notification service)}
+      # Without a first administrator nobody can sign in to the operations page.
+      SKYHUB_BOOTSTRAP_ADMIN_USERNAME: ${SKYHUB_BOOTSTRAP_ADMIN_USERNAME:?set it in .env}
+      SKYHUB_BOOTSTRAP_ADMIN_PASSWORD: ${SKYHUB_BOOTSTRAP_ADMIN_PASSWORD:?set it in .env (12 to 72 characters)}
+    healthcheck:
+      <<: *java-health
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9082 && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+
+  notification:
+    <<: *java-service
+    image: skyhub/notification:local
+    build: {context: ., dockerfile: docker/service.Dockerfile, args: {SERVICE: notification}}
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/notification
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SKYHUB_LINK_TOKEN_KEY: ${SKYHUB_LINK_TOKEN_KEY:?set it in .env (the same value as the booking service)}
+      # Where emailed links lead: the website, as a browser reaches it.
+      SKYHUB_SITE_URL: ${SKYHUB_SITE_URL:-http://localhost:3000}
+    depends_on:
+      <<: *java-needs
+      mailpit: {condition: service_started}
+    healthcheck:
+      <<: *java-health
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9083 && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+
+  disruption-agent:
+    image: skyhub/disruption-agent:local
+    build: {context: services/disruption-agent, dockerfile: ../../docker/disruption-agent.Dockerfile}
+    environment:
+      SKYHUB_BOOKING_API_URL: http://booking:8082
+      SKYHUB_SEARCH_API_URL: http://flight-search:8081
+      SKYHUB_AGENT_API_TOKEN: ${SKYHUB_AGENT_API_TOKEN:?set it in .env (32 or more random characters, the same value the website uses)}
+      # An OPS staff account the agent signs in to booking with. It is used when first needed, so the agent starts without it existing.
+      SKYHUB_AGENT_USERNAME: ${SKYHUB_AGENT_USERNAME:?set it in .env}
+      SKYHUB_AGENT_PASSWORD: ${SKYHUB_AGENT_PASSWORD:?set it in .env}
+      # Optional: with a key and SKYHUB_AGENT_PLANNER=groq the model is used; otherwise the rule-based planner (ADR-0080).
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      SKYHUB_AGENT_PLANNER: ${SKYHUB_AGENT_PLANNER:-first-fit}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8084/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  website:
+    image: skyhub/website:local
+    build: {context: frontend, dockerfile: ../docker/website.Dockerfile}
+    ports:
+      - "3000:3000"
+    environment:
+      SKYHUB_SEARCH_API_URL: http://flight-search:8081
+      SKYHUB_BOOKING_API_URL: http://booking:8082
+      SKYHUB_AGENT_API_URL: http://disruption-agent:8084
+      SKYHUB_AGENT_API_TOKEN: ${SKYHUB_AGENT_API_TOKEN:?set it in .env (the same value the agent uses)}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis: {condition: service_healthy}
+      flight-search: {condition: service_healthy}
+      booking: {condition: service_healthy}
+      disruption-agent: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
