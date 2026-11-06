@@ -48,6 +48,14 @@ jobs:
       - run: pip install pytest && python -m pytest docker/checks
       - run: docker build -f docker/service.Dockerfile --build-arg SERVICE=${{ matrix.service }} -t skyhub/${{ matrix.service }}:ci .
 
+  # The agent's and the website's images (ADR-0082): each is built from its own folder.
+  images-other:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f docker/disruption-agent.Dockerfile -t skyhub/disruption-agent:ci services/disruption-agent
+      - run: docker build -f docker/website.Dockerfile -t skyhub/website:ci frontend
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

@@ -1,0 +1,13 @@
+# What never goes into the website's build context (and so never into an image layer). See ADR-0081 and ADR-0082.
+# Secrets: .env.local holds this machine's keys. They reach a container only as environment variables at start.
+.env
+.env.*
+**/.env
+# Rebuilt inside the image, or only for this machine.
+**/node_modules
+.next
+out
+test-results
+playwright-report
+e2e
+tsconfig.tsbuildinfo
