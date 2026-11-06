@@ -186,3 +186,20 @@ def test_an_empty_flight_needs_no_model_at_all():
         w.BOOKINGS[:] = original
 
     assert report.bookings_total == 0 and report.proposals == [] and model.seen == []
+
+
+def test_the_model_is_never_shown_the_disrupted_flight_as_an_option():
+    model = ScriptedModel(FIND, submit(rebook("ABC234", "SK503"), rebook("DEF567", "SK502")))
+
+    run_agent(model)
+
+    result = next(m for m in model.seen[-1] if m["role"] == "tool")
+    offered = [(a["flight_number"], a["departure_date"]) for a in json.loads(result["content"])["alternatives"]]
+    assert ("SK501", "2026-11-02") not in offered and ("SK501", "2026-11-03") in offered
+
+
+def test_a_proposal_may_leave_out_its_rationale_because_the_agent_fills_in_an_empty_one():
+    from disruption_agent.agent import SUBMIT_SPEC
+    item = SUBMIT_SPEC.parameters["properties"]["proposals"]["items"]
+
+    assert "rationale" not in item["required"]

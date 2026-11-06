@@ -1,7 +1,7 @@
 import time
 from datetime import date
 
-from disruption_agent.guardrails import Facts, GuardrailPipeline, Rule, SeatAwareResults, SeatLedger, default_policy, default_rules
+from disruption_agent.guardrails import DisruptedFlightHidden, Facts, GuardrailPipeline, Rule, SeatAwareResults, SeatLedger, default_policy, default_rules
 from disruption_agent.models import Proposal
 from tests.builders import DISRUPTED, alternative, booking, utc
 
@@ -220,3 +220,17 @@ def test_verifies_a_huge_number_of_proposals_in_linear_time():
 
     assert len(result.proposals) == n and all(p.action == "REBOOK" for p in result.proposals)
     assert elapsed < 3.0, f"{n} proposals took {elapsed:.2f}s"
+
+
+def test_does_not_show_the_model_the_flight_that_is_disrupted_but_shows_the_same_number_on_another_day():
+    adapter = DisruptedFlightHidden(("SK501", date(2026, 11, 2)))
+
+    shown = adapter.adapt("find_alternatives", {}, {"alternatives": [
+        {"flight_number": "SK501", "departure_date": "2026-11-02", "seats_available": 9},
+        {"flight_number": "SK501", "departure_date": "2026-11-03", "seats_available": 9},
+        {"flight_number": "SK503", "departure_date": "2026-11-02", "seats_available": 9}]})
+
+    assert [(a["flight_number"], a["departure_date"]) for a in shown["alternatives"]] == [
+        ("SK501", "2026-11-03"), ("SK503", "2026-11-02")]
+    assert adapter.adapt("find_alternatives", {}, {"error": "bad"}) == {"error": "bad"}
+    assert adapter.adapt("get_disruption_impact", {}, {"bookings": []}) == {"bookings": []}

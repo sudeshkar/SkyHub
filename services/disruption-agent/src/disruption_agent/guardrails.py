@@ -137,6 +137,21 @@ class SeatAwareResults:
         return {**result, "alternatives": shown}
 
 
+class DisruptedFlightHidden:
+    """Leaves the disrupted flight itself out of what the model is shown. The search still lists it (it may be delayed, not
+    gone), and "the earliest flight that fits" would then always be the very flight being moved away from. The same
+    number on another day is a real option and stays. `NotTheDisruptedFlight` still refuses it if it is proposed anyway."""
+
+    def __init__(self, disrupted: tuple[str, date]) -> None:
+        self._disrupted = (disrupted[0], disrupted[1].isoformat())
+
+    def adapt(self, tool_name: str, arguments: dict, result: dict) -> dict:
+        if tool_name != "find_alternatives" or "alternatives" not in result:
+            return result
+        return {**result, "alternatives": [a for a in result["alternatives"]
+                                           if (a["flight_number"], a["departure_date"]) != self._disrupted]}
+
+
 @dataclass(frozen=True)
 class Policy:
     """Everything that decides what is believed and what the model is told, built fresh for each run."""
