@@ -1,0 +1,23 @@
+# What never goes into a build context (and so never into an image layer). See ADR-0081.
+# Secrets: .env holds the real keys. They reach a container only as environment variables at start.
+.env
+.env.*
+**/.env
+**/*.env.local
+# Everything the build makes again for itself, or that only this machine needs.
+.git
+.github
+.idea
+.vscode
+.claude
+graphify-out
+logs
+docs
+observability
+**/target
+**/node_modules
+**/.venv
+**/__pycache__
+**/.next
+frontend
+services/disruption-agent
