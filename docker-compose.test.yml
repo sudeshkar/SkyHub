@@ -1,0 +1,21 @@
+# FOR TESTING BY HAND ONLY (docs/TESTING-LOCALLY.md). Never use this file anywhere but your own desktop.
+#   docker compose -p skyhubtest -f docker-compose.yml -f docker-compose.app.yml -f docker-compose.test.yml up -d --build
+#
+# What it changes, and why:
+#  1. It publishes the ports docker-compose.app.yml keeps private (the services, their management ports and the agent), so you can
+#     use curl on them: create staff, read metrics, list parked emails (ADR-0032). In a real deployment these stay private.
+#  2. It opens check-in and boarding 100 days before departure (as tools/live-check does, ADR-0059), so the seed flights, which leave
+#     a few days from now, can be checked in to and boarded. The real windows are 24 hours for check-in and 45 minutes for boarding.
+
+services:
+  flight-search:
+    ports: ["8081:8081", "9081:9081"]
+  booking:
+    ports: ["8082:8082", "9082:9082"]
+    environment:
+      SKYHUB_BOOKING_CHECKIN_OPENSBEFORE: PT2400H
+      SKYHUB_BOOKING_BOARDING_OPENSBEFORE: PT2400H
+  notification:
+    ports: ["9083:9083"]
+  disruption-agent:
+    ports: ["8084:8084"]
