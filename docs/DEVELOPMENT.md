@@ -96,6 +96,6 @@ The full table is [`ROADMAP.md`](ROADMAP.md). The order we plan to work in (each
 **Loose ends to fold in when a slice touches them:** browser tests (Playwright) for check-in and boarding passes, disruption notices, the refund retry, the withdraw form and the account pages; manage-token revocation (account tokens are done, ADR-0041); a rotation procedure for the link-token key (the token is sealed on Kafka since ADR-0046); share the lock-out logic between staff and traveller accounts; homepage hero video (needs a paid plan); the graphify hook.
 
 **Needs the author, not code:**
-- Set `GROQ_API_KEY`, then run `python -m evals --live` and `python -m disruption_agent SK001 <date>`: the live Groq model has never been run.
+- Set `GROQ_API_KEY`, then run `python -m evals --live` and `python -m disruption_agent SK001 <date>`: the live eval has been run once (ADR-0080); `python -m disruption_agent SK001 <date>` against a real stack has not.
 - Restart the booking service with its usual keys to get the account and My bookings endpoints (the first start indexes older bookings, see ADR-0034); set `SKYHUB_SITE_URL` anywhere that is not local.
 - On a new machine, turn the Java extension's auto-build off in `.vscode/settings.json` (it can overwrite `target/classes`); `.vscode/` is not committed.

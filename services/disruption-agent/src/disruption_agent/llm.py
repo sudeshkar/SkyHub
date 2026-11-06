@@ -33,6 +33,7 @@ class ChatModel(Protocol):
 
 
 INVALID_JSON = "__invalid_json__"
+MALFORMED_ATTEMPTS = 3
 
 
 class GroqChatModel:
@@ -48,10 +49,21 @@ class GroqChatModel:
         if tools:
             request["tools"] = [{"type": "function", "function": {
                 "name": t.name, "description": t.description, "parameters": t.parameters}} for t in tools]
-        message = self._client.chat.completions.create(**request).choices[0].message
-        return Turn(content=message.content, tool_calls=[
-            ToolCall(id=c.id, name=c.function.name, arguments=_arguments(c.function.arguments))
-            for c in (message.tool_calls or [])])
+        for _ in range(MALFORMED_ATTEMPTS):
+            try:
+                message = self._client.chat.completions.create(**request).choices[0].message
+            except Exception as error:
+                if not _malformed_tool_call(error):
+                    raise          # a missing model, a bad key, an outage: a person must see these
+                continue           # Groq checks the call against our schema and refused it: the model slipped, so ask again
+            return Turn(content=message.content, tool_calls=[
+                ToolCall(id=c.id, name=c.function.name, arguments=_arguments(c.function.arguments))
+                for c in (message.tool_calls or [])])
+        return Turn(content=None)  # still malformed: no answer, so the agent hands the batch to a person
+
+
+def _malformed_tool_call(error: Exception) -> bool:
+    return getattr(error, "status_code", None) == 400 and "tool_use_failed" in str(error)
 
 
 def _arguments(raw: str) -> dict:

@@ -56,3 +56,50 @@ def test_omits_the_tools_field_when_there_are_none():
     GroqChatModel(fake, model="m").complete([], [])
 
     assert "tools" not in fake.sent
+
+
+class GroqRefusal(Exception):
+    """Shaped like groq.BadRequestError: a 400 whose text carries the code."""
+
+    def __init__(self, code: str, status: int = 400):
+        super().__init__(f"Error code: {status} - {{'error': {{'code': '{code}'}}}}")
+        self.status_code = status
+
+
+class FlakyGroq(FakeGroq):
+    def __init__(self, failures, message):
+        super().__init__(message)
+        self.failures = list(failures)
+        self.calls = 0
+
+    def _create(self, **kwargs):
+        self.calls += 1
+        if self.failures:
+            raise self.failures.pop(0)
+        return super()._create(**kwargs)
+
+
+def test_asks_again_when_groq_rejects_the_models_tool_call_as_malformed():
+    fake = FlakyGroq([GroqRefusal("tool_use_failed")], SimpleNamespace(content="ok", tool_calls=None))
+
+    turn = GroqChatModel(fake, model="m").complete([], [SPEC])
+
+    assert (turn.content, fake.calls) == ("ok", 2)
+
+
+def test_gives_no_answer_rather_than_crashing_when_the_model_keeps_sending_malformed_calls():
+    fake = FlakyGroq([GroqRefusal("tool_use_failed")] * 3, SimpleNamespace(content="never", tool_calls=None))
+
+    turn = GroqChatModel(fake, model="m").complete([], [SPEC])
+
+    assert turn.tool_calls == [] and fake.calls == 3      # the agent hands the batch to a person
+
+
+def test_still_raises_every_other_error_such_as_a_model_that_does_not_exist():
+    fake = FlakyGroq([GroqRefusal("model_not_found", status=404)], SimpleNamespace(content="ok", tool_calls=None))
+
+    try:
+        GroqChatModel(fake, model="m").complete([], [SPEC])
+    except GroqRefusal:
+        return
+    raise AssertionError("a 404 must not be swallowed")

@@ -10,7 +10,7 @@ from datetime import date
 from pydantic import TypeAdapter, ValidationError
 
 from .clients import ServiceError
-from .guardrails import Facts, GuardrailPipeline, Policy, ResultAdapter, default_policy
+from .guardrails import DisruptedFlightHidden, Facts, GuardrailPipeline, Policy, ResultAdapter, default_policy
 from .llm import INVALID_JSON, ChatModel, ToolCall, ToolSpec
 from .models import AffectedBooking, Proposal, Report
 from .toolbox import ToolBox
@@ -32,7 +32,7 @@ SUBMIT_SPEC = ToolSpec(
                 "departure_date": {"type": "string", "description": "YYYY-MM-DD, required for REBOOK"},
                 "rationale": {"type": "string", "description": "one short sentence"},
             },
-            "required": ["locator", "action", "rationale"]}}},
+            "required": ["locator", "action"]}}},
         "required": ["proposals"]})
 
 SYSTEM_PROMPT = """You help airline operations staff re-accommodate travellers when a flight is delayed or cancelled.
@@ -45,6 +45,7 @@ Rules:
 - A flight must leave no earlier than the booking's earliest departure, land no later than its latest arrival, and have
   enough free seats for ALL the booking's passengers. Free seats are shared: do not put more passengers on a flight than
   it has seats, counting every booking you assign to it.
+- Never propose the disrupted flight itself; it is not offered, and it is the one being left.
 - Prefer the earliest flight that fits. If none fits, use NEEDS_HUMAN and say why in one sentence.
 - Finish by calling submit_proposals once, with exactly one proposal for every booking in the request.
 Staff approve or change your proposals; nothing happens automatically."""
@@ -82,10 +83,11 @@ class DisruptionAgent:
         facts.add_bookings(bookings)
         policy = self._policy()                              # one policy per run: seat counts carry across batches
         pipeline = GuardrailPipeline(facts, policy.rules)
+        adapters = [*policy.adapters, DisruptedFlightHidden(facts.disrupted)]    # whatever the policy, never offer the flight being left
         offered = await self._offered_tools()
         report = Report(flight_number=flight_number, departure_date=day, bookings_total=len(bookings), proposals=[])
         for batch in _chunks(bookings, self._batch_size):    # bounds the model's context however big the flight is
-            submitted = await self._propose(flight, batch, facts, offered, policy.adapters)
+            submitted = await self._propose(flight, batch, facts, offered, adapters)
             verified = pipeline.verify(submitted, batch)
             report.proposals.extend(verified.proposals)
             report.rejections.extend(verified.rejections)
