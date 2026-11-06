@@ -34,6 +34,20 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: python -m pytest
 
+  # The service images (ADR-0081): the guard tests, then a real build of each Java service from the one Dockerfile.
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [flight-search, booking, notification]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install pytest && python -m pytest docker/checks
+      - run: docker build -f docker/service.Dockerfile --build-arg SERVICE=${{ matrix.service }} -t skyhub/${{ matrix.service }}:ci .
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

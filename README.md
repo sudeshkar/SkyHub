@@ -144,6 +144,16 @@ Set `GRAFANA_ADMIN_PASSWORD` first (see `.env.example`). Open the *SkyHub overvi
 
 A step-by-step walk-through of the whole system (traveller, staff, gate, assistant) is in [`docs/TESTING-LOCALLY.md`](docs/TESTING-LOCALLY.md).
 
+### Container images (ADR-0081)
+
+The three Java services build from one Dockerfile, from the repository root:
+
+```bash
+docker build -f docker/service.Dockerfile --build-arg SERVICE=booking -t skyhub/booking .
+```
+
+`SERVICE` is `flight-search`, `booking` or `notification`. The image holds no key: pass `SKYHUB_PII_KEY` and the others from `.env.example` as environment variables when you start a container. The disruption agent, the website and a compose profile that runs everything are not done yet.
+
 ## Tests
 
 ```bash
