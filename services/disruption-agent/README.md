@@ -39,7 +39,7 @@ python -m evals --live                               # judge the Groq model agai
 ```
 
 Settings (all environment variables): `SKYHUB_BOOKING_API_URL` (default `http://localhost:8082`),
-`SKYHUB_SEARCH_API_URL` (`http://localhost:8081`), `GROQ_MODEL` (`llama-3.3-70b-versatile`).
+`SKYHUB_SEARCH_API_URL` (`http://localhost:8081`), `GROQ_MODEL` (`openai/gpt-oss-120b`, set in `config.py`).
 
 To use the approval screen on the operations page (ADR-0024), run the agent as a service and give the website the same
 secret:

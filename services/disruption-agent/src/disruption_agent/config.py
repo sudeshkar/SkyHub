@@ -9,6 +9,8 @@ import httpx
 from .clients import BookingClient, SearchClient
 
 TIMEOUT_SECONDS = 5.0
+# The one place the default model is named. Groq retires models (llama-3.3-70b-versatile went away in 2026): set GROQ_MODEL, or change this.
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 
 
 @dataclass(frozen=True)
@@ -27,7 +29,7 @@ class Settings:
         return cls(booking_url=os.environ.get("SKYHUB_BOOKING_API_URL", "http://localhost:8082"),
                    search_url=os.environ.get("SKYHUB_SEARCH_API_URL", "http://localhost:8081"),
                    agent_username=os.environ["SKYHUB_AGENT_USERNAME"], agent_password=os.environ["SKYHUB_AGENT_PASSWORD"],
-                   groq_model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"))
+                   groq_model=os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL))
 
     def booking_client(self) -> BookingClient:
         return BookingClient(httpx.Client(base_url=self.booking_url, timeout=TIMEOUT_SECONDS),

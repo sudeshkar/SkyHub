@@ -49,3 +49,20 @@ def test_whatever_a_chaotic_model_says_the_answer_a_person_sees_is_safe():
         refused += len(report.rejections)
 
     assert refused > 500, "the chaos was too tame to prove anything"
+
+
+def test_only_runs_the_scenarios_it_is_asked_for_so_one_slow_live_scenario_can_be_run_alone(capsys):
+    from evals.run import main
+
+    assert main(["--only", "nothing flies"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "nothing flies" in printed and "a full day" not in printed
+
+
+def test_only_refuses_a_name_that_matches_no_scenario_and_lists_the_real_ones(capsys):
+    from evals.run import main
+
+    assert main(["--only", "a full dya"]) == 2
+
+    assert "a full day" in capsys.readouterr().err
