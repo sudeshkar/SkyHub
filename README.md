@@ -45,9 +45,9 @@ Taken from a local run (`docs/images/`). The look and the reasons behind it are 
 |---|---|
 | ![Move affected bookings: the groq planner proposes moving three bookings to the next day's flight, each with its reason and a checkbox](docs/images/approval-screen.jpg) | ![The booking-confirmed email in Mailpit](docs/images/email.png) |
 
-| Grafana: *SkyHub overview* | |
+| Grafana: *SkyHub overview*, the services | Grafana: *SkyHub overview*, the journey |
 |---|---|
-| ![Grafana dashboard with request, booking, seat hold and payment panels](docs/images/grafana-overview.png) | |
+| ![Requests per second, 5xx error rate, p99 latency by endpoint, bookings per minute by outcome, cache hit ratio and calls from booking to flight search](docs/images/grafana-overview.jpg) | ![Manage-booking actions and seat holds per minute, check-ins per minute by outcome, and payments per minute by outcome: captured, declined, refunded and provider unavailable](docs/images/grafana-journey.jpg) |
 
 ## Architecture
 
