@@ -43,7 +43,7 @@ Taken from a local run (`docs/images/`). The look and the reasons behind it are 
 
 | Operations: approving the agent's proposals | The confirmation email, caught by Mailpit |
 |---|---|
-| ![The operations page listing proposed moves with checkboxes (before the redesign)](docs/images/approval-screen.png) | ![The booking-confirmed email in Mailpit](docs/images/email.png) |
+| ![Move affected bookings: the groq planner proposes moving three bookings to the next day's flight, each with its reason and a checkbox](docs/images/approval-screen.jpg) | ![The booking-confirmed email in Mailpit](docs/images/email.png) |
 
 | Grafana: *SkyHub overview* | |
 |---|---|
