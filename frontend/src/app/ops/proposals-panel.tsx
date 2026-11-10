@@ -8,7 +8,7 @@ import {
   groupProposals, OUTCOME_OPTIONS, outcomeCounts, ROW_WINDOW, windowGroups, type OutcomeFilter, type ProposalGroup,
 } from "./proposal-groups";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 /**
  * Where staff review what the agent proposes after a disruption, and approve it (ADR-0024). Nothing moves until a
@@ -20,8 +20,8 @@ export function ProposalsPanel() {
   const typed = state.status === "error" ? state.values : undefined;
 
   return (
-    <section aria-label="Proposals" className="mt-12 space-y-6 border-t border-sand pt-10">
-      <form action={action} className="max-w-md space-y-4">
+    <section aria-label="Proposals" className="space-y-6">
+      <form action={action} className="tool-form">
         <h2 className="font-display text-xl">Move affected bookings</h2>
         <p className="text-sm text-muted">
           After recording a disruption, ask for proposals for everyone booked on that flight. You approve each move.
@@ -46,7 +46,7 @@ export function ProposalsPanel() {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md border border-copper px-6 py-3 font-semibold text-copper hover:bg-white disabled:opacity-60"
+          className="rounded-md border border-accent px-6 py-3 font-semibold text-accent hover:bg-white disabled:opacity-60"
         >
           {pending ? "Asking…" : "Get proposals"}
         </button>
@@ -202,7 +202,7 @@ function ProposalTable({ set }: { set: ProposalSet }) {
             The buttons act on all {view.total} matching bookings, drawn or not.
           </p>
           <button type="button" onClick={() => setLimit((current) => current + ROW_WINDOW)}
-            className="rounded-md border border-sand px-4 py-2 text-sm hover:bg-white">
+            className="rounded-full border border-line px-4 py-2 text-sm hover:bg-white">
             {`Show ${Math.min(ROW_WINDOW, view.total - view.drawn)} more`}
           </button>
         </div>
@@ -220,7 +220,7 @@ function ProposalTable({ set }: { set: ProposalSet }) {
           type="button"
           onClick={approve}
           disabled={moving || chosenShown.length === 0}
-          className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60"
+          className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60"
         >
           {moving ? `Moving ${progress.done} of ${progress.total}…` : `Move ${chosenShown.length} selected`}
         </button>
@@ -252,14 +252,14 @@ function ProposalGroupSection({ group, rows, results, deselected, disabled, onTo
         {!person && (
           <span className="flex gap-2 text-sm">
             <button type="button" disabled={disabled} onClick={() => onSelect(group, true)} aria-label={`Select all going to ${where}`}
-              className="rounded-md border border-sand px-3 py-1 hover:bg-white disabled:opacity-60">All</button>
+              className="rounded-md border border-line px-3 py-1 hover:bg-white disabled:opacity-60">All</button>
             <button type="button" disabled={disabled} onClick={() => onSelect(group, false)} aria-label={`Select none going to ${where}`}
-              className="rounded-md border border-sand px-3 py-1 hover:bg-white disabled:opacity-60">None</button>
+              className="rounded-md border border-line px-3 py-1 hover:bg-white disabled:opacity-60">None</button>
           </span>
         )}
       </div>
       {rows.length > 0 && (
-        <ul className="divide-y divide-sand border border-sand bg-white">
+        <ul className="divide-y divide-line border border-line bg-white">
           {rows.map((p) => (
             <ProposalRow key={p.locator} proposal={p} result={results[p.locator]} selected={!deselected.has(p.locator)}
               disabled={disabled} onToggle={() => onToggle(p.locator)} />

@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { withdrawDisruption, type WithdrawState } from "./actions";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 /**
  * Takes back a disruption that was recorded by mistake or has been resolved (ADR-0026). Kept apart from the recording form
@@ -15,16 +15,16 @@ export function WithdrawForm() {
 
   if (state.status === "signed-out") {
     return (
-      <p role="alert" className="mt-10 border-l-4 border-amber-line bg-amber-bg px-4 py-3 text-sm text-text">
+      <p role="alert" className="border-l-4 border-amber-line bg-amber-bg px-4 py-3 text-sm text-text">
         Your session has ended, or your role cannot do this. <a href="/ops" className="underline">Sign in again</a>.
       </p>
     );
   }
 
   return (
-    <section aria-label="Withdraw a disruption" className="mt-10 space-y-6 border-t border-sand pt-8">
+    <section aria-label="Withdraw a disruption" className="space-y-6">
       {state.status === "withdrawn" && (
-        <div role="status" className="border-l-4 border-copper bg-white px-4 py-3">
+        <div role="status" className="border-l-4 border-accent bg-white px-4 py-3">
           <p className="font-semibold">
             {state.flightNumber} on {state.departureDate} is back to its schedule.
           </p>
@@ -37,7 +37,7 @@ export function WithdrawForm() {
         </div>
       )}
 
-      <form action={action} className="max-w-md space-y-4">
+      <form action={action} className="tool-form">
         <h2 className="font-display text-xl">Withdraw a disruption</h2>
         <p className="text-sm text-muted">
           Use this when a delay or cancellation was recorded by mistake or has been resolved. Every traveller still holding the
@@ -67,7 +67,7 @@ export function WithdrawForm() {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md border border-copper px-6 py-3 font-semibold text-copper hover:bg-white disabled:opacity-60"
+          className="rounded-md border border-accent px-6 py-3 font-semibold text-accent hover:bg-white disabled:opacity-60"
         >
           {pending ? "Withdrawing…" : "Withdraw"}
         </button>

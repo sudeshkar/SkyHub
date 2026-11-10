@@ -45,7 +45,7 @@ test("a gate agent sees only the gate, checks a pass, boards the passenger once 
   await page.getByLabel("Username").fill(agent);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("Signed in as")).toContainText("gate agent");
+  await expect(page.getByText("Signed in as")).toContainText(/gate agent/i);
   await expect(page.getByRole("region", { name: "Gate" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Record" })).toHaveCount(0); // the operations forms are not offered
   await expect(page.getByRole("heading", { name: "Withdraw a disruption" })).toHaveCount(0);

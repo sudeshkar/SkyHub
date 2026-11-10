@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { recordDisruption, type RecordState } from "./actions";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 /**
  * Records a delay or cancellation. Recording again for the same flight and date replaces the earlier record, so a
@@ -25,7 +25,7 @@ export function DisruptionForm() {
   return (
     <div className="space-y-6">
       {state.status === "recorded" && (
-        <section aria-label="Recorded" role="status" className="border-l-4 border-copper bg-white px-4 py-3">
+        <section aria-label="Recorded" role="status" className="border-l-4 border-accent bg-white px-4 py-3">
           <p className="font-semibold">
             {state.flightNumber} on {state.departureDate} is recorded as {state.type === "DELAYED" ? "delayed" : "cancelled"}.
           </p>
@@ -38,7 +38,7 @@ export function DisruptionForm() {
         </section>
       )}
 
-      <form action={action} className="max-w-md space-y-4">
+      <form action={action} className="tool-form">
         <h2 className="font-display text-xl">Record a delay or cancellation</h2>
         <label className="block text-sm font-medium">
           Flight number
@@ -100,7 +100,7 @@ export function DisruptionForm() {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60"
+          className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60"
         >
           {pending ? "Recording…" : "Record"}
         </button>

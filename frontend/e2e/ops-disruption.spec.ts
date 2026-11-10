@@ -35,7 +35,9 @@ test("staff sign in, record a cancellation, and sign out", async ({ page, contex
   expect(cookie.sameSite).toBe("Strict");
   expect(cookie.path).toBe("/ops");
 
-  // The page has a second form that also asks for a flight (withdrawing a disruption), so work inside the one that records.
+  // The dashboard lists the tools; each opens on its own address (ADR-0084).
+  await page.getByRole("link", { name: /Record a delay or cancellation/ }).click();
+  await expect(page).toHaveURL(/\/ops\?tool=record$/);
   const record = page.locator("form").filter({ hasText: "Record a delay or" });
   await record.getByLabel("Flight number").fill("SK501");
   await record.getByLabel(/Scheduled departure date/).first().fill(date);
