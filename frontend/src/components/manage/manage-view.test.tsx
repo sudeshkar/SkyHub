@@ -56,6 +56,12 @@ describe("ManageView", () => {
     expect(screen.getByText("Confirmation sent to p****@example.com")).toBeInTheDocument();
   });
 
+  it("closes the booking from a small close button at the top, with cancelling beside it", () => {
+    render(<ManageView pnr={PNR} />);
+
+    expect(screen.getByRole("button", { name: "Close this booking" })).toHaveTextContent("");
+    expect(screen.getByRole("button", { name: "Cancel booking" })).toBeInTheDocument();
+  });
   describe("cancelling", () => {
     it("asks first, then cancels and refreshes", async () => {
       vi.mocked(cancelBooking).mockResolvedValue({ kind: "ok", pnr: { ...PNR, status: "CANCELLED" } });
@@ -159,7 +165,7 @@ describe("ManageView", () => {
 
       expect(await screen.findByText("PERERA/PRIYA")).toBeInTheDocument();
       expect(screen.getByText("Boarding no. 7")).toBeInTheDocument();
-      expect(screen.getByText(PASS.barcode)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Show boarding pass for PERERA/PRIYA on SK501" })).toBeInTheDocument();
       expect(checkInFlight).toHaveBeenCalledWith(0);
       expect(screen.queryByRole("button", { name: "Check in for SK501" })).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Check in for SK901" })).toBeInTheDocument(); // other flight unaffected
@@ -198,7 +204,7 @@ describe("ManageView", () => {
 
       expect(await screen.findByRole("status")).toHaveTextContent(/checked out of SK501/i);
       expect(checkOutFlight).toHaveBeenCalledWith(0);
-      expect(screen.queryByText(PASS.barcode)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Show boarding pass for PERERA/PRIYA on SK501" })).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Check in for SK501" })).toBeInTheDocument();
       await waitFor(() => expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled()); // it stays disabled while the action is still finishing
     });
@@ -210,9 +216,41 @@ describe("ManageView", () => {
       fireEvent.click(screen.getByRole("button", { name: "Check out of SK501" }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent("Check-in is closed");
-      expect(screen.getByText(PASS.barcode)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Show boarding pass for PERERA/PRIYA on SK501" })).toBeInTheDocument();
     });
 
+    it("lists every boarding pass one under another, across the booking's flights", () => {
+      const SK901_PASS = { ...PASS, flightNumber: "SK901", seatNumber: "24A", sequence: 3, barcode: "M1PERERA/PRIYA YUFHBD SK901 2026-11-02 24A 0003.sig" };
+      render(<ManageView pnr={PNR} boardingPasses={{ 0: [PASS], 1: [SK901_PASS] }} />);
+
+      const rows = within(screen.getByRole("list", { name: "Boarding passes" })).getAllByRole("listitem");
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toHaveTextContent("SK501");
+      expect(rows[1]).toHaveTextContent("SK901");
+      expect(screen.queryByText(PASS.barcode)).not.toBeInTheDocument(); // the full pass opens on request
+    });
+
+    it("opens a pass in a pop-up with its QR code, and closes it again", () => {
+      render(<ManageView pnr={PNR} boardingPasses={{ 0: [PASS] }} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Show boarding pass for PERERA/PRIYA on SK501" }));
+
+      const dialog = screen.getByRole("dialog", { name: "Boarding pass" });
+      expect(within(dialog).getByRole("img", { name: /QR code.*PERERA\/PRIYA/ })).toBeInTheDocument();
+      expect(within(dialog).getByText(PASS.barcode)).toBeInTheDocument();
+
+      fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("closes the pass pop-up with the Escape key", () => {
+      render(<ManageView pnr={PNR} boardingPasses={{ 0: [PASS] }} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Show boarding pass for PERERA/PRIYA on SK501" }));
+      fireEvent.keyDown(document, { key: "Escape" });
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
     it("offers no check-out on a cancelled booking", () => {
       render(<ManageView pnr={{ ...PNR, status: "CANCELLED" }} boardingPasses={{ 0: [PASS] }} />);
 
@@ -389,8 +427,8 @@ describe("one passenger at a time (ADR-0058)", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent(/checked out/i);
     expect(checkOutFlight).toHaveBeenCalledWith(0, [0]);
-    expect(screen.queryByText(PRIYA.barcode)).not.toBeInTheDocument();
-    expect(screen.getByText(RAJ.barcode)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show boarding pass for PERERA/PRIYA on SK501" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show boarding pass for PERERA/RAJ on SK501" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Change seat for Priya Perera on SK501" })).toBeEnabled()); // it stays disabled while the action is still finishing
     expect(screen.getByRole("button", { name: "Change seat for Raj Perera on SK501" })).toBeDisabled();
   });
@@ -403,8 +441,8 @@ describe("one passenger at a time (ADR-0058)", () => {
 
     await screen.findByRole("status");
     expect(checkOutFlight).toHaveBeenCalledWith(0);
-    expect(screen.queryByText(PRIYA.barcode)).not.toBeInTheDocument();
-    expect(screen.queryByText(RAJ.barcode)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show boarding pass for PERERA/PRIYA on SK501" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show boarding pass for PERERA/RAJ on SK501" })).not.toBeInTheDocument();
   });
 
   it("keeps the passes and says why when check-out is refused", async () => {
@@ -414,6 +452,6 @@ describe("one passenger at a time (ADR-0058)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check out Raj of SK501" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Check-in is closed");
-    expect(screen.getByText(RAJ.barcode)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show boarding pass for PERERA/RAJ on SK501" })).toBeInTheDocument();
   });
 });

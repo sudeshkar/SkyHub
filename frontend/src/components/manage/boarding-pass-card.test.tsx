@@ -10,9 +10,9 @@ const PASS: BoardingPass = {
 
 describe("BoardingPassCard (ADR-0071)", () => {
   it("shows a QR code of the pass beside the details a person reads", () => {
-    render(<ul><BoardingPassCard pass={PASS} /></ul>);
+    render(<BoardingPassCard pass={PASS} />);
 
-    const card = screen.getByRole("listitem");
+    const card = screen.getByRole("article");
     expect(within(card).getByRole("img", { name: /QR code.*PERERA\/PRIYA/ })).toBeInTheDocument();
     expect(card).toHaveTextContent("PERERA/PRIYA");
     expect(card).toHaveTextContent("Boarding no. 7");
@@ -20,16 +20,16 @@ describe("BoardingPassCard (ADR-0071)", () => {
   });
 
   it("keeps the pass text under the code, so it can be copied when a camera cannot be used", () => {
-    render(<ul><BoardingPassCard pass={PASS} /></ul>);
+    render(<BoardingPassCard pass={PASS} />);
 
     expect(screen.getByText(PASS.barcode)).toBeInTheDocument();
   });
 
   it("gives each pass its own code", () => {
-    const { container, rerender } = render(<ul><BoardingPassCard pass={PASS} /></ul>);
+    const { container, rerender } = render(<BoardingPassCard pass={PASS} />);
     const first = container.querySelector("path")?.getAttribute("d");
 
-    rerender(<ul><BoardingPassCard pass={{ ...PASS, seatNumber: "11E", barcode: PASS.barcode.replace("11D", "11E") }} /></ul>);
+    rerender(<BoardingPassCard pass={{ ...PASS, seatNumber: "11E", barcode: PASS.barcode.replace("11D", "11E") }} />);
 
     expect(container.querySelector("path")?.getAttribute("d")).not.toBe(first);
   });

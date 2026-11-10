@@ -15,12 +15,16 @@ import {
   type ManageActionResult,
 } from "@/app/manage/actions";
 import type { BoardingPass, Disruption, Pnr, SeatMap as SeatMapData } from "@/lib/api/booking";
-import { formatPrice, utcDateTime } from "@/lib/format";
+import { formatPrice, formatSearchDate, utcDateTime } from "@/lib/format";
 import { SeatMap } from "@/components/booking/seat-map";
+import { CloseButton, Modal } from "@/components/modal";
 import { BoardingPassCard } from "./boarding-pass-card";
 
 type Editing = { passenger: number; segment: number; map: SeatMapData | null; choice: string };
 type Notice = { tone: "ok" | "error"; text: string };
+
+/** The look of every card on this page: white, softly rounded, with a faint blue shadow. */
+const CARD = "rounded-xl border border-line bg-white shadow-[0_1px_2px_rgb(11_27_51/0.04),0_10px_28px_-14px_rgb(10_80_143/0.22)]";
 
 function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
@@ -95,6 +99,8 @@ export function ManageView({
   const [passes, setPasses] = useState<Record<number, BoardingPass[]>>(boardingPasses);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  // The boarding pass open in the pop-up.
+  const [viewing, setViewing] = useState<BoardingPass | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [pending, startTransition] = useTransition();
   const cancelled = pnr.status === "CANCELLED";
@@ -183,6 +189,9 @@ export function ManageView({
     });
   }
 
+  // Flight by flight in booking order, then in boarding order.
+  const allPasses = pnr.segments.flatMap((_, s) => [...(passes[s] ?? [])].sort((a, b) => a.sequence - b.sequence));
+
   const picking = editing && editing.map ? editing : null;
   const othersHeld = new Map<string, string>();
   if (picking) {
@@ -192,8 +201,8 @@ export function ManageView({
   }
 
   return (
-    <div className="mt-8 space-y-8">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-sand pb-6">
+    <div className="mt-8 space-y-6">
+      <header className={`${CARD} flex flex-wrap items-start justify-between gap-4 p-6`}>
         <div>
           <p className="text-sm text-muted">Booking reference</p>
           <p
@@ -202,16 +211,33 @@ export function ManageView({
           >
             {pnr.locator}
           </p>
-          <p className={`mt-2 text-sm font-semibold ${cancelled ? "text-danger" : "text-copper"}`}>
-            {cancelled ? "Cancelled" : "Confirmed"}
+          <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span
+              className={`rounded-full px-2.5 py-0.5 font-semibold ${cancelled ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`}
+            >
+              {cancelled ? "Cancelled" : "Confirmed"}
+            </span>
+            <span className="text-muted">Confirmation sent to {pnr.contactEmail}</span>
           </p>
-          <p className="mt-1 text-sm text-muted">Confirmation sent to {pnr.contactEmail}</p>
         </div>
-        <form action={closeSession}>
-          <button type="submit" className="rounded-md border border-sand px-4 py-2 text-sm hover:bg-sand-soft">
-            Close this booking
-          </button>
-        </form>
+        <div className="flex items-center gap-3">
+          {!cancelled && (
+            <button
+              type="button"
+              onClick={() => {
+                setNotice(null);
+                setConfirmingCancel(true);
+              }}
+              className="rounded-full border border-danger/40 bg-white px-4 py-2 text-sm font-medium text-danger hover:bg-danger hover:text-white"
+            >
+              Cancel booking
+            </button>
+          )}
+          {/* Closing only ends this browser's access to the booking; the booking itself is untouched. */}
+          <form action={closeSession}>
+            <CloseButton type="submit" label="Close this booking" />
+          </form>
+        </div>
       </header>
 
       {cancelled && pnr.refund && (
@@ -226,31 +252,49 @@ export function ManageView({
         <p
           role={notice.tone === "error" ? "alert" : "status"}
           className={`border-l-4 bg-white px-4 py-3 text-sm ${
-            notice.tone === "error" ? "border-danger text-danger" : "border-copper text-text"
+            notice.tone === "error" ? "border-danger text-danger" : "border-accent text-text"
           }`}
         >
           {notice.text}
         </p>
       )}
 
-      <section aria-label="Flights and seats" className="space-y-8">
+      {/* One card per flight: its number, date and check-in state on top, its passengers and seats below. Side by side
+          from tablet width up, so a connection's two flights fit on one screen. */}
+      <section aria-label="Flights and seats" className={`grid items-start gap-5 ${pnr.segments.length > 1 ? "md:grid-cols-2" : ""}`}>
         {pnr.segments.map((segment, s) => {
           const disruption = disruptions.find((d) => d.segmentIndex === s);
           const flightCancelled = disruption?.type === "CANCELLED";
           const checkedIn = passes[s] ?? [];
           const isIn = (passenger: number) => checkedIn.some((pass) => pass.passengerIndex === passenger);
+          const everyoneIn = checkedIn.length === pnr.passengers.length;
           return (
-            <div key={`${segment.flightNumber}-${segment.departureDate}`}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-mono text-lg">
-                  {segment.flightNumber} <span className="text-muted">· {segment.departureDate}</span>
-                </h2>
-                <div className="flex items-center gap-3">
-                  {checkedIn.length === pnr.passengers.length && <p className="text-sm font-semibold text-copper">Checked in</p>}
-                  {checkedIn.length > 0 && checkedIn.length < pnr.passengers.length && (
-                    <p className="text-sm font-semibold text-copper">
-                      {checkedIn.length} of {pnr.passengers.length} checked in
+            <article
+              key={`${segment.flightNumber}-${segment.departureDate}`}
+              aria-labelledby={`flight-${s}`}
+              className={`${CARD} overflow-hidden`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-wash/60 px-5 py-4">
+                <div>
+                  {pnr.segments.length > 1 && (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Flight {s + 1} of {pnr.segments.length}
                     </p>
+                  )}
+                  <h2 id={`flight-${s}`} className="font-mono text-xl font-semibold text-ink">
+                    {segment.flightNumber}
+                  </h2>
+                  <p className="text-sm text-muted">{formatSearchDate(segment.departureDate)}</p>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  {!cancelled && !flightCancelled && (
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        everyoneIn ? "bg-accent text-white" : checkedIn.length > 0 ? "bg-accent/10 text-accent" : "bg-line/70 text-muted"
+                      }`}
+                    >
+                      {everyoneIn ? "Checked in" : checkedIn.length > 0 ? `${checkedIn.length} of ${pnr.passengers.length} checked in` : "Not checked in"}
+                    </span>
                   )}
                   {checkedIn.length > 0 && !cancelled && (
                     <button
@@ -258,7 +302,7 @@ export function ManageView({
                       disabled={pending}
                       onClick={() => checkOut(s)}
                       aria-label={`Check out of ${segment.flightNumber}`}
-                      className="text-sm text-copper underline hover:text-copper-strong disabled:opacity-50"
+                      className="text-sm text-accent underline hover:text-accent-strong disabled:opacity-50"
                     >
                       Check out
                     </button>
@@ -269,29 +313,33 @@ export function ManageView({
                       disabled={pending}
                       onClick={() => checkIn(s)}
                       aria-label={`Check in for ${segment.flightNumber}`}
-                      className="rounded-md border border-copper px-4 py-1.5 text-sm font-semibold text-copper hover:bg-sand-soft disabled:opacity-50"
+                      className="rounded-full border border-accent px-4 py-1.5 text-sm font-semibold text-accent hover:bg-wash disabled:opacity-50"
                     >
                       Check in
                     </button>
                   )}
                 </div>
               </div>
-              {disruption && <DisruptionNotice flightNumber={segment.flightNumber} disruption={disruption} />}
-              <ul className="mt-3 divide-y divide-sand rounded-lg border border-sand bg-white">
+              {disruption && (
+                <div className="px-5">
+                  <DisruptionNotice flightNumber={segment.flightNumber} disruption={disruption} />
+                </div>
+              )}
+              <ul className="divide-y divide-line">
                 {pnr.passengers.map((passenger, p) => (
-                  <li key={`${passenger.firstName}-${passenger.lastName}-${p}`} className="flex items-center justify-between gap-4 px-5 py-3">
-                    <span>
+                  <li key={`${passenger.firstName}-${passenger.lastName}-${p}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5">
+                    <span className="font-medium">
                       {passenger.firstName} {passenger.lastName}
                     </span>
                     <span className="flex items-center gap-4">
-                      <span className="font-mono text-sm">Seat {passenger.seats[s]}</span>
+                      <span className="rounded-md bg-wash px-2 py-0.5 font-mono text-sm text-ink">Seat {passenger.seats[s]}</span>
                       {pnr.passengers.length > 1 && !cancelled && !flightCancelled && (
                         <button
                           type="button"
                           disabled={pending}
                           onClick={() => (isIn(p) ? checkOut(s, [p]) : checkIn(s, [p]))}
                           aria-label={isIn(p) ? `Check out ${passenger.firstName} of ${segment.flightNumber}` : `Check in ${passenger.firstName} for ${segment.flightNumber}`}
-                          className="text-sm text-copper underline hover:text-copper-strong disabled:opacity-50"
+                          className="text-sm text-accent underline hover:text-accent-strong disabled:opacity-50"
                         >
                           {isIn(p) ? "Check out" : "Check in"}
                         </button>
@@ -301,7 +349,7 @@ export function ManageView({
                         disabled={cancelled || flightCancelled || pending || isIn(p)}
                         onClick={() => openPicker(p, s)}
                         aria-label={`Change seat for ${passenger.firstName} ${passenger.lastName} on ${segment.flightNumber}`}
-                        className="text-sm text-copper hover:text-copper-strong disabled:cursor-not-allowed disabled:text-muted"
+                        className="text-sm text-accent hover:text-accent-strong disabled:cursor-not-allowed disabled:text-muted"
                       >
                         Change seat
                       </button>
@@ -309,22 +357,59 @@ export function ManageView({
                   </li>
                 ))}
               </ul>
-              {checkedIn.length > 0 && !cancelled && (
-                <ul aria-label={`Boarding passes for ${segment.flightNumber}`} className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {checkedIn.map((pass) => (
-                    <BoardingPassCard key={pass.barcode} pass={pass} />
-                  ))}
-                </ul>
-              )}
-            </div>
+            </article>
           );
         })}
       </section>
 
+      {/* Every pass on the booking, one row each, flight by flight; a row opens the full pass with its QR code. */}
+      {!cancelled && allPasses.length > 0 && (
+        <section aria-labelledby="passes-heading">
+          <h2 id="passes-heading" className="font-semibold">
+            Boarding passes
+          </h2>
+          <ul aria-label="Boarding passes" className={`${CARD} mt-3 divide-y divide-line overflow-hidden`}>
+            {allPasses.map((pass) => (
+              <li key={pass.barcode}>
+                <button
+                  type="button"
+                  onClick={() => setViewing(pass)}
+                  aria-label={`Show boarding pass for ${pass.passengerName} on ${pass.flightNumber}`}
+                  className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-wash"
+                >
+                  <QrGlyph />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-mono text-sm text-muted">
+                      {pass.flightNumber} · {pass.departureDate}
+                    </span>
+                    <span className="block truncate font-semibold">{pass.passengerName}</span>
+                  </span>
+                  <span className="text-right text-sm">
+                    <span className="block font-mono">
+                      <span className="text-muted">Seat</span> {pass.seatNumber}
+                    </span>
+                    <span className="block font-semibold text-accent">Boarding no. {pass.sequence}</span>
+                  </span>
+                  <svg viewBox="0 0 20 20" className="size-5 shrink-0 text-muted" aria-hidden="true">
+                    <path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {viewing && (
+        <Modal title="Boarding pass" onClose={() => setViewing(null)}>
+          <BoardingPassCard pass={viewing} />
+        </Modal>
+      )}
+
       {editing && (
         <section
           aria-label="Choose a new seat"
-          className="rounded-lg border border-copper bg-white p-6"
+          className="rounded-lg border border-accent bg-white p-6"
         >
           <h2 className="font-semibold">
             New seat for {pnr.passengers[editing.passenger].firstName} on {pnr.segments[editing.segment].flightNumber}
@@ -344,11 +429,11 @@ export function ManageView({
                   type="button"
                   disabled={pending || picking.choice === pnr.passengers[picking.passenger].seats[picking.segment]}
                   onClick={confirmSeat}
-                  className="rounded-md bg-copper px-5 py-2.5 font-semibold text-white hover:bg-copper-strong disabled:cursor-not-allowed disabled:opacity-50"
+                  className="btn-primary px-5 py-2.5 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {pending ? "Saving…" : `Move to seat ${picking.choice}`}
                 </button>
-                <button type="button" onClick={() => setEditing(null)} className="rounded-md border border-sand px-5 py-2.5">
+                <button type="button" onClick={() => setEditing(null)} className="rounded-full border border-line px-5 py-2.5">
                   Keep my seat
                 </button>
               </div>
@@ -361,49 +446,46 @@ export function ManageView({
         </section>
       )}
 
-      {!cancelled && (
-        <section aria-label="Cancel booking" className="border-t border-sand pt-6">
-          {confirmingCancel ? (
-            <div role="alertdialog" aria-labelledby="cancel-heading" className="max-w-lg rounded-lg border border-danger bg-white p-5">
-              <h2 id="cancel-heading" className="font-semibold">
-                Cancel this booking?
-              </h2>
-              <p className="mt-2 text-sm text-muted">
-                Every seat on every flight is released and the booking cannot be restored. You would need to book again.
-              </p>
-              <p className="mt-2 text-sm text-muted">
-                You get a full refund if you cancel 24 hours or more before the first flight, or if the airline cancelled a
-                flight on this booking. Otherwise nothing is refunded.
-              </p>
-              <div className="mt-4 flex gap-3">
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={confirmCancel}
-                  className="rounded-md bg-danger px-5 py-2.5 font-semibold text-white disabled:opacity-60"
-                >
-                  {pending ? "Cancelling…" : "Yes, cancel booking"}
-                </button>
-                <button type="button" onClick={() => setConfirmingCancel(false)} className="rounded-md border border-sand px-5 py-2.5">
-                  Keep booking
-                </button>
-              </div>
-            </div>
-          ) : (
+      {!cancelled && confirmingCancel && (
+        <Modal role="alertdialog" title="Cancel this booking?" onClose={() => setConfirmingCancel(false)}>
+          <p className="text-sm text-muted">
+            Every seat on every flight is released and the booking cannot be restored. You would need to book again.
+          </p>
+          <p className="mt-2 text-sm text-muted">
+            You get a full refund if you cancel 24 hours or more before the first flight, or if the airline cancelled a
+            flight on this booking. Otherwise nothing is refunded.
+          </p>
+          <div className="mt-4 flex gap-3">
             <button
               type="button"
-              onClick={() => {
-                setNotice(null);
-                setConfirmingCancel(true);
-              }}
-              className="text-sm text-danger hover:underline"
+              disabled={pending}
+              onClick={confirmCancel}
+              className="rounded-md bg-danger px-5 py-2.5 font-semibold text-white disabled:opacity-60"
             >
-              Cancel booking
+              {pending ? "Cancelling…" : "Yes, cancel booking"}
             </button>
-          )}
-        </section>
+            <button type="button" onClick={() => setConfirmingCancel(false)} className="rounded-full border border-line px-5 py-2.5">
+              Keep booking
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
+  );
+}
+
+/** A small QR mark at the start of each boarding pass row, so the row reads as "a pass you can open". */
+function QrGlyph() {
+  return (
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-wash text-ink" aria-hidden="true">
+      <svg viewBox="0 0 20 20" className="size-6">
+        <path
+          d="M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM5 5h1v1H5zM14 5h1v1h-1zM5 14h1v1H5zM11 11h2v2h-2zM14 11h3v1h-3zM11 14h1v3h-1zM13 14h4v1h-4zM15 16h2v1h-2z"
+          fill="currentColor"
+          fillRule="evenodd"
+        />
+      </svg>
+    </span>
   );
 }
 
@@ -419,7 +501,7 @@ function RefundNotice({
 }) {
   const money = formatPrice(refund.amount, refund.currency);
   return (
-    <section aria-label="Refund" className="rounded-lg border border-sand bg-white p-5">
+    <section aria-label="Refund" className="rounded-lg border border-line bg-white p-5">
       <h2 className="font-semibold">Refund</h2>
       {refund.status === "REFUNDED" && (
         <p className="mt-2 text-sm">{money} has been refunded to your original payment method.</p>
@@ -438,7 +520,7 @@ function RefundNotice({
             type="button"
             disabled={pending}
             onClick={onRetry}
-            className="mt-3 rounded-md border border-sand px-4 py-2 text-sm font-semibold disabled:opacity-60"
+            className="mt-3 rounded-full border border-line px-4 py-2 text-sm font-semibold disabled:opacity-60"
           >
             Try the refund again
           </button>
@@ -460,8 +542,8 @@ function DisruptionNotice({ flightNumber, disruption }: { flightNumber: string; 
         <p className="font-semibold text-danger">This flight is cancelled.</p>
         {disruption.reason && <p className="mt-1 text-muted">{disruption.reason}</p>}
         <p className="mt-2">
-          You can cancel this booking below and{" "}
-          <Link href="/" className="text-copper underline hover:text-copper-strong">
+          You can cancel this booking with Cancel booking at the top and{" "}
+          <Link href="/" className="text-accent underline hover:text-accent-strong">
             Search for another flight
           </Link>
           .
@@ -473,7 +555,7 @@ function DisruptionNotice({ flightNumber, disruption }: { flightNumber: string; 
     <p
       role="status"
       aria-label={`${flightNumber} is delayed`}
-      className="mt-3 border-l-4 border-copper bg-white px-4 py-3 text-sm"
+      className="mt-3 border-l-4 border-accent bg-white px-4 py-3 text-sm"
     >
       <span className="font-semibold">Delayed.</span> New departure{" "}
       {disruption.revisedDeparture ? utcDateTime(disruption.revisedDeparture) : "to be confirmed"}.
