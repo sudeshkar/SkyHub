@@ -7,7 +7,16 @@ function secondsLeft(expiresAt: string): number {
 }
 
 /** Counts down to the end of a seat hold and tells the page, once, when it is over. */
-export function HoldCountdown({ expiresAt, onExpire }: { expiresAt: string; onExpire: () => void }) {
+export function HoldCountdown({
+  expiresAt,
+  onExpire,
+  className = "mb-6",
+}: {
+  expiresAt: string;
+  onExpire: () => void;
+  /** Spacing around the line, for where it sits on the page. */
+  className?: string;
+}) {
   const [left, setLeft] = useState(() => secondsLeft(expiresAt));
   const expire = useRef(onExpire);
   const fired = useRef(false);
@@ -33,7 +42,7 @@ export function HoldCountdown({ expiresAt, onExpire }: { expiresAt: string; onEx
 
   const text = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
   return (
-    <p className="mb-6 text-sm text-muted">
+    <p className={`${className} text-sm text-muted`}>
       We are holding your seats for <span className="font-mono font-semibold text-ink">{text}</span>
       {/* Announced only at the end, so a screen reader is not interrupted every second. */}
       <span role="status" className="sr-only">

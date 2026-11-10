@@ -5,16 +5,19 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { loadSavedPassengers, type SavedName } from "@/lib/saved-passengers-client";
 import { createBooking, holdSeats, quoteTrip, releaseSeats } from "@/app/book/actions";
-import type { Pnr, QuoteOutcome, SeatMap as SeatMapData, Segment } from "@/lib/api/booking";
+import type { QuoteOutcome, SeatMap as SeatMapData, Segment } from "@/lib/api/booking";
+import { rememberBooking, tripKey } from "@/lib/recent-booking";
 import { formatPrice } from "@/lib/format";
+import { Modal } from "@/components/modal";
+import { useRecentBooking } from "./booking-confirmation";
 import { HoldCountdown } from "./hold-countdown";
 import { DEFAULT_PAYMENT_TOKEN, PaymentSummary } from "./payment-summary";
 import { SeatMap } from "./seat-map";
 
-type Step = "seats" | "passengers" | "review" | "done";
+type Step = "seats" | "passengers" | "review";
 type Passenger = { firstName: string; lastName: string };
 
-const STEPS: { id: Exclude<Step, "done">; label: string }[] = [
+const STEPS: { id: Step; label: string }[] = [
   { id: "seats", label: "Seats" },
   { id: "passengers", label: "Passengers" },
   { id: "review", label: "Review" },
@@ -60,7 +63,13 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
   // The names this traveller has saved to their account, asked for only when they reach the passengers step (ADR-0078).
   const [saved, setSaved] = useState<SavedName[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const [booked, setBooked] = useState<{ pnr: Pnr; paid: string } | null>(null);
+  // What to do next while choosing seats, such as moving on to the connecting flight.
+  const [guide, setGuide] = useState<string | null>(null);
+  // These flights were booked in this tab a moment ago: warn before they are booked again by mistake (not a block, as
+  // booking the same flights twice can be meant, such as for someone else). Hidden once the traveller chooses to go on.
+  const recent = useRecentBooking();
+  const [bookingAgain, setBookingAgain] = useState(false);
+  const alreadyBooked = recent && recent.trip === tripKey(segments) && !bookingAgain ? recent : null;
   // The price the server worked out for this trip; null while it is being worked out.
   const [quote, setQuote] = useState<QuoteOutcome | null>(null);
   const [paymentToken, setPaymentToken] = useState<string>(DEFAULT_PAYMENT_TOKEN);
@@ -76,13 +85,48 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
     if (p !== passengerIndex && row[segmentIndex]) heldByParty.set(row[segmentIndex], initials(passengers[p], p));
   });
 
+  const flightDone = (s: number, rows: string[][] = seats) => rows.every((row) => Boolean(row[s]));
+  const firstUnseated = (s: number, rows: string[][] = seats) => Math.max(0, rows.findIndex((row) => !row[s]));
+  /** The next flight that still needs seats, looking forward from `from` first, then back; -1 when every flight is done. */
+  const nextOpenFlight = (from: number, rows: string[][] = seats) => {
+    const order = [...segments.keys()].filter((s) => s !== from);
+    const ahead = order.filter((s) => s > from);
+    return [...ahead, ...order.filter((s) => s < from)].find((s) => !flightDone(s, rows)) ?? -1;
+  };
+
+  function goToFlight(s: number, rows: string[][] = seats) {
+    setSegmentIndex(s);
+    setPassengerIndex(firstUnseated(s, rows));
+  }
+
+  /**
+   * Choosing a seat leads the traveller on: to the next passenger still without a seat on this flight, then to the next
+   * flight that needs seats, saying so, so nobody is left wondering why they cannot continue (a booking with a connection
+   * has a seat map per flight). Choosing the same seat again clears it, and leads nowhere.
+   */
   function chooseSeat(seatNumber: string) {
-    setSeats((current) => {
-      const next = current.map((row) => [...row]);
-      next[passengerIndex][segmentIndex] = next[passengerIndex][segmentIndex] === seatNumber ? "" : seatNumber;
-      return next;
-    });
-    if (passengerIndex < passengerCount - 1) setPassengerIndex(passengerIndex + 1);
+    const next = seats.map((row) => [...row]);
+    const clearing = next[passengerIndex][segmentIndex] === seatNumber;
+    next[passengerIndex][segmentIndex] = clearing ? "" : seatNumber;
+    setSeats(next);
+    if (clearing) {
+      setGuide(null);
+      return;
+    }
+    const waiting = next.findIndex((row) => !row[segmentIndex]);
+    if (waiting !== -1) {
+      setPassengerIndex(waiting);
+      return;
+    }
+    const flight = nextOpenFlight(segmentIndex, next);
+    if (flight !== -1) {
+      goToFlight(flight, next);
+      setGuide(
+        `Seat ${seatNumber} chosen on ${segments[segmentIndex].flightNumber}. Now choose a seat on ${segments[flight].flightNumber}.`,
+      );
+    } else {
+      setGuide("Every seat is chosen. Continue to passengers when you are ready.");
+    }
   }
 
   function continueToPassengers() {
@@ -155,8 +199,16 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
       );
       if (outcome.kind === "booked") {
         setHold(null);
-        setBooked({ pnr: outcome.pnr, paid: formatPrice(shown.amount, shown.currency) });
-        setStep("done");
+        rememberBooking({
+          locator: outcome.pnr.locator,
+          contactEmail: outcome.pnr.contactEmail,
+          paid: formatPrice(shown.amount, shown.currency),
+          trip: tripKey(segments),
+          passengers: outcome.pnr.passengers.map((p) => ({ firstName: p.firstName, lastName: p.lastName, seats: p.seats })),
+        });
+        // Replaces this page in the history: Back then goes to the flight results, and a refresh or Forward shows the
+        // confirmation again instead of an empty seat map for flights already paid for.
+        router.replace("/book/confirmed");
       } else if (outcome.kind === "declined") {
         // A definite "no": the next try is a new attempt, so it gets a new key.
         idempotencyKey.current = crypto.randomUUID();
@@ -184,14 +236,64 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
     });
   }
 
-  if (step === "done" && booked) {
-    return <Confirmation pnr={booked.pnr} paid={booked.paid} />;
-  }
-
   const seatMap = seatMaps[segmentIndex];
+
+  // The step's Back and Next buttons sit beside the heading, which stays at the top of the screen while the traveller
+  // scrolls, so moving on never means hunting for a button at the bottom of a long form.
+  const actions =
+    step === "seats" ? (
+      // Back to the flight results the traveller came from; a booking link opened on its own has none, so it starts again.
+      <button
+        type="button"
+        onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))}
+        aria-label="Back to flight results"
+        className="flex items-center gap-2 rounded-full border border-line bg-white px-5 py-2.5 hover:border-accent hover:text-accent"
+      >
+        <svg viewBox="0 0 20 20" className="size-4" aria-hidden="true">
+          <path d="M16 10H4m5-5-5 5 5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Back
+      </button>
+    ) : step === "passengers" ? (
+      <>
+        <button type="button" onClick={backToSeats} className="rounded-full border border-line bg-white px-5 py-2.5">
+          Back
+        </button>
+        <button
+          type="submit"
+          form="passenger-details"
+          className="btn-primary px-6 py-2.5 font-semibold text-white"
+        >
+          Review booking
+        </button>
+      </>
+    ) : step === "review" ? (
+      <>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setStep("passengers")}
+          className="rounded-full border border-line bg-white px-5 py-2.5"
+        >
+          Back
+        </button>
+        <button
+          type="button"
+          disabled={pending || quote?.kind !== "quoted"}
+          onClick={confirm}
+          className="btn-primary px-6 py-2.5 font-semibold text-white disabled:opacity-60"
+        >
+          {pending ? "Processing…" : quote?.kind === "quoted" ? `Pay ${formatPrice(quote.amount, quote.currency)} and book` : "Pay and book"}
+        </button>
+      </>
+    ) : null;
 
   return (
     <div>
+      <div className="sticky top-20 z-30 -mx-4 mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-b-xl glass px-4 py-3">
+        <h1 className="font-display text-3xl">Complete your booking</h1>
+        {actions && <div className="flex gap-3">{actions}</div>}
+      </div>
       <ol className="mb-8 flex gap-6 text-sm" aria-label="Booking steps">
         {STEPS.map((s, i) => (
           <li
@@ -204,6 +306,28 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
         ))}
       </ol>
 
+      {/* A pop-up rather than a banner, so it takes no room from the seat map; closing it in any way means booking again. */}
+      {alreadyBooked && step === "seats" && (
+        <Modal role="alertdialog" title="You have just booked these flights" onClose={() => setBookingAgain(true)}>
+          <p className="text-sm text-muted">
+            You booked these flights a moment ago ({alreadyBooked.locator}). Book them again only if you mean to, such as for
+            someone else.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link href="/book/confirmed" className="btn-primary px-5 py-2.5 font-semibold">
+              See that booking
+            </Link>
+            <button
+              type="button"
+              onClick={() => setBookingAgain(true)}
+              className="rounded-full border border-line bg-white px-5 py-2.5 hover:border-accent hover:text-accent"
+            >
+              Book again
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {notice && (
         <p role="alert" className="mb-6 border-l-4 border-danger bg-white px-4 py-3 text-sm text-danger">
           {notice}
@@ -212,35 +336,47 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
 
       {step === "seats" && (
         <section aria-labelledby="seats-heading" className="grid gap-8 lg:grid-cols-[1fr_18rem]">
-          <div>
+          {/* min-w-0: lets the sideways seat map scroll inside its column instead of widening the page.
+              Pulled up on wider screens: the space above the plane is kept for its wing, and the tabs and key sit in it, so
+              this closes the empty strip between the steps and the tabs. Phones keep it, as the rows there can wrap. */}
+          <div className="min-w-0 sm:-mt-12">
             <h2 id="seats-heading" className="sr-only">
               Choose seats
             </h2>
-            {segments.length > 1 && (
-              <div role="tablist" aria-label="Flights" className="mb-6 flex gap-2">
-                {segments.map((segment, i) => (
-                  <button
-                    key={segment.flightNumber}
-                    role="tab"
-                    aria-selected={i === segmentIndex}
-                    onClick={() => {
-                      setSegmentIndex(i);
-                      setPassengerIndex(0);
-                    }}
-                    className={`rounded-md border px-4 py-2 font-mono text-sm ${
-                      i === segmentIndex ? "border-ink bg-ink text-ivory" : "border-sand bg-white"
-                    }`}
-                  >
-                    {segment.flightNumber}
-                  </button>
-                ))}
-              </div>
-            )}
             <SeatMap
               seats={seatMap.seats}
               selected={seats[passengerIndex][segmentIndex] || undefined}
               heldByParty={heldByParty}
               onSelect={chooseSeat}
+              header={
+                segments.length > 1 && (
+                  <div role="tablist" aria-label="Flights" className="flex gap-2">
+                    {segments.map((segment, i) => (
+                      <button
+                        key={segment.flightNumber}
+                        role="tab"
+                        aria-selected={i === segmentIndex}
+                        data-complete={flightDone(i)}
+                        title={flightDone(i) ? "Seats chosen" : "Seats still to choose"}
+                        onClick={() => {
+                          goToFlight(i);
+                          setGuide(null);
+                        }}
+                        className={`flex items-center gap-1.5 rounded-md border px-4 py-2 font-mono text-sm ${
+                          i === segmentIndex ? "border-ink bg-ink text-canvas" : "border-line bg-white"
+                        }`}
+                      >
+                        {segment.flightNumber}
+                        {flightDone(i) && (
+                          <svg viewBox="0 0 20 20" className={`size-4 ${i === segmentIndex ? "text-sky" : "text-accent"}`} aria-hidden="true">
+                            <path d="M4.5 10.5l3.5 3.5 7.5-8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )
+              }
             />
           </div>
 
@@ -254,7 +390,7 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
                     onClick={() => setPassengerIndex(p)}
                     aria-pressed={p === passengerIndex}
                     className={`flex w-full justify-between rounded-md border px-3 py-2 text-left text-sm ${
-                      p === passengerIndex ? "border-copper" : "border-sand"
+                      p === passengerIndex ? "border-accent" : "border-line"
                     }`}
                   >
                     <span>Passenger {p + 1}</span>
@@ -263,24 +399,52 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              disabled={!allSeated || pending}
-              onClick={continueToPassengers}
-              className="w-full rounded-md bg-copper px-4 py-3 font-semibold text-white hover:bg-copper-strong disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {pending ? "Holding your seats…" : "Continue to passengers"}
-            </button>
-            {!allSeated && <p className="text-xs text-muted">Choose a seat for every passenger on every flight.</p>}
+            {guide && (
+              <p role="status" className="rounded-lg border border-accent/30 bg-wash px-3 py-2.5 text-sm text-ink">
+                {guide}
+              </p>
+            )}
+            {/* The main button always does the next useful thing: on to a flight that still needs seats, or on to the
+                passengers once every flight has them. */}
+            {!allSeated && flightDone(segmentIndex) && nextOpenFlight(segmentIndex) !== -1 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  goToFlight(nextOpenFlight(segmentIndex));
+                  setGuide(null);
+                }}
+                className="flex w-full items-center justify-center gap-2 btn-primary px-4 py-3 font-semibold text-white"
+              >
+                Next flight: {segments[nextOpenFlight(segmentIndex)].flightNumber}
+                <svg viewBox="0 0 20 20" className="size-4" aria-hidden="true">
+                  <path d="M4 10h12m-5-5 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!allSeated || pending}
+                onClick={continueToPassengers}
+                className="w-full btn-primary px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {pending ? "Holding your seats…" : "Continue to passengers"}
+              </button>
+            )}
+            {!allSeated && !flightDone(segmentIndex) && (
+              <p className="text-xs text-muted">
+                Choose a seat for Passenger {firstUnseated(segmentIndex) + 1} on {segments[segmentIndex].flightNumber}
+                {nextOpenFlight(segmentIndex) !== -1 ? `, then on ${segments[nextOpenFlight(segmentIndex)].flightNumber}` : ""}.
+              </p>
+            )}
           </aside>
         </section>
       )}
 
       {step === "passengers" && (
-        <form onSubmit={goToReview} className="max-w-xl space-y-6">
+        <form id="passenger-details" onSubmit={goToReview} className="max-w-xl space-y-6">
           {hold && <HoldCountdown expiresAt={hold.expiresAt} onExpire={holdEnded} />}
           {passengers.map((passenger, p) => (
-            <fieldset key={p} className="rounded-lg border border-sand bg-white p-5">
+            <fieldset key={p} className="rounded-lg border border-line bg-white p-5">
               <legend className="px-1 font-semibold">Passenger {p + 1}</legend>
               <p className="mb-3 text-sm text-muted">Enter names exactly as they appear on the passport.</p>
               {saved.length > 0 && (
@@ -293,7 +457,7 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
                       const chosen = saved[Number(e.target.value)];
                       if (chosen) setPassengers(passengers.map((x, i) => (i === p ? { firstName: chosen.firstName, lastName: chosen.lastName } : x)));
                     }}
-                    className="mt-1 block w-full rounded-md border border-sand px-3 py-2"
+                    className="mt-1 block w-full rounded-md border border-line px-3 py-2"
                   >
                     <option value="">Choose a saved passenger…</option>
                     {saved.map((name, i) => (
@@ -314,7 +478,7 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
                       onChange={(e) =>
                         setPassengers(passengers.map((x, i) => (i === p ? { ...x, [field]: e.target.value } : x)))
                       }
-                      className="mt-1 block w-full rounded-md border border-sand px-3 py-2"
+                      className="mt-1 block w-full rounded-md border border-line px-3 py-2"
                     />
                   </label>
                 ))}
@@ -330,95 +494,44 @@ function Wizard({ segments, seatMaps, passengerCount, loadSaved = loadSavedPasse
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-sand px-3 py-2"
+              className="mt-1 block w-full rounded-md border border-line px-3 py-2"
             />
             <span className="mt-1 block text-xs text-muted">We send the booking confirmation here.</span>
           </label>
-          <div className="flex gap-4">
-            <button type="button" onClick={backToSeats} className="rounded-md border border-sand px-5 py-3">
-              Back
-            </button>
-            <button type="submit" className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong">
-              Review booking
-            </button>
-          </div>
         </form>
       )}
 
       {step === "review" && (
-        <section aria-labelledby="review-heading" className="max-w-xl space-y-6">
-          <h2 id="review-heading" className="text-xl font-semibold">
-            Check your booking
-          </h2>
-          {hold && <HoldCountdown expiresAt={hold.expiresAt} onExpire={holdEnded} />}
-          <dl className="divide-y divide-sand rounded-lg border border-sand bg-white">
-            {passengers.map((p, i) => (
-              <div key={i} className="flex justify-between px-5 py-3">
-                <dt>
-                  {p.firstName} {p.lastName}
-                </dt>
-                <dd className="font-mono text-sm">
-                  {segments.map((s, j) => `${s.flightNumber} ${seats[i][j]}`).join(" · ")}
-                </dd>
+        // Two columns from tablet width up (the trip on the left, payment on the right), so the whole review, and the Pay
+        // button in the heading row, fit on one screen without scrolling.
+        <section aria-labelledby="review-heading" className="space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+            <h2 id="review-heading" className="text-xl font-semibold">
+              Check your booking
+            </h2>
+            {hold && <HoldCountdown expiresAt={hold.expiresAt} onExpire={holdEnded} className="" />}
+          </div>
+          <div className="grid items-start gap-6 md:grid-cols-2">
+            <dl className="divide-y divide-line rounded-lg border border-line bg-white">
+              {passengers.map((p, i) => (
+                <div key={i} className="flex justify-between gap-4 px-5 py-3">
+                  <dt>
+                    {p.firstName} {p.lastName}
+                  </dt>
+                  <dd className="font-mono text-sm">
+                    {segments.map((s, j) => `${s.flightNumber} ${seats[i][j]}`).join(" · ")}
+                  </dd>
+                </div>
+              ))}
+              <div className="flex justify-between px-5 py-3">
+                <dt>Confirmation to</dt>
+                <dd>{email}</dd>
               </div>
-            ))}
-            <div className="flex justify-between px-5 py-3">
-              <dt>Confirmation to</dt>
-              <dd>{email}</dd>
-            </div>
-          </dl>
-          <PaymentSummary quote={quote} method={paymentToken} onMethodChange={setPaymentToken} disabled={pending} />
-          <div className="flex gap-4">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setStep("passengers")}
-              className="rounded-md border border-sand px-5 py-3"
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              disabled={pending || quote?.kind !== "quoted"}
-              onClick={confirm}
-              className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60"
-            >
-              {pending ? "Processing…" : quote?.kind === "quoted" ? `Pay ${formatPrice(quote.amount, quote.currency)} and book` : "Pay and book"}
-            </button>
+            </dl>
+            <PaymentSummary quote={quote} method={paymentToken} onMethodChange={setPaymentToken} disabled={pending} />
           </div>
         </section>
       )}
     </div>
-  );
-}
-
-function Confirmation({ pnr, paid }: { pnr: Pnr; paid: string }) {
-  return (
-    <section aria-labelledby="done-heading" className="max-w-xl rounded-lg border border-sand bg-white p-8">
-      <p className="text-sm font-semibold text-copper">Booking confirmed</p>
-      <h2 id="done-heading" className="mt-1 font-display text-3xl">
-        Your booking reference
-      </h2>
-      <p className="mt-4 font-mono text-4xl tracking-[0.3em]" aria-label={`Booking reference ${pnr.locator.split("").join(" ")}`}>
-        {pnr.locator}
-      </p>
-      <p className="mt-4 text-sm">
-        Paid <span className="font-mono font-semibold">{paid}</span>
-      </p>
-      <p className="mt-2 text-muted">
-        Confirmation sent to {pnr.contactEmail}. Keep this reference and a passenger&apos;s last name to manage the
-        booking.
-      </p>
-      <ul className="mt-6 space-y-1 text-sm">
-        {pnr.passengers.map((p) => (
-          <li key={`${p.firstName}-${p.lastName}-${p.seats.join()}`}>
-            {p.firstName} {p.lastName} — <span className="font-mono">{p.seats.join(", ")}</span>
-          </li>
-        ))}
-      </ul>
-      <Link href="/manage" className="mt-8 inline-block text-copper hover:text-copper-strong">
-        Manage this booking
-      </Link>
-    </section>
   );
 }

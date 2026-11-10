@@ -26,7 +26,7 @@ export function PaymentSummary({
   disabled?: boolean;
 }) {
   return (
-    <section aria-labelledby="payment-heading" className="rounded-lg border border-sand bg-white p-5">
+    <section aria-labelledby="payment-heading" className="rounded-lg border border-line bg-white p-5">
       <h3 id="payment-heading" className="font-semibold">
         Payment
       </h3>
