@@ -23,7 +23,7 @@ export function segmentsOf(itinerary: Itinerary): Segment[] {
 
 const STYLE: Record<Segment["kind"], string> = {
   flight: "bg-ink",
-  wait: "bg-sand",
+  wait: "bg-line",
   transfer: "bg-amber-line [background-image:repeating-linear-gradient(135deg,transparent_0_4px,rgb(255_255_255/0.55)_4px_8px)]",
 };
 

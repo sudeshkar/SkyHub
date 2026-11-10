@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { requestLink, type LinkState } from "./actions";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 const WORDS = {
   "sign-up": { heading: "Create an account", lead: "Enter your email address and we will send you a link to choose a password." },
@@ -21,7 +21,7 @@ export function LinkForm({ mode }: { mode: keyof typeof WORDS }) {
 
   if (state.status === "sent") {
     return (
-      <section role="status" className="max-w-md border-l-4 border-copper bg-white px-4 py-3">
+      <section role="status" className="max-w-md border-l-4 border-accent bg-white px-4 py-3">
         <p className="font-semibold">Check your inbox.</p>
         <p className="mt-1 text-sm text-muted">
           If {state.email} is a valid address, we have sent it a link to choose a password. The link works once and for one hour.
@@ -49,7 +49,7 @@ export function LinkForm({ mode }: { mode: keyof typeof WORDS }) {
           className={field}
         />
       </label>
-      <button type="submit" disabled={pending} className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60">
+      <button type="submit" disabled={pending} className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60">
         {pending ? "Sending…" : "Email me a link"}
       </button>
       {state.status === "error" && (

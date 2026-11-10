@@ -19,27 +19,35 @@ SkyHub is a **portfolio project, not a real airline**. It is built the way a pro
 
 ## Screenshots
 
-Taken from a local run (`docs/images/`).
+Taken from a local run (`docs/images/`). The look and the reasons behind it are in [ADR-0084](docs/adr/0084-website-redesign.md) and [`docs/design/06-clear-sky.md`](docs/design/06-clear-sky.md).
 
-| Search | Choose seats |
+| Home | Search |
 |---|---|
-| ![Search results for Dubai to London](docs/images/search-results.png) | ![Seat map with business and economy cabins](docs/images/seat-map.png) |
+| ![The home page: an airport photo with the line "Your journey, our priority" and the search card below](docs/images/home.jpg) | ![Mumbai to New York results, one with a change of airport in Dubai highlighted](docs/images/search-results.jpg) |
 
-| Pay | Manage a booking |
+| Choose seats | Pay |
 |---|---|
-| ![Review step with the test card chosen](docs/images/payment.png) | ![A confirmed booking with check-in, change seat and cancel](docs/images/manage-booking.png) |
+| ![A sideways seat map inside an aeroplane outline; the first flight is ticked and the page asks for a seat on the second](docs/images/seat-map.jpg) | ![The review step in two columns: passengers and seats, and the payment with the test card chosen](docs/images/payment.jpg) |
 
-| The confirmation email, caught by Mailpit | |
+| Booking confirmed | Manage a booking |
 |---|---|
-| ![The booking-confirmed email in Mailpit](docs/images/email.png) | |
+| ![The confirmation page with the booking reference, amount paid and seats](docs/images/booking-confirmed.jpg) | ![A booking as cards: the reference, and one card per flight with its check-in status and passengers](docs/images/manage-booking.jpg) |
 
-| Operations: approving the agent's proposals | |
+| A boarding pass | After cancelling: the refund |
 |---|---|
-| ![The operations page listing proposed moves with checkboxes](docs/images/approval-screen.png) | |
+| ![A boarding pass in a pop-up with its QR code](docs/images/boarding-pass.jpg) | ![A cancelled booking with its refund](docs/images/refund.jpg) |
 
-| After cancelling: the refund | Grafana: *SkyHub overview* |
+| Operations: the dashboard | Operations: one tool |
 |---|---|
-| ![A cancelled booking with its refund](docs/images/refund.png) | ![Grafana dashboard with request, booking, seat hold and payment panels](docs/images/grafana-overview.png) |
+| ![The operations dashboard: tool cards grouped into Disruptions and Boarding](docs/images/ops-dashboard.jpg) | ![Who has boarded for one flight: checked in, boarded and waiting as tiles with a progress bar](docs/images/ops-tool.jpg) |
+
+| Operations: approving the agent's proposals | The confirmation email, caught by Mailpit |
+|---|---|
+| ![The operations page listing proposed moves with checkboxes (before the redesign)](docs/images/approval-screen.png) | ![The booking-confirmed email in Mailpit](docs/images/email.png) |
+
+| Grafana: *SkyHub overview* | |
+|---|---|
+| ![Grafana dashboard with request, booking, seat hold and payment panels](docs/images/grafana-overview.png) | |
 
 ## Architecture
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { setPassword, type SetPasswordState } from "./actions";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 /** Where the emailed link leads (ADR-0033): choosing a password with it is what proves the address is the person's. */
 export function SetPasswordForm({ token }: { token: string }) {
@@ -12,7 +12,7 @@ export function SetPasswordForm({ token }: { token: string }) {
 
   if (state.status === "done") {
     return (
-      <section role="status" className="max-w-md border-l-4 border-copper bg-white px-4 py-3">
+      <section role="status" className="max-w-md border-l-4 border-accent bg-white px-4 py-3">
         <p className="font-semibold">Your password is saved.</p>
         <p className="mt-2 text-sm">
           <Link href="/account" className="underline">Sign in</Link> with your email address and the new password. Everyone who was
@@ -35,7 +35,7 @@ export function SetPasswordForm({ token }: { token: string }) {
         Repeat the password
         <input name="confirm" type="password" required minLength={12} maxLength={72} autoComplete="new-password" className={field} />
       </label>
-      <button type="submit" disabled={pending} className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60">
+      <button type="submit" disabled={pending} className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60">
         {pending ? "Saving…" : "Save password"}
       </button>
       {state.status === "link-expired" && (

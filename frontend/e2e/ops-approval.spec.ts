@@ -66,7 +66,8 @@ test("staff approve the agent's proposals and the bookings really move", async (
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("Signed in as")).toContainText(USER!);
 
-  // Record the cancellation in the UI.
+  // Record the cancellation in the UI. The dashboard lists the tools; each opens on its own address (ADR-0084).
+  await page.getByRole("link", { name: /Record a delay or cancellation/ }).click();
   await page.getByLabel("Flight number").fill("SK001");
   await page.getByLabel(/Scheduled departure date/).first().fill(day);
   await page.getByLabel("Cancelled").check();
@@ -74,6 +75,7 @@ test("staff approve the agent's proposals and the bookings really move", async (
   await expect(page.getByRole("status").first()).toContainText("is recorded as cancelled");
 
   // Ask for proposals for the same flight.
+  await page.goto("/ops?tool=move");
   const panel = page.getByRole("region", { name: "Proposals" });
   await panel.getByLabel("Disrupted flight").fill("SK001");
   await panel.getByLabel(/Scheduled departure date/).fill(day);

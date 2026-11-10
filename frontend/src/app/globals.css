@@ -1,41 +1,145 @@
 @import "tailwindcss";
 
-/* Design tokens — "Desert Dusk". Components use these names only, never raw hex values. */
+/*
+ * Design tokens: "Clear Sky", a cool, saturated blue on a soft blue-white canvas, with pill-shaped gradient buttons and a
+ * frosted-glass header (see docs/design/06-clear-sky.md). Components use these names only, never raw hex values.
+ * The names say what a colour is for, not what it looks like, so a future palette changes values here and nowhere else.
+ */
 @theme {
-  --color-ink: #0f1b2d;
-  --color-ink-soft: #24344a;
-  --color-ivory: #faf7f2;
-  --color-sand: #e9dfcc;
-  --color-sand-soft: #f3ede2;
-  --color-copper: #b5552b;
-  --color-copper-strong: #964420;
-  --color-gold: #b08d57;
-  --color-text: #1b2533;
-  --color-muted: #5b6472;
+  --color-ink: #0b1b33; /* headings, dark surfaces */
+  --color-ink-soft: #23395a;
+  --color-canvas: #f4f8fd; /* page background */
+  --color-line: #d9e4f2; /* borders, dividers */
+  --color-wash: #ecf3fb; /* quiet fills, hover */
+  --color-accent: #0a72e6; /* links, highlights, buttons: 4.8:1 on white */
+  --color-accent-strong: #0a508f; /* hover, pressed */
+  --color-sky: #8ad8fc; /* the light end of the gradient */
+  --color-text: #14243a;
+  --color-muted: #566579; /* 5.6:1 on the canvas */
   --color-amber: #8a5200;
   --color-amber-bg: #fff6e0;
   --color-amber-line: #e8c77a;
-  --color-danger: #a8321f;
+  --color-danger: #b42318;
 
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
-  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
-  background: var(--color-ivory);
+  /* A soft blue glow from the top of the page, fading into the canvas. */
+  background:
+    radial-gradient(1200px 520px at 50% -8%, rgb(138 216 252 / 0.32), transparent 70%),
+    var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-sans);
+  /* Radio buttons, checkboxes and range sliders in the accent blue rather than the browser's own colour. */
+  accent-color: var(--color-accent);
+}
+
+/* Display headings: bold and set tight, as large sans-serif type reads best. */
+.font-display {
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-copper);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+@layer components {
+  /* The main action on a screen: a pill with a blue gradient, a soft glow and a light top edge, as on a glossy app button. */
+  .btn-primary {
+    border-radius: 9999px;
+    color: #fff;
+    background-image: linear-gradient(180deg, #2f93ff 0%, var(--color-accent) 55%, #0862c8 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.35),
+      0 1px 2px rgb(10 80 143 / 0.25),
+      0 6px 16px -6px rgb(10 114 230 / 0.55);
+    transition:
+      filter 150ms,
+      box-shadow 150ms,
+      transform 150ms;
+  }
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.06);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.35),
+      0 1px 2px rgb(10 80 143 / 0.25),
+      0 10px 22px -8px rgb(10 114 230 / 0.65);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  /* A white card: softly rounded, with a faint blue shadow. */
+  .card {
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-line);
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgb(11 27 51 / 0.04),
+      0 10px 28px -14px rgb(10 80 143 / 0.22);
+  }
+
+  /*
+   * A staff tool's form, packed so it fits on one screen: from tablet width up, short fields sit two to a row, and
+   * everything else (headings, help text, choices, long text, buttons, messages) takes the whole row.
+   */
+  .tool-form {
+    display: grid;
+    gap: 1rem 1.25rem;
+    align-items: start;
+  }
+  @media (min-width: 40rem) {
+    .tool-form {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .tool-form > * {
+      grid-column: 1 / -1;
+    }
+    .tool-form > label:not(:has(textarea)) {
+      grid-column: auto;
+    }
+  }
+  .tool-form > button {
+    justify-self: start;
+  }
+
+  /* A panel of frosted glass over whatever is behind it. */
+  .glass {
+    background: rgb(255 255 255 / 0.82);
+    backdrop-filter: saturate(1.6) blur(14px);
+    -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  }
+}
+
+/* A word that rises and fades in once, for the hero tagline; each word sets its own animation-delay. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise-word {
+  display: inline-block;
+  opacity: 0;
+  animation: rise-in 650ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
     transition: none !important;
+  }
+  /* With the animation switched off, the tagline must still be visible rather than stay at its starting opacity. */
+  .rise-word {
+    opacity: 1;
   }
 }

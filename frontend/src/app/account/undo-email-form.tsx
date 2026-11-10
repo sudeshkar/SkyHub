@@ -12,7 +12,7 @@ export function UndoEmailForm({ token }: { token: string }) {
 
   if (state.status === "done") {
     return (
-      <section role="status" className="max-w-md border-l-4 border-copper bg-white px-4 py-3">
+      <section role="status" className="max-w-md border-l-4 border-accent bg-white px-4 py-3">
         <p className="font-semibold">Your account is yours again.</p>
         <p className="mt-2 text-sm">
           Your old email address is back on it and everyone has been signed out. We have sent a link to choose a new password to that
@@ -31,7 +31,7 @@ export function UndoEmailForm({ token }: { token: string }) {
         changed the address can no longer use it. We then send you a link to choose a new password. If you changed your address yourself,
         do not press the button.
       </p>
-      <button type="submit" disabled={pending} className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60">
+      <button type="submit" disabled={pending} className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60">
         {pending ? "Working…" : "Take my account back"}
       </button>
       {state.status === "link-invalid" && (

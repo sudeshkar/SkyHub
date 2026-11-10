@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { undoBoarding, type UndoBoardingState } from "./actions";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 /**
  * Takes back a boarding that was recorded by mistake (ADR-0064). For operations and administrators only: the page does not show it to
@@ -16,16 +16,16 @@ export function UndoBoardingForm() {
 
   if (state.status === "signed-out") {
     return (
-      <p role="alert" className="mt-10 border-l-4 border-amber-line bg-amber-bg px-4 py-3 text-sm text-text">
+      <p role="alert" className="border-l-4 border-amber-line bg-amber-bg px-4 py-3 text-sm text-text">
         Your session has ended, or your role cannot do this. <a href="/ops" className="underline">Sign in again</a>.
       </p>
     );
   }
 
   return (
-    <section aria-label="Undo a boarding" className="mt-10 space-y-6 border-t border-sand pt-8">
+    <section aria-label="Undo a boarding" className="space-y-6">
       {state.status === "undone" && (
-        <div role="status" className="border-l-4 border-copper bg-white px-4 py-3">
+        <div role="status" className="border-l-4 border-accent bg-white px-4 py-3">
           <p className="font-semibold">
             Boarding taken back for passenger {state.passenger} on flight {state.leg} of booking {state.locator}.
           </p>
@@ -33,7 +33,7 @@ export function UndoBoardingForm() {
         </div>
       )}
 
-      <form action={action} className="max-w-md space-y-4">
+      <form action={action} className="tool-form">
         <h2 className="font-display text-xl">Undo a boarding</h2>
         <p className="text-sm text-muted">
           Use this when a passenger was boarded by mistake, for example the wrong pass was scanned. They stay checked in and can board
@@ -73,7 +73,7 @@ export function UndoBoardingForm() {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md border border-copper px-6 py-3 font-semibold text-copper hover:bg-white disabled:opacity-60"
+          className="rounded-md border border-accent px-6 py-3 font-semibold text-accent hover:bg-white disabled:opacity-60"
         >
           {pending ? "Undoing…" : "Undo boarding"}
         </button>

@@ -12,8 +12,15 @@ export const metadata: Metadata = {
 export default function BookPage(props: PageProps<"/book">) {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
-      <h1 className="mb-8 font-display text-3xl">Complete your booking</h1>
-      <Suspense fallback={<p aria-busy="true">Loading seat maps…</p>}>
+      {/* The heading is drawn by whatever loads below: the booking steps put their Back and Next buttons beside it. */}
+      <Suspense
+        fallback={
+          <>
+            <Heading />
+            <p aria-busy="true">Loading seat maps…</p>
+          </>
+        }
+      >
         <Booking searchParams={props.searchParams} />
       </Suspense>
     </div>
@@ -40,13 +47,20 @@ async function Booking({ searchParams }: Pick<PageProps<"/book">, "searchParams"
   return <BookingWizard segments={segments} seatMaps={seatMaps} passengerCount={passengers} />;
 }
 
+function Heading() {
+  return <h1 className="mb-8 font-display text-3xl">Complete your booking</h1>;
+}
+
 function Problem({ text }: { text: string }) {
   return (
-    <div className="rounded-lg border border-sand bg-white p-8">
-      <p>{text}</p>
-      <Link href="/" className="mt-4 inline-block text-copper hover:text-copper-strong">
-        New search
-      </Link>
-    </div>
+    <>
+      <Heading />
+      <div className="rounded-lg border border-line bg-white p-8">
+        <p>{text}</p>
+        <Link href="/" className="mt-4 inline-block text-accent hover:text-accent-strong">
+          New search
+        </Link>
+      </div>
+    </>
   );
 }

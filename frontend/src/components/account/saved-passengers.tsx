@@ -7,7 +7,7 @@ const PROBLEMS: Record<string, string> = {
   "passenger-failed": "That could not be done just now. Please try again.",
 };
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2";
 
 /**
  * The names a traveller keeps to fill a booking with (ADR-0078). Names only: it says so, because a person deciding what to keep here
@@ -16,7 +16,7 @@ const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-
  */
 export function SavedPassengers({ result, problem }: { result: SavedPassengersOutcome; problem?: string }) {
   return (
-    <section aria-labelledby="saved-passengers" className="mt-8 border-t border-sand pt-6">
+    <section aria-labelledby="saved-passengers" className="mt-8 border-t border-line pt-6">
       <h2 id="saved-passengers" className="font-display text-xl">Saved passengers</h2>
       <p className="mt-2 max-w-prose text-sm text-muted">
         Save the people you travel with, and fill in a booking for them in one click. We keep only the names, never a date of birth,
@@ -41,13 +41,13 @@ function List({ passengers, limit }: { passengers: { id: number; firstName: stri
       ) : (
         <>
           <p className="mt-3 text-sm text-muted">{passengers.length} of {limit} places used.</p>
-          <ul className="mt-2 max-w-md divide-y divide-sand border border-sand bg-white">
+          <ul className="mt-2 max-w-md divide-y divide-line border border-line bg-white">
             {passengers.map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2">
                 <span>{p.firstName} {p.lastName}</span>
                 <form action={deleteSavedPassenger}>
                   <input type="hidden" name="id" value={p.id} />
-                  <button type="submit" aria-label={`Remove ${p.firstName} ${p.lastName}`} className="rounded-md border border-sand px-3 py-1 text-sm hover:bg-sand-soft">
+                  <button type="submit" aria-label={`Remove ${p.firstName} ${p.lastName}`} className="rounded-md border border-line px-3 py-1 text-sm hover:bg-wash">
                     Remove
                   </button>
                 </form>
@@ -68,7 +68,7 @@ function List({ passengers, limit }: { passengers: { id: number; firstName: stri
             Last name
             <input name="lastName" required maxLength={50} autoComplete="off" className={field} />
           </label>
-          <button type="submit" className="rounded-md border border-copper px-5 py-2 font-semibold text-copper hover:bg-white sm:col-span-2 sm:justify-self-start">
+          <button type="submit" className="rounded-full border border-accent px-5 py-2 font-semibold text-accent hover:bg-white sm:col-span-2 sm:justify-self-start">
             Save passenger
           </button>
         </form>

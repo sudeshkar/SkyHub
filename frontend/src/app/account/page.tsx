@@ -61,7 +61,7 @@ async function AccountContent({ searchParams }: { searchParams: AccountSearchPar
           Signed in as <strong className="text-text">{account.kind === "account" ? account.email : session.email}</strong>
         </p>
         <form action={signOut}>
-          <button type="submit" className="rounded-md border border-sand px-4 py-2 text-sm hover:bg-white">
+          <button type="submit" className="rounded-full border border-line px-4 py-2 text-sm hover:bg-white">
             Sign out
           </button>
         </form>
