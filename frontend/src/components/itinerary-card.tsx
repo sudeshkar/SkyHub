@@ -39,7 +39,7 @@ export function ItineraryCard({ itinerary, bookHref }: { itinerary: Itinerary; b
   const via = itinerary.connections.map((connection) => connection.arrivalAirport).join(", ");
 
   return (
-    <article className="border-b border-sand py-6 first:pt-0">
+    <article className="border-b border-line py-6 first:pt-0">
       <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr_auto_auto] sm:gap-x-6">
         <div>
           <p className="font-mono text-2xl font-medium">{localTime(first.departureTime, origin.timeZone)}</p>
@@ -60,7 +60,7 @@ export function ItineraryCard({ itinerary, bookHref }: { itinerary: Itinerary; b
           <p className="font-mono text-2xl font-medium">
             {localTime(last.arrivalTime, destination.timeZone)}
             {offset > 0 && (
-              <sup className="ms-0.5 text-xs text-copper" aria-label={`plus ${offset} day`}>
+              <sup className="ms-0.5 text-xs text-accent" aria-label={`plus ${offset} day`}>
                 +{offset}
               </sup>
             )}
@@ -70,7 +70,7 @@ export function ItineraryCard({ itinerary, bookHref }: { itinerary: Itinerary; b
           </p>
         </div>
 
-        <p className="col-span-3 mt-2 text-right sm:col-span-1 sm:mt-0 sm:border-s sm:border-sand sm:ps-6">
+        <p className="col-span-3 mt-2 text-right sm:col-span-1 sm:mt-0 sm:border-s sm:border-line sm:ps-6">
           <span className="block text-xs text-muted">from</span>
           <span className="text-xl font-semibold">{formatMoney(itinerary.fareFrom, itinerary.currency)}</span>
           <span className="block text-xs text-muted">per person</span>
@@ -78,7 +78,7 @@ export function ItineraryCard({ itinerary, bookHref }: { itinerary: Itinerary; b
             <Link
               href={bookHref}
               aria-label={`Select ${itinerary.legs.map((leg) => leg.flightNumber).join(" and ")}`}
-              className="mt-2 inline-block rounded-md bg-copper px-5 py-2 text-sm font-semibold text-white hover:bg-copper-strong"
+              className="mt-2 inline-block btn-primary px-5 py-2 text-sm font-semibold text-white"
             >
               Select
             </Link>
@@ -101,7 +101,7 @@ export function ItineraryCard({ itinerary, bookHref }: { itinerary: Itinerary; b
         </p>
       )}
       <details className="mt-3 text-sm">
-        <summary className="cursor-pointer text-copper hover:text-copper-strong">Flight details</summary>
+        <summary className="cursor-pointer text-accent hover:text-accent-strong">Flight details</summary>
         <ol className="mt-3 space-y-3">
           {itinerary.legs.map((leg, index) => {
             const from = airport(leg.origin);

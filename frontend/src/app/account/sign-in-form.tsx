@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { signIn, type SignInState } from "./actions";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 export function SignInForm() {
   const [state, action, pending] = useActionState<SignInState, FormData>(signIn, { status: "idle" });
@@ -27,7 +27,7 @@ export function SignInForm() {
         Password
         <input name="password" type="password" required maxLength={200} autoComplete="current-password" className={field} />
       </label>
-      <button type="submit" disabled={pending} className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60">
+      <button type="submit" disabled={pending} className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60">
         {pending ? "Signing in…" : "Sign in"}
       </button>
       {state.status === "error" && (

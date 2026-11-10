@@ -3,7 +3,7 @@ import { AIRPORTS } from "@/lib/airports";
 import { MAX_PASSENGERS } from "@/lib/booking-params";
 
 const fieldClass =
-  "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5 text-base text-text focus:border-copper";
+  "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5 text-base text-text focus:border-accent";
 
 function AirportSelect({ name, label }: { name: string; label: string }) {
   return (
@@ -44,7 +44,7 @@ export function SearchForm() {
       </label>
       <button
         type="submit"
-        className="h-[46px] rounded-md bg-copper px-6 font-semibold text-white hover:bg-copper-strong"
+        className="h-[46px] btn-primary px-6 font-semibold text-white"
       >
         Search flights
       </button>

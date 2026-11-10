@@ -95,11 +95,11 @@ export function CameraScanner(props: Props) {
         </p>
       ) : (
         <>
-          <video ref={video} aria-label="Camera view" muted playsInline className="aspect-[4/3] w-full rounded-md border border-sand bg-black object-cover" />
+          <video ref={video} aria-label="Camera view" muted playsInline className="aspect-[4/3] w-full rounded-md border border-line bg-black object-cover" />
           <p className="text-sm text-muted">Point the camera at the QR code on the boarding pass.</p>
         </>
       )}
-      <button type="button" onClick={props.onClose} className="rounded-md border border-sand px-4 py-2 text-sm hover:bg-sand-soft">
+      <button type="button" onClick={props.onClose} className="rounded-full border border-line px-4 py-2 text-sm hover:bg-wash">
         {failure ? "Close" : "Stop camera"}
       </button>
     </div>

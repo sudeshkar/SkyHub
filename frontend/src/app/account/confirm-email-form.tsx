@@ -13,7 +13,7 @@ export function ConfirmEmailForm({ token }: { token: string }) {
 
   if (state.status === "done") {
     return (
-      <section role="status" className="max-w-md border-l-4 border-copper bg-white px-4 py-3">
+      <section role="status" className="max-w-md border-l-4 border-accent bg-white px-4 py-3">
         <p className="font-semibold">Your new email address is saved.</p>
         <p className="mt-2 text-sm">
           For your safety you have been signed out everywhere. <Link href="/account" className="underline">Sign in</Link> again with the
@@ -32,7 +32,7 @@ export function ConfirmEmailForm({ token }: { token: string }) {
         this one, will end, and you will sign in again with the new address. The account will then list the bookings made with it
         instead of bookings made with the old address (those can still be opened with their reference and last name).
       </p>
-      <button type="submit" disabled={pending} className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60">
+      <button type="submit" disabled={pending} className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60">
         {pending ? "Confirming…" : "Confirm the change"}
       </button>
       {state.status === "link-invalid" && (

@@ -39,7 +39,7 @@ async function Results({ searchParams }: Pick<PageProps<"/search">, "searchParam
 
   return (
     <>
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-sand pb-6">
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-6">
         <div>
           <h1 className="font-display text-3xl">
             {airport(origin).city} to {airport(destination).city}
@@ -51,7 +51,7 @@ async function Results({ searchParams }: Pick<PageProps<"/search">, "searchParam
             · {formatSearchDate(date)}
           </p>
         </div>
-        <Link href="/" className="text-copper hover:text-copper-strong">
+        <Link href="/" className="text-accent hover:text-accent-strong">
           Change search
         </Link>
       </header>
@@ -92,16 +92,16 @@ async function Results({ searchParams }: Pick<PageProps<"/search">, "searchParam
 
 function Message({ title, body, retryHref }: { title: string; body: string; retryHref?: string }) {
   return (
-    <div className="rounded-lg border border-sand bg-white p-8">
+    <div className="rounded-lg border border-line bg-white p-8">
       <h2 className="text-xl font-semibold">{title}</h2>
       <p className="mt-2 text-muted">{body}</p>
       <div className="mt-6 flex gap-6">
         {retryHref && (
-          <Link href={retryHref} className="font-semibold text-copper hover:text-copper-strong">
+          <Link href={retryHref} className="font-semibold text-accent hover:text-accent-strong">
             Try again
           </Link>
         )}
-        <Link href="/" className="text-copper hover:text-copper-strong">
+        <Link href="/" className="text-accent hover:text-accent-strong">
           New search
         </Link>
       </div>
@@ -112,12 +112,12 @@ function Message({ title, body, retryHref }: { title: string; body: string; retr
 function ResultsSkeleton() {
   return (
     <div aria-busy="true" aria-label="Loading flights" className="animate-pulse space-y-8">
-      <div className="h-9 w-64 rounded bg-sand" />
+      <div className="h-9 w-64 rounded bg-line" />
       {[0, 1, 2].map((row) => (
-        <div key={row} className="flex items-center gap-6 border-b border-sand pb-6">
-          <div className="h-8 w-16 rounded bg-sand" />
-          <div className="h-2 flex-1 rounded-full bg-sand" />
-          <div className="h-8 w-16 rounded bg-sand" />
+        <div key={row} className="flex items-center gap-6 border-b border-line pb-6">
+          <div className="h-8 w-16 rounded bg-line" />
+          <div className="h-2 flex-1 rounded-full bg-line" />
+          <div className="h-8 w-16 rounded bg-line" />
         </div>
       ))}
     </div>

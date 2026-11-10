@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { lookupBooking, type LookupState } from "./actions";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 export function ManageForm({ notice }: { notice?: string }) {
   const [state, action, pending] = useActionState<LookupState, FormData>(lookupBooking, { status: "idle" });
@@ -35,7 +35,7 @@ export function ManageForm({ notice }: { notice?: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60"
+        className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60"
       >
         {pending ? "Finding…" : "Find booking"}
       </button>

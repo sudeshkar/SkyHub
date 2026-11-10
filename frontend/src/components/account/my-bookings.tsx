@@ -73,7 +73,7 @@ export function MyBookings({ bookings, nextCursor, firstPage, when = "all" }: {
     <>
       {filters}
       {upcoming && <p className="mt-2 text-sm text-muted">Soonest flight first.</p>}
-      <ul className="mt-3 divide-y divide-sand rounded-lg border border-sand bg-white">
+      <ul className="mt-3 divide-y divide-line rounded-lg border border-line bg-white">
         {bookings.map((booking) => (
           <li key={booking.locator} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <div>
@@ -90,7 +90,7 @@ export function MyBookings({ bookings, nextCursor, firstPage, when = "all" }: {
               <button
                 type="submit"
                 aria-label={`Open booking ${booking.locator}`}
-                className="rounded-md border border-sand px-4 py-2 text-sm hover:bg-sand/40"
+                className="rounded-full border border-line px-4 py-2 text-sm hover:bg-line/40"
               >
                 Open
               </button>

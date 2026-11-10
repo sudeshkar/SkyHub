@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { requestEmailChange, type ChangeEmailState } from "./email-actions";
 
-const field = "mt-1 block w-full rounded-md border border-sand bg-white px-3 py-2.5";
+const field = "mt-1 block w-full rounded-md border border-line bg-white px-3 py-2.5";
 
 /**
  * Asks to move the account to another address (ADR-0039). The password is asked for again, and a link goes to the new address;
@@ -15,7 +15,7 @@ export function ChangeEmailForm() {
 
   if (state.status === "sent") {
     return (
-      <section role="status" className="max-w-md border-l-4 border-copper bg-white px-4 py-3">
+      <section role="status" className="max-w-md border-l-4 border-accent bg-white px-4 py-3">
         <p className="font-semibold">Check the new inbox.</p>
         <p className="mt-1 text-sm text-muted">
           If {state.email} can be used, we have sent it a link. Open it while you are signed in to this account. The link works once
@@ -51,7 +51,7 @@ export function ChangeEmailForm() {
         Current password
         <input name="password" type="password" required maxLength={100} autoComplete="current-password" className={field} />
       </label>
-      <button type="submit" disabled={pending} className="rounded-md bg-copper px-6 py-3 font-semibold text-white hover:bg-copper-strong disabled:opacity-60">
+      <button type="submit" disabled={pending} className="btn-primary px-6 py-3 font-semibold text-white disabled:opacity-60">
         {pending ? "Sending…" : "Email me a link"}
       </button>
       {state.status === "error" && (
