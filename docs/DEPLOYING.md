@@ -1,4 +1,4 @@
-# Deploying SkyHub on a Hetzner server
+# Deploying SkyHub on a server (Hetzner or DigitalOcean)
 
 This puts the whole of SkyHub (website, three Java services, the AI agent, PostgreSQL, Redis, Kafka and the mail catcher) on **one Linux server** with HTTPS, at an address anyone can open. Why one server and not Vercel or Kubernetes is in [ADR-0085](adr/0085-one-server-with-caddy.md).
 
@@ -39,7 +39,29 @@ At <https://console.hetzner.cloud>: create a **Project** (for example `skyhub`),
 
 **Create & Buy**. After a minute it shows the server's **IPv4 address**, for example `203.0.113.5`. Hetzner bills by the hour, so deleting the server stops the cost.
 
-The Hetzner firewall sits in front of the server. The compose file does not rely on it: it publishes no port except Caddy's (Docker goes around a firewall *on* the server, such as ufw, which is why the ports are removed instead).
+### Or on DigitalOcean
+
+Students get $200 of credit for a year through the GitHub Student Developer Pack (sign up through the Pack's link, or the credit is not applied). The 8 GB size costs about $48 a month, so the credit covers about four months. At <https://cloud.digitalocean.com>:
+
+1. **Settings, Billing, Billing alerts**: set an alert at about $50, so a forgotten server cannot quietly use up the credit.
+2. **Create, Droplets**:
+
+   | Setting | Choose |
+   |---|---|
+   | Region | The one closest to your visitors: **Bangalore** (BLR1) for the Gulf and South Asia, or **Frankfurt** (FRA1) |
+   | Image | **OS, Ubuntu 24.04 (LTS) x64** |
+   | Size | **Basic, Regular**, **8 GB / 4 CPUs** (about $48 a month). 4 GB is not enough |
+   | Authentication | **SSH Key, New SSH Key**: paste the line from step 1, name it `my-pc` |
+   | Monitoring | Tick the free **metrics monitoring** (CPU, memory and disk graphs in the console) |
+   | Backups | Off for a demo |
+   | Hostname | `skyhub` |
+
+   **Create Droplet**. Its **ipv4** address appears in a minute. It stays the same for as long as the Droplet exists, even when it is switched off.
+3. **Networking, Firewalls, Create Firewall** named `skyhub-web`. Inbound: **SSH** (TCP 22), **HTTP** (TCP 80), **HTTPS** (TCP 443) and a **Custom** rule for **UDP 443**, all from all IPv4 and IPv6. Leave the outbound rules as they are. Under **Apply to Droplets** choose `skyhub`, then **Create Firewall**.
+
+You log in as `root`, as on Hetzner, so everything from step 3 on is the same. A switched-off Droplet is still billed: **Destroy** it to stop the cost.
+
+The cloud firewall sits in front of the server. The compose file does not rely on it: it publishes no port except Caddy's (Docker goes around a firewall *on* the server, such as ufw, which is why the ports are removed instead).
 
 ## 3. Give it a name
 
