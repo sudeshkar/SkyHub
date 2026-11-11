@@ -2,3 +2,5 @@
 *.cmd text eol=crlf
 *.Dockerfile text eol=lf
 .dockerignore text eol=lf
+deploy/*.sh text eol=lf
+deploy/Caddyfile text eol=lf

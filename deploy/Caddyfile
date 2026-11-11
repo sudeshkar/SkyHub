@@ -1,0 +1,10 @@
+# The one way in from the internet (ADR-0085). Caddy fetches and renews the HTTPS certificate for the domain by itself
+# and sends http:// visitors to https://.
+{$SKYHUB_DOMAIN} {
+	encode zstd gzip
+
+	# Browsers remember to use HTTPS only for a year; the other headers are the website's own.
+	header Strict-Transport-Security "max-age=31536000"
+
+	reverse_proxy website:3000
+}
