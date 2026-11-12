@@ -1,4 +1,4 @@
-# Deploying SkyHub on a server (Hetzner or DigitalOcean)
+# Deploying SkyHub on a server (Hetzner, DigitalOcean or AWS)
 
 This puts the whole of SkyHub (website, three Java services, the AI agent, PostgreSQL, Redis, Kafka and the mail catcher) on **one Linux server** with HTTPS, at an address anyone can open. Why one server and not Vercel or Kubernetes is in [ADR-0085](adr/0085-one-server-with-caddy.md).
 
@@ -41,7 +41,7 @@ At <https://console.hetzner.cloud>: create a **Project** (for example `skyhub`),
 
 ### Or on DigitalOcean
 
-Students get $200 of credit for a year through the GitHub Student Developer Pack (sign up through the Pack's link, or the credit is not applied). The 8 GB size costs about $48 a month, so the credit covers about four months. At <https://cloud.digitalocean.com>:
+The 8 GB size costs about $48 a month. The GitHub Student Developer Pack has offered DigitalOcean credit in the past, but not always: check the Pack before counting on it. At <https://cloud.digitalocean.com>:
 
 1. **Settings, Billing, Billing alerts**: set an alert at about $50, so a forgotten server cannot quietly use up the credit.
 2. **Create, Droplets**:
@@ -60,6 +60,47 @@ Students get $200 of credit for a year through the GitHub Student Developer Pack
 3. **Networking, Firewalls, Create Firewall** named `skyhub-web`. Inbound: **SSH** (TCP 22), **HTTP** (TCP 80), **HTTPS** (TCP 443) and a **Custom** rule for **UDP 443**, all from all IPv4 and IPv6. Leave the outbound rules as they are. Under **Apply to Droplets** choose `skyhub`, then **Create Firewall**.
 
 You log in as `root`, as on Hetzner, so everything from step 3 on is the same. A switched-off Droplet is still billed: **Destroy** it to stop the cost.
+
+### Or on AWS (EC2)
+
+A new AWS account comes with free credits (about $100 at sign-up and more for finishing the starter tasks; check the sign-up page for the current amounts). An 8 GB `t3.large` with its disk and address costs about $65-75 a month, so the credits cover two to three months. At <https://console.aws.amazon.com>:
+
+1. **Protect the account first.** Account name (top right), **Security credentials**, **Assign MFA device**, with an authenticator app.
+2. **Budgets, Create budget, Monthly cost budget**: $20 with your email. AWS does not stop spending on its own.
+3. **Pick the region** in the menu at the top right, for example **Middle East (UAE) `me-central-1`** or **Europe (Frankfurt)**. Every later step happens in that region; if the server seems to have vanished, check this menu first.
+4. **EC2, Launch instance**:
+
+   | Setting | Choose |
+   |---|---|
+   | Name | `skyhub` |
+   | Image | **Ubuntu Server 24.04 LTS**, **64-bit (x86)** |
+   | Instance type | **t3.large** (2 vCPU, 8 GiB). Not micro or small. If a Free plan account refuses it, upgrade to the Paid plan: the credits still pay first, but the card is charged once they are gone |
+   | Key pair | **Create new key pair**: `skyhub-key`, **ED25519**, **.pem**. The file downloads once; keep it |
+   | Network settings, **Edit** | Auto-assign public IP **on**; **Create security group** `skyhub-web` with inbound **SSH 22 from My IP**, **HTTP 80** and **HTTPS 443** from anywhere, and **Custom UDP 443** from anywhere |
+   | Storage | **30 GiB gp3** (the default 8 is too small for the images) |
+
+   **Launch instance**, then wait for **Running** and **2/2 checks passed**.
+5. **EC2, Elastic IPs, Allocate**, then **Actions, Associate** it with `skyhub`. Without it the address changes every time the server is stopped and started. Use this address from now on.
+6. Log in from PowerShell (Windows refuses a key that others can read, hence `icacls`):
+   ```powershell
+   Move-Item $HOME\Downloads\skyhub-key.pem $HOME\.ssh\
+   icacls $HOME\.ssh\skyhub-key.pem /inheritance:r /grant:r "$($env:USERNAME):R"
+   ssh -i $HOME\.ssh\skyhub-key.pem ubuntu@YOUR_ELASTIC_IP
+   ```
+
+**What differs from the rest of this guide on AWS:**
+
+- You log in as **`ubuntu`**, not `root`, so step 4 needs `sudo`:
+  ```bash
+  sudo apt update && sudo apt -y upgrade
+  curl -fsSL https://get.docker.com | sudo sh
+  sudo usermod -aG docker ubuntu          # docker without sudo; log out and in again for it to apply
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  ```
+- Every `ssh` and `scp` command takes the key: `ssh -i $HOME\.ssh\skyhub-key.pem ubuntu@IP`, and the `.env` lives in `/home/ubuntu/SkyHub`.
+- If SSH suddenly times out, your home IP has changed: set the SSH rule of `skyhub-web` to **My IP** again.
+- **Stop** the instance and compute billing stops, but the disk and the Elastic IP are still charged. To stop everything: **Terminate** the instance, then **Release** the Elastic IP. Do it before the credits run out.
 
 The cloud firewall sits in front of the server. The compose file does not rely on it: it publishes no port except Caddy's (Docker goes around a firewall *on* the server, such as ufw, which is why the ports are removed instead).
 

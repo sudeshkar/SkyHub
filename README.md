@@ -179,7 +179,7 @@ The website is at <http://localhost:3000>; emails are caught by Mailpit at <http
 
 ### On a server, with HTTPS (ADR-0085)
 
-A third file, `docker-compose.prod.yml`, puts the same stack on one public Linux server: Caddy is the only thing reachable from the internet (80 and 443, with a certificate it fetches by itself), nothing else is published, and the database password comes from `.env`. Three scripts in `deploy/` write the keys, run compose with the three files and create the agent's account. [`docs/DEPLOYING.md`](docs/DEPLOYING.md) walks through it on a new Hetzner or DigitalOcean server, step by step.
+A third file, `docker-compose.prod.yml`, puts the same stack on one public Linux server: Caddy is the only thing reachable from the internet (80 and 443, with a certificate it fetches by itself), nothing else is published, and the database password comes from `.env`. Three scripts in `deploy/` write the keys, run compose with the three files and create the agent's account. [`docs/DEPLOYING.md`](docs/DEPLOYING.md) walks through it on a new Hetzner, DigitalOcean or AWS server, step by step.
 
 ## Tests
 
