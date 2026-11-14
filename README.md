@@ -177,6 +177,10 @@ docker compose -f docker-compose.yml -f docker-compose.app.yml up -d --build
 
 The website is at <http://localhost:3000>; emails are caught by Mailpit at <http://localhost:8025>. Only the website is published: the services are reachable from each other, not from outside. Compose stops with a message naming any key that is missing. The first start builds five images and takes several minutes. The infrastructure alone (`docker compose up -d`) is unchanged and asks for none of these keys.
 
+### On a server, with HTTPS (ADR-0085)
+
+A third file, `docker-compose.prod.yml`, puts the same stack on one public Linux server: Caddy is the only thing reachable from the internet (80 and 443, with a certificate it fetches by itself), nothing else is published, and the database password comes from `.env`. Three scripts in `deploy/` write the keys, run compose with the three files and create the agent's account. [`docs/DEPLOYING.md`](docs/DEPLOYING.md) walks through it on a new Hetzner, DigitalOcean or AWS server, step by step.
+
 ## Tests
 
 ```bash

@@ -1,0 +1,82 @@
+# The whole stack on one public server (ADR-0085), added on top of the other two files:
+#   docker compose -f docker-compose.yml -f docker-compose.app.yml -f docker-compose.prod.yml up -d --build
+# docs/DEPLOYING.md walks through it on a new Hetzner server.
+#
+# What it changes for a machine on the internet:
+# - Caddy is the only thing listening on the internet (80 and 443) and gets the HTTPS certificate by itself.
+# - Nothing else is published. Docker writes its own firewall rules and goes around ufw, so a published database port
+#   would be open to the world even with the firewall on: here the ports are removed, not just firewalled.
+# - The mail inbox is published on the server's loopback only, to be opened through an SSH tunnel.
+# - The database password comes from .env instead of the development one.
+# - The Java services and Kafka get a memory ceiling, and everything restarts by itself after a reboot.
+
+x-always: &always
+  restart: unless-stopped
+
+services:
+  caddy:
+    <<: *always
+    image: caddy:2.10.2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      # The address the site answers on: a domain pointed at this server, or <ip-with-dashes>.sslip.io.
+      SKYHUB_DOMAIN: ${SKYHUB_DOMAIN:?set it in .env (for example skyhub.example.com)}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # the certificate and its key: keep it, or every restart asks Let's Encrypt for a new one
+      - caddy-config:/config
+    depends_on:
+      website: {condition: service_healthy}
+
+  website:
+    ports: !reset []
+    environment:
+      # Every visitor now arrives from Caddy, so without this they would all share one rate-limit bucket. Caddy replaces any
+      # X-Forwarded-For a visitor sends with the address it really saw, so the header can be trusted here and only here.
+      SKYHUB_TRUST_PROXY: "true"
+
+  postgres:
+    <<: *always
+    ports: !reset []
+    environment:
+      # Read only when the database is first created: changing it later means changing it inside Postgres too.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in .env (openssl rand -base64 24)}
+
+  redis:
+    <<: *always
+    ports: !reset []
+
+  kafka:
+    <<: *always
+    ports: !reset []
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms384m -Xmx384m"
+    mem_limit: 768m
+
+  mailpit:
+    <<: *always
+    ports: !override
+      - "127.0.0.1:8025:8025" # the inbox: ssh -L 8025:localhost:8025 root@SERVER, then http://localhost:8025
+
+  flight-search:
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set it in .env}
+    mem_limit: 768m
+
+  booking:
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set it in .env}
+    mem_limit: 768m
+
+  notification:
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set it in .env}
+      SKYHUB_SITE_URL: ${SKYHUB_SITE_URL:?set it in .env (https://your-domain, where emailed links lead)}
+    mem_limit: 512m
+
+volumes:
+  caddy-data:
+  caddy-config:
