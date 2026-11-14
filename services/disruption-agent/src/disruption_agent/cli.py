@@ -11,6 +11,7 @@ from datetime import date
 from mcp import Client, StdioServerParameters
 
 from .agent import DisruptionAgent
+from .strategies import ByGroup
 from .apply import Applier, ConsoleApprover, summary
 from .config import Settings
 from .llm import GroqChatModel
@@ -26,7 +27,7 @@ async def propose(flight_number: str, day: date, settings: Settings, api_key: st
                                    env={**os.environ, "PYTHONUTF8": "1"})
     async with unwrapped(), Client(server) as client:
         model = GroqChatModel(Groq(api_key=api_key), settings.groq_model)
-        return await DisruptionAgent(model, McpToolBox(client)).run(flight_number, day)
+        return await DisruptionAgent(model, McpToolBox(client), strategy=ByGroup()).run(flight_number, day)   # ADR-0089
 
 
 def main(argv: list[str] | None = None) -> int:

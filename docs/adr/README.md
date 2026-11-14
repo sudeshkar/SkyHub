@@ -92,3 +92,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0086](0086-designed-emails.md) | Designed emails with the SkyHub look | Accepted |
 | [0087](0087-e-ticket-receipt.md) | The confirmation as an e-ticket receipt, with a PDF | Accepted |
 | [0088](0088-rebooked-email-as-an-itinerary.md) | The "your booking has moved" email as an itinerary card | Accepted |
+| [0089](0089-rebooking-by-group.md) | The model chooses flights per group, and code fills them (families first) | Accepted |
