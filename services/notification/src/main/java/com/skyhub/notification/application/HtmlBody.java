@@ -12,7 +12,8 @@ import java.util.regex.Pattern;
  * the shapes the plain text already has become layout:
  * <ul>
  *   <li>a paragraph whose every line is {@code Label: value} becomes a table of facts;</li>
- *   <li>indented lines, under an optional {@code Heading:} line, become a card with one row per line;</li>
+ *   <li>indented lines, under an optional {@code Heading:} line, become a card with one row per line, and a row that is a route
+ *   ({@code CMB 07:30 → DXB 10:50}) is drawn large, airport to airport (ADR-0087);</li>
  *   <li>a paragraph that is only a web address becomes a button, with the address shown under it to copy;</li>
  *   <li>anything else is a paragraph that flows (the text's line breaks only wrap it), with its web addresses as links.</li>
  * </ul>
@@ -41,6 +42,9 @@ public final class HtmlBody {
     private static final String TRAILING_PUNCTUATION = ".,;:!?)";
     /** "Booking reference: ABC234". A short label of words, so a sentence that happens to hold a colon stays a sentence. */
     private static final Pattern FACT = Pattern.compile("([A-Z][A-Za-z -]{0,29}): (\\S.*)");
+    /** "CMB 07:30 → DXB 10:50 (+1)": codes and local times; the landing time, and its later day, only when known (ADR-0087). */
+    private static final Pattern ROUTE =
+            Pattern.compile("([A-Z]{3}) (\\d{2}:\\d{2}) → ([A-Z]{3})(?: (\\d{2}:\\d{2}(?: \\(\\+\\d+\\))?))?");
     private static final Pattern PARAGRAPH_BREAK = Pattern.compile("\\R[ \\t]*\\R");
     private static final int PREVIEW_LENGTH = 140;
 
@@ -134,10 +138,28 @@ public final class HtmlBody {
                 .append(CARD).append(";border:1px solid ").append(LINE).append(";border-radius:10px;border-collapse:separate;\">\n");
         for (int i = from; i < lines.length; i++) {
             String border = i == lines.length - 1 ? "" : "border-bottom:1px solid " + LINE + ";";
+            Matcher route = ROUTE.matcher(lines[i].strip());
+            if (route.matches()) {
+                out.append("<tr><td style=\"padding:16px;").append(border).append("\">").append(route(route)).append("</td></tr>\n");
+                continue;
+            }
             out.append("<tr><td style=\"padding:12px 16px;").append(border).append("color:").append(INK).append(";\">")
                     .append(linkify(escape(lines[i].strip()))).append("</td></tr>\n");
         }
         return out.append("</table>\n").toString();
+    }
+
+    /** Airport to airport, large. The pattern lets through only codes, times and "(+1)", and each part is escaped anyway. */
+    private static String route(Matcher route) {
+        String arrives = route.group(4) == null ? "&nbsp;" : escape(route.group(4));
+        String code = "font-size:28px;line-height:1.1;font-weight:800;letter-spacing:.02em;color:" + INK + ";";
+        String time = "font-size:15px;font-weight:600;color:" + MUTED + ";";
+        return "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>"
+                + "<td width=\"40%\" style=\"vertical-align:top;\"><div style=\"" + code + "\">" + escape(route.group(1)) + "</div>"
+                + "<div style=\"" + time + "\">" + escape(route.group(2)) + "</div></td>"
+                + "<td width=\"20%\" align=\"center\" style=\"vertical-align:middle;color:" + ACCENT + ";font-size:22px;\">&#9992;</td>"
+                + "<td width=\"40%\" align=\"right\" style=\"vertical-align:top;\"><div style=\"" + code + "\">" + escape(route.group(3))
+                + "</div><div style=\"" + time + "\">" + arrives + "</div></td></tr></table>";
     }
 
     private static String button(String address) {

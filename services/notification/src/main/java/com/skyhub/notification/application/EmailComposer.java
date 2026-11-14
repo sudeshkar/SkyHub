@@ -29,6 +29,20 @@ public final class EmailComposer {
     }
 
     public static EmailMessage bookingConfirmed(BookingConfirmedEvent event) {
+        return bookingConfirmed(event, false);
+    }
+
+    /**
+     * The confirmation. An event that carries routes, times and seats becomes an itinerary (ADR-0087): a card per flight, headed with
+     * its flight number and date, with the route in local time, the airports, and each passenger's seat. {@code ticketAttached} says
+     * whether the e-ticket PDF goes with it. An older event gets the confirmation as it was.
+     */
+    public static EmailMessage bookingConfirmed(BookingConfirmedEvent event, boolean ticketAttached) {
+        String subject = "Your SkyHub booking " + event.locator() + " is confirmed";
+        java.util.Optional<Itinerary> itinerary = Itinerary.of(event);
+        if (itinerary.isPresent()) {
+            return new EmailMessage(event.contactEmail(), subject, itineraryBody(itinerary.get(), ticketAttached));
+        }
         String flights = event.segments().stream()
                 .map(s -> "  " + s.flightNumber() + " on " + s.departureDate())
                 .collect(Collectors.joining("\n"));
@@ -51,7 +65,34 @@ public final class EmailComposer {
                 To see or change your booking, open Manage booking on SkyHub and enter this reference
                 with the last name of any passenger. You can check in online from 24 hours before departure.
                 """.formatted(event.locator(), flights, passengers, event.totalAmount().toPlainString(), event.currency());
-        return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " is confirmed", body);
+        return new EmailMessage(event.contactEmail(), subject, body);
+    }
+
+    private static String itineraryBody(Itinerary trip, boolean ticketAttached) {
+        StringBuilder flights = new StringBuilder();
+        for (Itinerary.Leg leg : trip.legs()) {
+            flights.append(leg.heading()).append(":\n")
+                    .append("  ").append(leg.route()).append('\n')
+                    .append("  ").append(leg.airports()).append('\n');
+            for (Itinerary.Seat seat : leg.seats()) {
+                flights.append("  ").append(seat.name()).append(": seat ").append(seat.seat()).append('\n');
+            }
+            flights.append('\n');
+        }
+        String ticket = ticketAttached
+                ? "Times are local at each airport. Your e-ticket is attached as a PDF, to keep or print."
+                : "Times are local at each airport.";
+        return """
+                Your booking is confirmed. Have a good trip.
+
+                Booking reference: %s
+                Total paid: %s
+
+                %s%s
+
+                To see or change your booking, open Manage booking on SkyHub and enter this reference
+                with the last name of any passenger. You can check in online from 24 hours before departure.
+                """.formatted(trip.locator(), trip.total(), flights, ticket);
     }
 
     public static EmailMessage bookingCancelled(BookingCancelledEvent event) {

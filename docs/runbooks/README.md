@@ -103,6 +103,12 @@ One section per alert in `observability/prometheus/alerts.yml`. Each says what t
 **Confirm:** `skyhub_notification_attachments_total` by `outcome` (`dropped` per email, `attached` per pass). Loki `{service="notification"} |= "Boarding passes not attached"` carries the `event.id`, `pnr.locator` and the kind of failure (`failure`), never the pass or the address. An `InvalidEventException` means a sealed pass would not open.
 **Mitigate:** the usual cause is that `SKYHUB_LINK_TOKEN_KEY` is not the same on the booking and notification services (the same key seals sign-up and reset links, ADR-0046, and passes): set the same value on both and restart. Emails already sent without passes are not resent; the travellers use Manage booking. Another cause is the notification service unable to draw a picture (`IllegalStateException`): check the runtime has the image libraries.
 
+## NotificationETicketsDropped
+
+**Means:** a booking confirmation was sent **without** its e-ticket PDF (ADR-0087), because the PDF could not be drawn. The traveller has the confirmation, with the whole itinerary in the email, and the booking is in Manage booking, so nothing is lost; only the file to keep or print is missing.
+**Confirm:** `skyhub_notification_etickets_total` by `outcome` (`attached`, `dropped`). Loki `{service="notification"} |= "E-ticket not attached"` carries the `event.id`, `pnr.locator` and the kind of failure (`failure`), never a name or address.
+**Mitigate:** it is a fault in drawing the PDF, not in the data: an `UncheckedIOException` usually means the logo is missing from the image (`email/skyhub-logo.png` on the classpath). Fix and redeploy. Confirmations already sent are not resent; the travellers have the itinerary in the email.
+
 ## NotificationDeadLettered
 
 **Means:** the notification service could not handle a message after all its retries (five attempts over about 22 minutes, on retry topics, ADR-0066) and it was copied to the dead-letter topic `skyhub.booking.events.DLT` (ADR-0019). Usually the mail provider was down for longer than the retries, or a message is malformed. The traveller did not get that email.

@@ -42,20 +42,23 @@ public class NotificationService {
     private final NotificationMetrics metrics;
     private final SecretOpener tokens;
     private final PassImages images;
+    private final ETickets tickets;
     private final String siteUrl;
 
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
                                TransactionOperations transactions, NotificationMetrics metrics, SecretOpener tokens,
-                               PassImages images) {
-        this(sent, email, clock, transactions, metrics, tokens, images, "http://localhost:3000");
+                               PassImages images, ETickets tickets) {
+        this(sent, email, clock, transactions, metrics, tokens, images, tickets, "http://localhost:3000");
     }
 
     @Autowired
     public NotificationService(SentNotificationRepository sent, EmailSender email, Clock clock,
                                TransactionOperations transactions, NotificationMetrics metrics, SecretOpener tokens,
-                               PassImages images, @Value("${skyhub.notifications.site-url:http://localhost:3000}") String siteUrl) {
+                               PassImages images, ETickets tickets,
+                               @Value("${skyhub.notifications.site-url:http://localhost:3000}") String siteUrl) {
         this.tokens = tokens;
         this.images = images;
+        this.tickets = tickets;
         this.siteUrl = siteUrl;
         this.sent = sent;
         this.email = email;
@@ -65,7 +68,26 @@ public class NotificationService {
     }
 
     public void bookingConfirmed(BookingConfirmedEvent event) {
-        deliver(event, EmailComposer.bookingConfirmed(event));
+        List<EmailMessage.Attachment> ticket = Itinerary.of(event).map(trip -> eTicket(event, trip)).orElse(List.of());
+        deliver(event, EmailComposer.bookingConfirmed(event, !ticket.isEmpty()).withAttachments(ticket));
+    }
+
+    /**
+     * The e-ticket PDF (ADR-0087), or nothing: the confirmation is what matters, so a PDF that cannot be drawn sends the email without
+     * it, counts it, and says so in the log with no name or address in it.
+     */
+    private List<EmailMessage.Attachment> eTicket(BookingConfirmedEvent event, Itinerary trip) {
+        try {
+            byte[] pdf = tickets.pdf(trip);
+            metrics.eTickets("attached");
+            return List.of(new EmailMessage.Attachment("SkyHub-e-ticket-" + event.locator() + ".pdf", "application/pdf", pdf));
+        } catch (RuntimeException e) {
+            metrics.eTickets("dropped");
+            log.atWarn().addKeyValue("event.id", event.eventId()).addKeyValue("pnr.locator", event.locator())
+                    .addKeyValue("failure", e.getClass().getSimpleName())
+                    .log("E-ticket not attached; the confirmation is sent without it");
+            return List.of();
+        }
     }
 
     public void bookingCancelled(BookingCancelledEvent event) {

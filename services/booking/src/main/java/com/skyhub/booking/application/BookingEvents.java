@@ -14,7 +14,11 @@ import java.util.Optional;
  */
 public interface BookingEvents {
 
-    void bookingConfirmed(Pnr pnr, Money total);
+    /**
+     * @param flights what the flight catalog said about each flight of the booking when it was priced, in segment order: the
+     *                confirmation describes exactly the trip that was charged for (ADR-0087)
+     */
+    void bookingConfirmed(Pnr pnr, Money total, java.util.List<FlightInfo> flights);
 
     /**
      * The traveller cancelled. {@code decision} is what the fare rules say about the money (ADR-0016) and {@code paid}

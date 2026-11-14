@@ -145,4 +145,19 @@ class HtmlBodyTest {
 
         assertThat(html).containsPattern("<p[^>]*>You cancelled less than 24 hours");
     }
+    @Test
+    void should_draw_a_route_line_in_a_card_as_a_large_route_with_its_times() {
+        String html = html("SK002 · Fri 20 Nov 2026:\n  LHR 14:00 → DXB 00:50 (+1)\n  Priya Perera: seat 24A\n");
+
+        assertThat(html).containsPattern(">LHR</").containsPattern(">14:00<").containsPattern(">DXB</")
+                .containsPattern(">00:50 \\(\\+1\\)<").contains("Priya Perera: seat 24A")
+                .doesNotContainPattern("<td[^>]*>LHR 14:00 → DXB");   // drawn, not left as a plain row (the preview line keeps the text)
+    }
+
+    @Test
+    void should_draw_a_route_with_no_landing_time() {
+        String html = html("SK501:\n  CMB 07:30 → DXB\n");
+
+        assertThat(html).containsPattern(">CMB</").containsPattern(">07:30<").containsPattern(">DXB</");
+    }
 }

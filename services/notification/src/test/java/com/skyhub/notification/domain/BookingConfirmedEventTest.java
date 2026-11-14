@@ -24,11 +24,27 @@ class BookingConfirmedEventTest {
         assertThat(event.occurredAt()).isEqualTo(Instant.parse("2026-10-30T10:00:00Z"));
         assertThat(event.locator()).isEqualTo("ABC234");
         assertThat(event.contactEmail()).isEqualTo("priya@example.com");
-        assertThat(event.passengers()).containsExactly(new BookingConfirmedEvent.Passenger("Priya", "Perera"));
+        assertThat(event.passengers()).containsExactly(new BookingConfirmedEvent.Passenger("Priya", "Perera", java.util.List.of("11D")));
         assertThat(event.segments()).containsExactly(
-                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)));
+                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2), "CMB", "DXB",
+                        Instant.parse("2026-11-02T02:00:00Z"), Instant.parse("2026-11-02T06:50:00Z")));
         assertThat(event.totalAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
         assertThat(event.currency()).isEqualTo("USD");
+    }
+
+    @Test
+    void should_still_read_an_event_from_before_the_itinerary_with_no_route_times_or_seats() throws Exception {
+        String old = """
+                {"eventId":"0b8f6f5e-3c47-4a58-9d0e-6a4f7e2f1c11","type":"booking.confirmed","version":1,
+                 "occurredAt":"2026-10-30T10:00:00Z","locator":"ABC234","contactEmail":"priya@example.com",
+                 "passengers":[{"firstName":"Priya","lastName":"Perera"}],
+                 "segments":[{"flightNumber":"SK501","departureDate":"2026-11-02"}],"totalAmount":100.00,"currency":"USD"}
+                """;
+
+        BookingConfirmedEvent event = EventParser.parse(old, BookingConfirmedEvent.class);
+
+        assertThat(event.segments()).containsExactly(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)));
+        assertThat(event.passengers().getFirst().seats()).isEmpty();
     }
 
     @Test

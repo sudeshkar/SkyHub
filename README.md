@@ -13,7 +13,7 @@ SkyHub is a **portfolio project, not a real airline**. It is built the way a pro
 |---|---|
 | **Search** | Find flights between hubs and destinations, including connections that change airports between DXB and DWC. |
 | **Choose seats** | A live seat map. Chosen seats are **held for 10 minutes** while you fill in passenger details, with a countdown. |
-| **Book and pay** | One booking covers every flight of the trip. The server works out the price and charges it (demo payment methods, no real card); if booking then fails the charge is refunded. Repeating a request (double-click, retry) never books or charges twice. |
+| **Book and pay** | One booking covers every flight of the trip. The server works out the price and charges it (demo payment methods, no real card); if booking then fails the charge is refunded. Repeating a request (double-click, retry) never books or charges twice. The confirmation email is an itinerary in local times, with the e-ticket attached as a PDF. |
 | **Manage** | Look up a booking with its reference and a passenger's last name, then change seats or cancel. |
 | **Check in** | Opens 24 hours before departure. Gives each passenger a boarding pass with a signed barcode. |
 
@@ -41,9 +41,13 @@ Taken from a local run (`docs/images/`). The look and the reasons behind it are 
 |---|---|
 | ![The operations dashboard: tool cards grouped into Disruptions and Boarding](docs/images/ops-dashboard.jpg) | ![Who has boarded for one flight: checked in, boarded and waiting as tiles with a progress bar](docs/images/ops-tool.jpg) |
 
-| Operations: approving the agent's proposals | The confirmation email, caught by Mailpit |
+| The confirmation email, caught by Mailpit | The e-ticket PDF attached to it |
 |---|---|
-| ![Move affected bookings: the groq planner proposes moving three bookings to the next day's flight, each with its reason and a checkbox](docs/images/approval-screen.jpg) | ![The booking-confirmed email in Mailpit](docs/images/email.png) |
+| ![The booking-confirmed email in Mailpit: the SkyHub header, the reference and total, and a card per flight with the route drawn large, local times, airports and seats](docs/images/email.jpg) | ![The e-ticket: an A4 itinerary receipt with the booking reference, passengers, and each flight's route, local times, airports and seats](docs/images/e-ticket.jpg) |
+
+| Operations: approving the agent's proposals | |
+|---|---|
+| ![Move affected bookings: the groq planner proposes moving three bookings to the next day's flight, each with its reason and a checkbox](docs/images/approval-screen.jpg) | |
 
 | Grafana: *SkyHub overview*, the services | Grafana: *SkyHub overview*, the journey |
 |---|---|

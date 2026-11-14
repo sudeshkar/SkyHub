@@ -41,6 +41,14 @@ public class NotificationMetrics {
         registry.counter("skyhub.notification.attachments", "outcome", outcome).increment(count);
     }
 
+    /**
+     * E-tickets attached to a booking confirmation (ADR-0087): {@code attached} for each one sent, {@code dropped} for each confirmation
+     * that went without it because the PDF could not be drawn. A person has to look at dropped ones.
+     */
+    public void eTickets(String outcome) {
+        registry.counter("skyhub.notification.etickets", "outcome", outcome).increment();
+    }
+
     public void record(String type, Outcome outcome) {
         registry.counter("skyhub.notifications", "type", type, "outcome", outcome.name().toLowerCase(java.util.Locale.ROOT))
                 .increment();

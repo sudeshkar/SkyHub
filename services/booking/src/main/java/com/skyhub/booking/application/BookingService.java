@@ -126,13 +126,14 @@ public class BookingService {
         // Outside the booking transaction on purpose: see SeatInventoryInitializer.
         command.segments().forEach(s -> inventory.ensureInventory(s.flightNumber(), s.departureDate()));
         // The price is the server's, never the request's (ADR-0015).
-        Money price = pricing.quote(command.segments(), command.passengers().size());
+        PricingService.PricedTrip trip = pricing.price(command.segments(), command.passengers().size());
+        Money price = trip.total();
         requireExpectedPrice(command, price);
         // Outside the booking transaction: this is a network call. The key is derived from the Idempotency-Key, so a
         // retry after a crash between "charged" and "booked" finds this charge instead of making another.
         PaymentGateway.Charge charge = charge(command.paymentToken(), price, "booking-" + keyHash);
         try {
-            return transactions.execute(status -> book(command, contactEmail, keyHash, fingerprint, charge));
+            return transactions.execute(status -> book(command, contactEmail, keyHash, fingerprint, charge, trip.flights()));
         } catch (RuntimeException failed) {
             refund(charge, failed); // paid but not booked: give the money back, then report the real failure
             throw failed;
@@ -186,7 +187,7 @@ public class BookingService {
     }
 
     private BookingResult book(CreatePnrCommand command, ContactEmail contactEmail, String keyHash,
-                               String fingerprint, PaymentGateway.Charge charge) {
+                               String fingerprint, PaymentGateway.Charge charge, List<FlightInfo> flights) {
         String locator = locators.next();
         List<PnrSegment> segments = command.segments();
         for (int i = 0; i < segments.size(); i++) {
@@ -216,7 +217,7 @@ public class BookingService {
         Pnr saved = pnrs.saveAndFlush(pnr);
         payments.saveAndFlush(Payment.captured(locator, charge.id(), charge.amount(), clock.instant()));
         // Same transaction as the booking: the event exists exactly when the booking does (ADR-0019).
-        events.bookingConfirmed(saved, charge.amount());
+        events.bookingConfirmed(saved, charge.amount(), flights);
         return new BookingResult(PnrView.of(saved), true);
     }
 }
