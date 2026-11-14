@@ -45,7 +45,7 @@ class SmtpEmailSenderTest {
         sender.send(MESSAGE);
 
         String everything = textOf(sentMessage().getContent());
-        assertThat(everything).contains("Your booking is confirmed.").contains("<p>Your booking is confirmed.</p>");
+        assertThat(everything).contains("Your booking is confirmed.").contains("Your booking is confirmed.</p>");
     }
 
     private MimeMessage sentMessage() {
@@ -111,7 +111,41 @@ class SmtpEmailSenderTest {
         assertThat(attached).allSatisfy(part -> assertThat(part.getContentType()).startsWith("image/png"));
         assertThat(attached.get(0).getDataHandler().getInputStream().readAllBytes()).containsExactly(1, 2, 3);
         assertThat(attached.get(1).getDataHandler().getInputStream().readAllBytes()).containsExactly(4, 5);
-        assertThat(textOf(sent.getContent())).contains("Your booking is confirmed.").contains("<p>Your booking is confirmed.</p>");
+        assertThat(textOf(sent.getContent())).contains("Your booking is confirmed.").contains("Your booking is confirmed.</p>");
+    }
+
+    // ---- the logo (ADR-0086) ---------------------------------------------------------------------------------------------
+
+    private static jakarta.mail.BodyPart findInline(Object content, String contentId) throws Exception {
+        if (content instanceof Multipart parts) {
+            for (int i = 0; i < parts.getCount(); i++) {
+                jakarta.mail.BodyPart part = parts.getBodyPart(i);
+                String[] ids = part.getHeader("Content-ID");
+                if (ids != null && ids[0].equals("<" + contentId + ">")) {
+                    return part;
+                }
+                jakarta.mail.BodyPart deeper = findInline(part.getContent(), contentId);
+                if (deeper != null) {
+                    return deeper;
+                }
+            }
+        }
+        return null;
+    }
+
+    @Test
+    void should_carry_the_logo_inside_the_message_as_an_inline_picture_the_html_points_at() throws Exception {
+        sender.send(MESSAGE);
+
+        MimeMessage sent = sentMessage();
+        sent.saveChanges();
+        jakarta.mail.BodyPart logo = findInline(sent.getContent(), com.skyhub.notification.application.HtmlBody.LOGO_CONTENT_ID);
+        assertThat(logo).isNotNull();
+        assertThat(logo.getContentType()).startsWith("image/png");
+        assertThat(logo.getDisposition()).isEqualToIgnoringCase(jakarta.mail.Part.INLINE);
+        byte[] png = logo.getDataHandler().getInputStream().readAllBytes();
+        assertThat(png).startsWith((byte) 0x89, (byte) 'P', (byte) 'N', (byte) 'G');
+        assertThat(textOf(sent.getContent())).contains("cid:" + com.skyhub.notification.application.HtmlBody.LOGO_CONTENT_ID);
     }
 
     @Test

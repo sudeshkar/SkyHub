@@ -92,6 +92,21 @@ class SmtpEmailSenderMailpitTest {
     }
 
     @Test
+    void should_arrive_with_the_designed_html_and_the_logo_as_an_inline_picture_not_an_attachment() {
+        SmtpEmailSender sender = senderTo(MAILPIT.getHost(), MAILPIT.getMappedPort(1025));
+
+        sender.send(new EmailMessage("priya@example.com", "Your SkyHub booking ZZ3333 is confirmed",
+                "Your booking is confirmed.\n\nBooking reference: ZZ3333\n"));
+
+        JsonNode mail = awaitMessage("ZZ3333");
+        assertThat(mail.get("HTML").asString()).contains("Your SkyHub booking ZZ3333 is confirmed</h1>")
+                .contains("cid:skyhub-logo");
+        assertThat(mail.get("Inline")).hasSize(1);
+        assertThat(mail.get("Inline").get(0).get("ContentID").asString()).isEqualTo("skyhub-logo");
+        assertThat(mail.get("Attachments")).isEmpty();
+    }
+
+    @Test
     void should_keep_names_with_accents_and_other_scripts_intact() {
         SmtpEmailSender sender = senderTo(MAILPIT.getHost(), MAILPIT.getMappedPort(1025));
 
