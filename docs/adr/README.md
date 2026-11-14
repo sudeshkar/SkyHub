@@ -89,3 +89,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0083](0083-the-whole-stack-in-containers.md) | The whole stack in containers | Accepted |
 | [0084](0084-website-redesign.md) | A website redesign for fewer steps and less scrolling | Accepted |
 | [0085](0085-one-server-with-caddy.md) | One server with Caddy in front: the first public deployment | Accepted |
+| [0086](0086-designed-emails.md) | Designed emails with the SkyHub look | Accepted |

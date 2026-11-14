@@ -18,11 +18,15 @@ import org.springframework.stereotype.Component;
  * shows it in a web page instead of delivering it; in production it would be the provider's SMTP relay. Anything
  * the server refuses or does not answer becomes {@link EmailUnavailableException}, which makes the event retry
  * instead of being recorded as sent. The message carries the plain text and an HTML version of it (ADR-0050), and any attachments
- * (ADR-0074). The failure message never contains the address, the body or an attachment.
+ * (ADR-0074), and the SkyHub logo as an inline picture the HTML points at (ADR-0086). The failure message never contains the address,
+ * the body or an attachment.
  */
 @Component
 @ConditionalOnProperty(name = "skyhub.notifications.email.mode", havingValue = "smtp", matchIfMissing = true)
 public class SmtpEmailSender implements EmailSender {
+
+    private static final org.springframework.core.io.ClassPathResource LOGO =
+            new org.springframework.core.io.ClassPathResource("email/skyhub-logo.png");
 
     private final JavaMailSender mail;
     private final String from;
@@ -40,7 +44,9 @@ public class SmtpEmailSender implements EmailSender {
             helper.setFrom(from);
             helper.setTo(message.to());
             helper.setSubject(message.subject());
-            helper.setText(message.body(), HtmlBody.from(message.body()));
+            helper.setText(message.body(), HtmlBody.from(message.subject(), message.body()));
+            // After setText, which the inline picture must follow; it travels inside the message, never fetched (ADR-0086).
+            helper.addInline(HtmlBody.LOGO_CONTENT_ID, LOGO, "image/png");
             for (EmailMessage.Attachment attachment : message.attachments()) {
                 helper.addAttachment(attachment.fileName(), new org.springframework.core.io.ByteArrayResource(attachment.content()),
                         attachment.contentType());
