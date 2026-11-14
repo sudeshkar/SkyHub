@@ -344,4 +344,40 @@ class EmailComposerTest {
 
         assertThat(message.toString()).doesNotContain("priya@example.com").doesNotContain("boarding-pass").doesNotContain("9, 9").contains("attachments=1");
     }
+    // ---- the e-ticket receipt (ADR-0087) ---------------------------------------------------------------------------------------
+
+    private static BookingConfirmedEvent withItinerary() {
+        return ItineraryTest.confirmed(List.of(ItineraryTest.SK501, ItineraryTest.SK002), List.of(
+                new BookingConfirmedEvent.Passenger("Priya", "Perera", List.of("11D", "24A")),
+                new BookingConfirmedEvent.Passenger("Anil", "Perera", List.of("11E", "24B"))));
+    }
+
+    @Test
+    void should_describe_each_flight_as_an_itinerary_card_with_local_times_airports_and_seats() {
+        EmailMessage message = EmailComposer.bookingConfirmed(withItinerary(), true);
+
+        assertThat(message.subject()).isEqualTo("Your SkyHub booking ABC234 is confirmed");
+        assertThat(message.body())
+                .contains("Booking reference: ABC234\nTotal paid: 1240.00 USD")
+                .contains("SK501 · Mon 2 Nov 2026:\n  CMB 07:30 → DXB 10:50\n"
+                        + "  Colombo, Bandaranaike International → Dubai, Dubai International\n"
+                        + "  Priya Perera: seat 11D\n  Anil Perera: seat 11E")
+                .contains("SK002 · Fri 20 Nov 2026:\n  LHR 14:00 → DXB 00:50 (+1)")
+                .contains("Times are local at each airport")
+                .contains("e-ticket is attached")
+                .contains("last name");
+    }
+
+    @Test
+    void should_not_mention_an_attached_e_ticket_when_there_is_none() {
+        assertThat(EmailComposer.bookingConfirmed(withItinerary(), false).body()).doesNotContain("attached");
+    }
+
+    @Test
+    void should_keep_the_old_confirmation_for_an_event_with_no_itinerary() {
+        EmailMessage message = EmailComposer.bookingConfirmed(event(List.of(
+                new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)))), true);
+
+        assertThat(message.body()).contains("SK501 on 2026-11-02").doesNotContain("→").doesNotContain("attached");
+    }
 }

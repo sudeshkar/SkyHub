@@ -35,6 +35,14 @@ class PricingServiceTest {
     }
 
     @Test
+    void should_hand_back_the_flights_it_priced_in_trip_order_so_the_confirmation_describes_what_was_charged() {
+        PricingService.PricedTrip trip = pricing.price(List.of(new PnrSegment("SK901", DATE), new PnrSegment("SK501", DATE)), 1);
+
+        assertThat(trip.total()).isEqualTo(Money.of("430.50", "USD"));
+        assertThat(trip.flights()).extracting(FlightInfo::fare).containsExactly(Money.of("120.00", "USD"), Money.of("310.50", "USD"));
+    }
+
+    @Test
     void should_refuse_to_price_a_trip_the_guard_says_is_not_for_sale_before_looking_at_any_fare() {
         List<PnrSegment> trip = List.of(new PnrSegment("SK501", DATE));
         org.mockito.Mockito.doThrow(new com.skyhub.booking.domain.FlightCancelledException("SK501 is cancelled")).when(guard).requireSellable(trip);

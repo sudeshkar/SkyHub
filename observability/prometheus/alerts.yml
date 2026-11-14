@@ -151,6 +151,15 @@ groups:
           summary: "A check-in email went out without its boarding passes: the sealed pass would not open or the picture could not be drawn"
           runbook: "docs/runbooks/README.md#notificationattachmentsdropped"
 
+      # The booking confirmation still goes when its e-ticket PDF cannot be drawn (ADR-0087), so nothing else shows it.
+      - alert: NotificationETicketsDropped
+        expr: increase(skyhub_notification_etickets_total{outcome="dropped"}[15m]) > 0
+        for: 0m
+        labels: { severity: ticket }
+        annotations:
+          summary: "A booking confirmation went out without its e-ticket PDF: it could not be drawn"
+          runbook: "docs/runbooks/README.md#notificationeticketsdropped"
+
       - alert: NotificationDeadLettered
         expr: increase(skyhub_notifications_dead_lettered_total[10m]) > 0
         for: 0m

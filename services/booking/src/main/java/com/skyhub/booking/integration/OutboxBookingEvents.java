@@ -62,11 +62,17 @@ public class OutboxBookingEvents implements BookingEvents {
     }
 
     @Override
-    public void bookingConfirmed(Pnr pnr, Money total) {
+    public void bookingConfirmed(Pnr pnr, Money total, List<com.skyhub.booking.application.FlightInfo> flights) {
         Map<String, Object> event = event(BOOKING_CONFIRMED, pnr);
+        // Each passenger's seat on each flight, in segment order, and each flight's route and times as it was priced (ADR-0087).
         event.put("passengers", pnr.getPassengers().stream()
-                .map(p -> Map.of("firstName", p.getFirstName(), "lastName", p.getLastName())).toList());
-        event.put("segments", segments(pnr));
+                .map(p -> Map.of("firstName", p.getFirstName(), "lastName", p.getLastName(), "seats", p.getSeats())).toList());
+        List<PnrSegment> segments = pnr.getSegments();
+        List<Map<String, Object>> described = new java.util.ArrayList<>();
+        for (int i = 0; i < segments.size(); i++) {
+            described.add(itineraryLeg(segments.get(i), i < flights.size() ? flights.get(i) : null));
+        }
+        event.put("segments", described);
         event.put("totalAmount", total.amount());
         event.put("currency", total.currency());
         enqueue(pnr, event);
@@ -168,6 +174,26 @@ public class OutboxBookingEvents implements BookingEvents {
         event.put("locator", pnr.getLocator());
         event.put("contactEmail", pnr.getContactEmail().value());
         return event;
+    }
+
+    /** A flight with what the catalog knew about it; a field it did not know is left out, never guessed. */
+    private static Map<String, Object> itineraryLeg(PnrSegment segment, com.skyhub.booking.application.FlightInfo flight) {
+        Map<String, Object> leg = new LinkedHashMap<>();
+        leg.put("flightNumber", segment.flightNumber());
+        leg.put("departureDate", segment.departureDate().toString());
+        if (flight != null) {
+            putIfKnown(leg, "origin", flight.origin());
+            putIfKnown(leg, "destination", flight.destination());
+            putIfKnown(leg, "departure", flight.departure());
+            putIfKnown(leg, "arrival", flight.arrival());
+        }
+        return leg;
+    }
+
+    private static void putIfKnown(Map<String, Object> map, String key, Object value) {
+        if (value != null) {
+            map.put(key, value.toString());
+        }
     }
 
     private static List<Map<String, String>> segments(Pnr pnr) {

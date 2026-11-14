@@ -73,8 +73,12 @@ class OutboxBookingEventsTest {
                 List.of(new PnrPassenger("Priya", "Perera", List.of("11D"))), NOW, "keyhash", "fingerprint");
     }
 
+    /** SK501 as flight-search describes it: Colombo to Dubai, 02:00 to 06:50 UTC. */
+    private static final com.skyhub.booking.application.FlightInfo SK501 = new com.skyhub.booking.application.FlightInfo(
+            Instant.parse("2026-11-02T02:00:00Z"), Money.of("100.00", "USD"), "CMB", "DXB", Instant.parse("2026-11-02T06:50:00Z"));
+
     private OutboxEvent recorded() {
-        events().bookingConfirmed(pnr(), Money.of("100.00", "USD"));
+        events().bookingConfirmed(pnr(), Money.of("100.00", "USD"), List.of(SK501));
         ArgumentCaptor<OutboxEvent> saved = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outbox).save(saved.capture());
         return saved.getValue();
@@ -87,6 +91,17 @@ class OutboxBookingEventsTest {
         JsonNode expected = json.readTree(Files.readString(EXAMPLE));
         JsonNode actual = json.readTree(cipher.decrypt(event.getPayload()));
         assertThat(actual).isEqualTo(expected);
+    }
+
+    @Test
+    void should_leave_the_arrival_out_rather_than_guess_it_when_flight_search_does_not_know_it() throws Exception {
+        var noArrival = new com.skyhub.booking.application.FlightInfo(SK501.departure(), SK501.fare(), "CMB", "DXB", null);
+
+        events().bookingConfirmed(pnr(), Money.of("100.00", "USD"), List.of(noArrival));
+
+        JsonNode segment = json.readTree(cipher.decrypt(saved().getPayload())).get("segments").get(0);
+        assertThat(segment.has("arrival")).isFalse();
+        assertThat(segment.get("departure").asString()).isEqualTo("2026-11-02T02:00:00Z");
     }
 
     @Test

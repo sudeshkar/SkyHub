@@ -53,6 +53,9 @@ class NotificationServiceTest {
     @Mock
     private PassImages images;
 
+    @Mock
+    private ETickets tickets;
+
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private NotificationService service;
     private BookingConfirmedEvent event;
@@ -60,7 +63,7 @@ class NotificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new NotificationService(sent, email, Clock.fixed(NOW, ZoneOffset.UTC),
-                TransactionOperations.withoutTransaction(), new NotificationMetrics(registry), opener, images);
+                TransactionOperations.withoutTransaction(), new NotificationMetrics(registry), opener, images, tickets);
         event = new BookingConfirmedEvent(EVENT_ID, "booking.confirmed", 1, Instant.parse("2026-10-30T10:00:00Z"),
                 "ABC234", "priya@example.com", List.of(new BookingConfirmedEvent.Passenger("Priya", "Perera")),
                 List.of(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2))),
@@ -409,5 +412,51 @@ class NotificationServiceTest {
         assertThat(sentMessage().attachments()).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(opener, images);
         assertThat(attachments("dropped")).isZero();
+    }
+
+    // ---- the e-ticket (ADR-0087) ---------------------------------------------------------------------------------------------
+
+    private static BookingConfirmedEvent withItinerary() {
+        return ItineraryTest.confirmed(List.of(ItineraryTest.SK501),
+                List.of(new BookingConfirmedEvent.Passenger("Priya", "Perera", List.of("11D"))));
+    }
+
+    private double eTickets(String outcome) {
+        var counter = registry.find("skyhub.notification.etickets").tag("outcome", outcome).counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    @Test
+    void should_attach_the_e_ticket_as_a_pdf_named_by_the_booking_reference() {
+        when(tickets.pdf(org.mockito.ArgumentMatchers.any(Itinerary.class))).thenReturn(new byte[] {'%', 'P', 'D', 'F'});
+
+        service.bookingConfirmed(withItinerary());
+
+        EmailMessage message = sentMessage();
+        assertThat(message.attachments()).extracting(EmailMessage.Attachment::fileName).containsExactly("SkyHub-e-ticket-ABC234.pdf");
+        assertThat(message.attachments()).extracting(EmailMessage.Attachment::contentType).containsExactly("application/pdf");
+        assertThat(message.body()).contains("e-ticket is attached").contains("CMB 07:30");
+        assertThat(eTickets("attached")).isEqualTo(1);
+    }
+
+    @Test
+    void should_still_send_the_confirmation_without_the_pdf_when_it_cannot_be_drawn_and_count_it() {
+        when(tickets.pdf(org.mockito.ArgumentMatchers.any(Itinerary.class))).thenThrow(new IllegalStateException("no pdf"));
+
+        service.bookingConfirmed(withItinerary());
+
+        EmailMessage message = sentMessage();
+        assertThat(message.attachments()).isEmpty();
+        assertThat(message.body()).doesNotContain("attached").contains("CMB 07:30");
+        assertThat(eTickets("dropped")).isEqualTo(1);
+    }
+
+    @Test
+    void should_send_the_old_confirmation_and_draw_nothing_for_an_event_with_no_itinerary() {
+        service.bookingConfirmed(event);
+
+        assertThat(sentMessage().attachments()).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(tickets);
+        assertThat(eTickets("dropped")).isZero();
     }
 }

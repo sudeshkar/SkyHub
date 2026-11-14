@@ -234,8 +234,11 @@ class BookingServiceTest {
         service.createPnr(command(passenger("Priya", "Perera", "11D", "24A")), KEY);
 
         var total = org.mockito.ArgumentCaptor.forClass(Money.class);
-        verify(events).bookingConfirmed(any(Pnr.class), total.capture());
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<FlightInfo>> flights = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(events).bookingConfirmed(any(Pnr.class), total.capture(), flights.capture());
         assertThat(total.getValue()).isEqualTo(Money.of("200.00", "USD"));
+        assertThat(flights.getValue()).hasSize(2);   // the two flights it priced, SK501 and SK901, for the itinerary
     }
 
     @Test
