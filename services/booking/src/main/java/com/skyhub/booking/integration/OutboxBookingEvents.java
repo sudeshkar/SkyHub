@@ -153,10 +153,12 @@ public class OutboxBookingEvents implements BookingEvents {
     }
 
     @Override
-    public void bookingRebooked(Pnr pnr, PnrSegment from, PnrSegment to, boolean checkedOut) {
+    public void bookingRebooked(Pnr pnr, PnrSegment from, PnrSegment to, boolean checkedOut,
+                                com.skyhub.booking.application.FlightInfo fromInfo, com.skyhub.booking.application.FlightInfo toInfo) {
         Map<String, Object> event = event(BOOKING_REBOOKED, pnr);
-        event.put("from", Map.of("flightNumber", from.flightNumber(), "departureDate", from.departureDate().toString()));
-        event.put("to", Map.of("flightNumber", to.flightNumber(), "departureDate", to.departureDate().toString()));
+        // Each flight with its route and times, the same shape as a confirmed booking's segments (ADR-0087, ADR-0088).
+        event.put("from", itineraryLeg(from, fromInfo));
+        event.put("to", itineraryLeg(to, toInfo));
         int leg = pnr.getSegments().indexOf(to);
         event.put("passengers", pnr.getPassengers().stream().map(p -> Map.of("firstName", p.getFirstName(),
                 "lastName", p.getLastName(), "seat", p.getSeats().get(leg))).toList());

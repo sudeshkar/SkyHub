@@ -13,6 +13,7 @@ import com.skyhub.notification.domain.BookingRebookedEvent;
 import com.skyhub.notification.domain.BookingRefundCompletedEvent;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -120,6 +121,14 @@ public final class EmailComposer {
     }
 
     public static EmailMessage bookingRebooked(BookingRebookedEvent event) {
+        String subject = "Your SkyHub booking " + event.locator() + " has moved to " + event.to().flightNumber() + " on "
+                + event.to().departureDate();
+        List<Itinerary.Seat> seats = event.passengers().stream()
+                .map(p -> new Itinerary.Seat(p.firstName() + " " + p.lastName(), p.seat())).toList();
+        java.util.Optional<Itinerary.Leg> next = Itinerary.of(event.to(), seats);
+        if (next.isPresent()) {
+            return new EmailMessage(event.contactEmail(), subject, rebookedItinerary(event, next.get()));
+        }
         String seatList = event.passengers().stream()
                 .map(p -> "  " + p.firstName() + " " + p.lastName() + ": " + p.seat())
                 .collect(Collectors.joining("\n"));
@@ -142,7 +151,36 @@ public final class EmailComposer {
                 If the new flight does not suit you, open Manage booking on SkyHub with your reference and the last name of
                 any passenger: you can change your seats there, or cancel the booking.
                 """.formatted(event.locator(), oldFlight, newFlight, seatList, checkIn);
-        return new EmailMessage(event.contactEmail(), "Your SkyHub booking " + event.locator() + " has moved to " + newFlight, body);
+        return new EmailMessage(event.contactEmail(), subject, body);
+    }
+
+    /**
+     * The move as an itinerary card (ADR-0088): the new flight with its route in local time, its airports and each passenger's new
+     * seat, in the same shape as the confirmation's cards (ADR-0087), so the HTML draws it the same way.
+     */
+    private static String rebookedItinerary(BookingRebookedEvent event, Itinerary.Leg next) {
+        String left = Itinerary.of(event.from(), List.of()).map(Itinerary.Leg::heading)
+                .orElse(event.from().flightNumber() + " on " + event.from().departureDate());
+        StringBuilder card = new StringBuilder("Your new flight, ").append(next.heading()).append(":\n")
+                .append("  ").append(next.route()).append('\n')
+                .append("  ").append(next.airports()).append('\n');
+        for (Itinerary.Seat seat : next.seats()) {
+            card.append("  ").append(seat.name()).append(": seat ").append(seat.seat()).append('\n');
+        }
+        String checkIn = event.checkedOut() ? """
+
+                You had checked in for %s. Your old boarding passes no longer work, and you are not checked in for the new flight.
+                Please check in again on SkyHub when check-in opens; we will email you when it does.
+                """.formatted(left) : "";
+        return """
+                Your booking %s has been moved to a new flight, because your original flight, %s, was disrupted.
+
+                %s
+                Times are local at each airport.
+                %s
+                If the new flight does not suit you, open Manage booking on SkyHub with your reference and the last name of
+                any passenger: you can change your seats there, or cancel the booking.
+                """.formatted(event.locator(), left, card, checkIn);
     }
 
     /**

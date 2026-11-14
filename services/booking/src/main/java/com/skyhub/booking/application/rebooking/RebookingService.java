@@ -158,7 +158,7 @@ public class RebookingService {
         audit.save(Rebooking.of(command.locator(), index, from, target, command.rebookedBy(), clock.instant()));
         // Checked out first, so the email can say so; both are in this transaction, so the email exists exactly when the move does.
         boolean checkedOut = checkOut(command.locator(), index);
-        events.bookingRebooked(pnr, from, target, checkedOut);
+        events.bookingRebooked(pnr, from, target, checkedOut, fromInfo, targetInfo);
         return new RebookingResult(command.locator(), index, from, target, newSeats, true);
     }
 

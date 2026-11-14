@@ -81,6 +81,17 @@ public record Itinerary(String locator, List<String> passengers, List<Leg> legs,
         return Optional.of(new Itinerary(event.locator(), names, legs, event.totalAmount().toPlainString() + " " + event.currency()));
     }
 
+    /**
+     * One flight as a traveller reads it, for an email about a single flight such as a move (ADR-0088); empty when the segment does
+     * not carry its route and departure (an event from before they were sent).
+     */
+    public static Optional<Leg> of(BookingConfirmedEvent.Segment segment, List<Seat> seats) {
+        if (segment == null || segment.origin() == null || segment.destination() == null || segment.departure() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(leg(segment, seats));
+    }
+
     private static Leg leg(BookingConfirmedEvent.Segment segment, List<Seat> seats) {
         Airports.Airport from = Airports.of(segment.origin());
         Airports.Airport to = Airports.of(segment.destination());

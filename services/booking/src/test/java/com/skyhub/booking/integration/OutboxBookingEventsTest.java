@@ -77,6 +77,10 @@ class OutboxBookingEventsTest {
     private static final com.skyhub.booking.application.FlightInfo SK501 = new com.skyhub.booking.application.FlightInfo(
             Instant.parse("2026-11-02T02:00:00Z"), Money.of("100.00", "USD"), "CMB", "DXB", Instant.parse("2026-11-02T06:50:00Z"));
 
+    /** The same flight a day later, as the move's target (ADR-0088). */
+    private static final com.skyhub.booking.application.FlightInfo SK501_NEXT_DAY = new com.skyhub.booking.application.FlightInfo(
+            Instant.parse("2026-11-03T02:00:00Z"), Money.of("100.00", "USD"), "CMB", "DXB", Instant.parse("2026-11-03T06:50:00Z"));
+
     private OutboxEvent recorded() {
         events().bookingConfirmed(pnr(), Money.of("100.00", "USD"), List.of(SK501));
         ArgumentCaptor<OutboxEvent> saved = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -188,7 +192,7 @@ class OutboxBookingEventsTest {
         Pnr moved = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(next),
                 List.of(new PnrPassenger("Priya", "Perera", List.of("14A"))), NOW, "keyhash", "fingerprint");
 
-        events(REBOOKED_ID).bookingRebooked(moved, new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), next, false);
+        events(REBOOKED_ID).bookingRebooked(moved, new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), next, false, SK501, SK501_NEXT_DAY);
 
         OutboxEvent event = saved();
         assertThat(event.getEventType()).isEqualTo("booking.rebooked");
@@ -202,7 +206,8 @@ class OutboxBookingEventsTest {
         Pnr moved = Pnr.confirmed("ABC234", new ContactEmail("priya@example.com"), List.of(next),
                 List.of(new PnrPassenger("Priya", "Perera", List.of("14A"))), NOW, "keyhash", "fingerprint");
 
-        events(UUID.fromString("f6b4e8d2-3a59-4c7b-8d21-8e2f9a4c5b66")).bookingRebooked(moved, new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), next, true);
+        events(UUID.fromString("f6b4e8d2-3a59-4c7b-8d21-8e2f9a4c5b66")).bookingRebooked(moved, new PnrSegment("SK501", LocalDate.of(2026, 11, 2)), next, true,
+                SK501, SK501_NEXT_DAY);
 
         assertThat(json.readTree(cipher.decrypt(saved().getPayload())))
                 .isEqualTo(json.readTree(Files.readString(Path.of("../../api-specs/events/booking-rebooked-checked-out.v1.example.json"))));

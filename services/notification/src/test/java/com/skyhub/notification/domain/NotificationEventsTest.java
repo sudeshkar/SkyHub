@@ -204,9 +204,25 @@ class NotificationEventsTest {
 
         assertThat(event.eventId()).isEqualTo(UUID.fromString("e5a3d7c1-2f48-4b6a-9c10-7d1e8f3b4a55"));
         assertThat(event.locator()).isEqualTo("ABC234");
-        assertThat(event.from()).isEqualTo(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2)));
-        assertThat(event.to()).isEqualTo(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3)));
+        assertThat(event.from()).isEqualTo(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 2), "CMB", "DXB",
+                java.time.Instant.parse("2026-11-02T02:00:00Z"), java.time.Instant.parse("2026-11-02T06:50:00Z")));
+        assertThat(event.to()).isEqualTo(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3), "CMB", "DXB",
+                java.time.Instant.parse("2026-11-03T02:00:00Z"), java.time.Instant.parse("2026-11-03T06:50:00Z")));
         assertThat(event.passengers()).containsExactly(new BookingRebookedEvent.SeatedPassenger("Priya", "Perera", "14A"));
+    }
+
+    @Test
+    void should_still_read_a_rebooking_event_from_before_it_carried_routes_and_times() throws Exception {
+        String older = """
+                {"eventId":"e5a3d7c1-2f48-4b6a-9c10-7d1e8f3b4a55","type":"booking.rebooked","version":1,
+                 "occurredAt":"2026-10-30T10:00:00Z","locator":"ABC234","contactEmail":"priya@example.com",
+                 "from":{"flightNumber":"SK501","departureDate":"2026-11-02"},"to":{"flightNumber":"SK501","departureDate":"2026-11-03"},
+                 "passengers":[{"firstName":"Priya","lastName":"Perera","seat":"14A"}],"checkedOut":false}
+                """;
+
+        BookingRebookedEvent event = EventParser.parse(older, BookingRebookedEvent.class);
+
+        assertThat(event.to()).isEqualTo(new BookingConfirmedEvent.Segment("SK501", LocalDate.of(2026, 11, 3)));
     }
 
     @Test

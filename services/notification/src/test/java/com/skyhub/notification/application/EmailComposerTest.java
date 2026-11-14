@@ -380,4 +380,36 @@ class EmailComposerTest {
 
         assertThat(message.body()).contains("SK501 on 2026-11-02").doesNotContain("→").doesNotContain("attached");
     }
+
+    // ---- the move as an itinerary card (ADR-0088) ----------------------------------------------------------------------------
+
+    private static BookingRebookedEvent movedWithRoutes(boolean checkedOut) {
+        var cancelled = new BookingConfirmedEvent.Segment("SK001", LocalDate.of(2026, 11, 18), "DXB", "LHR",
+                Instant.parse("2026-11-18T08:30:00Z"), Instant.parse("2026-11-18T16:20:00Z"));
+        var next = new BookingConfirmedEvent.Segment("SK001", LocalDate.of(2026, 11, 19), "DXB", "LHR",
+                Instant.parse("2026-11-19T08:30:00Z"), Instant.parse("2026-11-19T16:20:00Z"));
+        return new BookingRebookedEvent(UUID.randomUUID(), "booking.rebooked", 1, Instant.parse("2026-11-14T10:00:00Z"), "CB68E8",
+                "nimal@example.com", cancelled, next,
+                List.of(new BookingRebookedEvent.SeatedPassenger("Nimal", "Silva", "10A")), checkedOut);
+    }
+
+    @Test
+    void should_show_the_new_flight_as_an_itinerary_card_with_local_times_airports_and_seats() {
+        EmailMessage message = EmailComposer.bookingRebooked(movedWithRoutes(false));
+
+        assertThat(message.subject()).isEqualTo("Your SkyHub booking CB68E8 has moved to SK001 on 2026-11-19");
+        assertThat(message.body())
+                .contains("your original flight, SK001 · Wed 18 Nov 2026, was disrupted")
+                .contains("Your new flight, SK001 · Thu 19 Nov 2026:\n  DXB 12:30 → LHR 16:20\n"
+                        + "  Dubai, Dubai International → London, Heathrow\n  Nimal Silva: seat 10A")
+                .contains("Times are local at each airport")
+                .contains("Manage booking")
+                .doesNotContain("check in again");
+    }
+
+    @Test
+    void should_still_tell_a_checked_out_party_to_check_in_again_in_the_itinerary_form() {
+        assertThat(EmailComposer.bookingRebooked(movedWithRoutes(true)).body())
+                .contains("DXB 12:30 → LHR 16:20").contains("check in again");
+    }
 }

@@ -91,3 +91,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0085](0085-one-server-with-caddy.md) | One server with Caddy in front: the first public deployment | Accepted |
 | [0086](0086-designed-emails.md) | Designed emails with the SkyHub look | Accepted |
 | [0087](0087-e-ticket-receipt.md) | The confirmation as an e-ticket receipt, with a PDF | Accepted |
+| [0088](0088-rebooked-email-as-an-itinerary.md) | The "your booking has moved" email as an itinerary card | Accepted |
