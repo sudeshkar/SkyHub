@@ -66,3 +66,49 @@ def test_only_refuses_a_name_that_matches_no_scenario_and_lists_the_real_ones(ca
     assert main(["--only", "a full dya"]) == 2
 
     assert "a full day" in capsys.readouterr().err
+
+
+# ---- planning by group (ADR-0089) ---------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("scenario", standard(), ids=lambda s: s.name)
+def test_planning_by_group_gives_a_safe_answer_in_every_scenario_and_is_never_refused(scenario):
+    from disruption_agent.firstfit import GroupFirstFitPlanner
+    from disruption_agent.strategies import ByGroup
+
+    with installed(scenario) as world:
+        report = run_agent(GroupFirstFitPlanner(), world, strategy=ByGroup())
+
+    assert violations(report, scenario.bookings, world.seats) == []
+    assert report.rejections == []        # code fills only flights that pass every rule, so nothing is refused
+
+
+def test_planning_by_group_moves_more_people_than_first_fit_on_a_full_day():
+    from disruption_agent.firstfit import GroupFirstFitPlanner
+    from disruption_agent.strategies import ByGroup
+
+    scenario = next(s for s in standard() if s.name == "a full day")
+    with installed(scenario) as world:
+        each = run_agent(FirstFitPlanner(), world)
+    with installed(scenario) as world:
+        grouped = run_agent(GroupFirstFitPlanner(), world, strategy=ByGroup())
+
+    def people(report):
+        return sum(p.passenger_count for p in report.proposals if p.action == "REBOOK")
+
+    assert people(grouped) >= people(each)
+
+
+def test_whatever_a_chaotic_model_plans_for_groups_the_answer_a_person_sees_is_safe():
+    from disruption_agent.strategies import ByGroup
+    from evals.chaos import GroupChaosModel
+
+    refused = 0
+    for seed in range(200):
+        rng = random.Random(seed)
+        scenario = random_world(rng)
+        with installed(scenario) as world:
+            report = run_agent(GroupChaosModel(rng), world, strategy=ByGroup(), batch_size=rng.choice([1, 40]))
+        assert violations(report, scenario.bookings, world.seats) == [], f"seed {seed}"
+        refused += len(report.rejections)
+
+    assert refused > 100, "the chaos was too tame to prove anything"

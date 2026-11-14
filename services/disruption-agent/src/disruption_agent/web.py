@@ -22,6 +22,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from .agent import DisruptionAgent
+from .strategies import ByGroup, PerBooking, Strategy
 from .clients import BookingClient, SearchClient, ServiceError
 from .llm import ChatModel
 from .models import Report
@@ -81,7 +82,9 @@ def _report_json(report: Report, planner: str) -> dict:
 
 def create_app(booking: BookingClient, search: SearchClient, api_token: str,
                planners: Mapping[str, Callable[[], ChatModel]], default_planner: str,
-               max_concurrent: int = 2, wait_seconds: float = 2.0, batch_size: int = 40) -> Starlette:
+               max_concurrent: int = 2, wait_seconds: float = 2.0, batch_size: int = 40,
+               strategies: Mapping[str, Callable[[], Strategy]] | None = None) -> Starlette:
+    """`strategies` says how each planner is asked (ADR-0089); a planner not listed proposes per booking."""
     if len(api_token) < MIN_TOKEN_LENGTH:
         raise ValueError(f"The agent API token must be at least {MIN_TOKEN_LENGTH} characters")
     if default_planner not in planners:
@@ -116,7 +119,9 @@ def create_app(booking: BookingClient, search: SearchClient, api_token: str,
             return _problem(502, f"The {name} planner could not start")
         try:
             async with unwrapped(), Client(build_server(booking, search)) as client:
-                report = await DisruptionAgent(planner, McpToolBox(client), batch_size=batch_size).run(flight, day)
+                strategy = (strategies or {}).get(name, PerBooking)()
+                report = await DisruptionAgent(planner, McpToolBox(client), batch_size=batch_size,
+                                               strategy=strategy).run(flight, day)
         except ServiceError as problem:
             return _problem(502, str(problem))
         return JSONResponse(_report_json(report, name), headers={"Cache-Control": "no-store"})
@@ -153,7 +158,8 @@ def main() -> None:   # pragma: no cover - needs the real services
             return GroqChatModel(Groq(api_key=key), settings.groq_model)
         planners["groq"] = groq
     default = os.environ.get("SKYHUB_AGENT_PLANNER", "first-fit")   # the rule-based planner unless told otherwise
-    app = create_app(settings.booking_client(), settings.search_client(), token, planners, default)
+    # The language model chooses flights per group and code fills them (ADR-0089); first-fit answers per booking.
+    app = create_app(settings.booking_client(), settings.search_client(), token, planners, default, strategies={"groq": ByGroup})
     uvicorn.run(app, host=os.environ.get("SKYHUB_AGENT_HOST", "127.0.0.1"), port=int(os.environ.get("SKYHUB_AGENT_PORT", "8084")))
 
 

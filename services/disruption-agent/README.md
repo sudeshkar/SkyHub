@@ -9,7 +9,8 @@ booking: a person approves. Design and limits: [ADR-0022](../../docs/adr/0022-di
    SK501 2026-11-02        │  find_alternatives       ──►  flight-search itineraries + booking seat maps    │
         │                  └────────────────────────────────────────────────────────────────────────────────┘
         ▼
-   agent: pages the bookings itself ─► batches of 40 ─► Groq model (sees tool results only) ─► proposals
+   agent: pages the bookings itself ─► groups (same route and window) ─► Groq model chooses flights per group
+          ─► code fills them, largest parties first (ADR-0089) ─► proposals
                                                                                           │
                                        guardrails (rules + seat ledger) check every proposal ◄┘
                                                                                           │
@@ -22,8 +23,8 @@ booking: a person approves. Design and limits: [ADR-0022](../../docs/adr/0022-di
 cd services/disruption-agent
 python -m venv .venv && source .venv/Scripts/activate     # on macOS/Linux: .venv/bin/activate
 pip install -e ".[dev]"
-python -m pytest                                          # 98 tests: units, guardrails, evals, a fuzz test. No key needed.
-python -m evals                                           # the baseline planner on four scenarios, with a safety check
+python -m pytest                                          # 125 tests: units, guardrails, evals, two fuzz tests. No key needed.
+python -m evals                                           # the two rule-based planners on four scenarios, with a safety check
 ```
 
 To run it on a real disruption you need the services running (see the root README), an `OPS` staff account for the agent
@@ -35,7 +36,7 @@ export SKYHUB_AGENT_PASSWORD=...            # 12+ characters
 export GROQ_API_KEY=...                     # https://console.groq.com
 python -m disruption_agent SK001 2027-01-01          # prints proposals; add --json for machines
 python -m disruption_agent SK001 2027-01-01 --apply  # then asks about each move: y / n / a (all the rest) / q
-python -m evals --live                               # judge the Groq model against the baseline
+python -m evals --live                               # judge the Groq model against the baselines (--compare: also per booking)
 ```
 
 Settings (all environment variables): `SKYHUB_BOOKING_API_URL` (default `http://localhost:8082`),
@@ -69,8 +70,9 @@ The MCP server can also run alone, for any MCP client: `python -m disruption_age
 | `server.py`, `toolbox.py` | The MCP server, and the adapter the agent reaches tools through |
 | `guardrails.py` | `Rule` classes, the `SeatLedger`, `GuardrailPipeline`, `Policy` |
 | `agent.py`, `llm.py` | The loop, and the `ChatModel` port with the Groq adapter |
+| `strategies.py`, `groups.py` | How the model is asked: a proposal per booking, or flights per group that code fills, largest parties first (ADR-0089) |
 | `apply.py` | `Applier` and the `Approver` port (console prompt): moves only what a person approves |
-| `web.py`, `firstfit.py` | The HTTP service for the operations page (token, concurrency gate, planner registry) and the rule-based planner |
+| `web.py`, `firstfit.py` | The HTTP service for the operations page (token, concurrency gate, planner registry) and the rule-based planners (per booking, and by group) |
 | `evals/` | Baseline planner, independent oracle, chaos model, scenarios, runner |
 
 Adding a safety check: write a `Rule`, add it to `default_rules()`. Adding a tool: write a `Tool`, add it to the registry in

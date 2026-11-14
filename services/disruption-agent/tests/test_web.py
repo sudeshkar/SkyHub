@@ -159,3 +159,18 @@ def test_a_busy_service_says_so_with_503():
     response = post(client)
 
     assert response.status_code == 503 and "busy" in response.json()["detail"].lower()
+
+
+def test_a_planner_registered_to_plan_by_group_is_asked_about_groups_and_its_moves_are_checked():
+    from disruption_agent.firstfit import GroupFirstFitPlanner
+    from disruption_agent.strategies import ByGroup
+
+    client = TestClient(app(planners={"first-fit": FirstFitPlanner, "groups": GroupFirstFitPlanner},
+                            strategies={"groups": ByGroup}))
+
+    body = post(client, {**BODY, "planner": "groups"}).json()
+
+    assert body["planner"] == "groups"
+    by_locator = {p["locator"]: p for p in body["proposals"]}
+    # ABC234 (2 people) cannot have SK502's one seat, so it gets SK503; DEF567 must land by 18:00, so it gets SK502
+    assert (by_locator["ABC234"]["flightNumber"], by_locator["DEF567"]["flightNumber"]) == ("SK503", "SK502")
