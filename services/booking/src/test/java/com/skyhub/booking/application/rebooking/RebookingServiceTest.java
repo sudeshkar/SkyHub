@@ -138,7 +138,7 @@ class RebookingServiceTest {
         assertThat(result.changed()).isTrue();
         assertThat(pnr.getSegments().getFirst()).isEqualTo(TO);
         verify(checkIns).deleteByLocatorAndSegmentIndex("ABC234", 0);
-        verify(events).bookingRebooked(pnr, FROM, TO, true);   // the email will tell them to check in again (ADR-0070)
+        verify(events).bookingRebooked(eq(pnr), eq(FROM), eq(TO), eq(true), any(), any());   // the email will tell them to check in again (ADR-0070)
         assertThat(registry.get("skyhub.rebooking.check_ins_released").counter().count()).isEqualTo(2.0);
     }
 
@@ -253,7 +253,18 @@ class RebookingServiceTest {
         assertThat(saved.getValue().getFromFlight()).isEqualTo("SK501");
         assertThat(saved.getValue().getToDate()).isEqualTo(DAY.plusDays(1));
         assertThat(saved.getValue().getRebookedAt()).isEqualTo(NOW);
-        verify(events).bookingRebooked(pnr, FROM, TO, false);
+        verify(events).bookingRebooked(eq(pnr), eq(FROM), eq(TO), eq(false), any(), any());
+    }
+
+    @Test
+    void should_describe_both_flights_in_the_event_as_the_catalog_did_so_the_email_can_show_the_new_route_and_times() {
+        service.rebook(command());   // the happy path: SK501 moves to the next day
+
+        var leaving = org.mockito.ArgumentCaptor.forClass(FlightInfo.class);
+        var joining = org.mockito.ArgumentCaptor.forClass(FlightInfo.class);
+        verify(events).bookingRebooked(eq(pnr), eq(FROM), eq(TO), eq(false), leaving.capture(), joining.capture());
+        assertThat(leaving.getValue()).isEqualTo(catalog.find("SK501", DAY).orElseThrow());
+        assertThat(joining.getValue()).isEqualTo(catalog.find("SK501", DAY.plusDays(1)).orElseThrow());
     }
 
     @Test
@@ -290,7 +301,7 @@ class RebookingServiceTest {
 
         assertThat(again.changed()).isFalse();
         verify(audit, times(1)).save(any());
-        verify(events, times(1)).bookingRebooked(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(events, times(1)).bookingRebooked(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
         assertThat(count("unchanged")).isEqualTo(1);
     }
 
@@ -326,7 +337,7 @@ class RebookingServiceTest {
         assertThat(inventory.get(key(TO, "20A")).getStatus()).isEqualTo(SeatStatus.AVAILABLE);
         assertThat(inventory.get(key(FROM, "11D")).getStatus()).isEqualTo(SeatStatus.BOOKED);
         assertThat(pnr.getSegments()).containsExactly(FROM);
-        verify(events, never()).bookingRebooked(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(events, never()).bookingRebooked(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
     }
 
     @Test
