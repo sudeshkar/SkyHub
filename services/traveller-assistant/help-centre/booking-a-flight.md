@@ -10,7 +10,9 @@ facts: [max-passengers, max-flights, seat-hold]
 
 A single booking can hold up to 9 passengers and up to 4 flights. Every passenger travels on every flight of the booking, and each passenger has one seat on each flight. The same flight cannot appear twice in one booking. You do not need an account to book.
 
-There are two cabins: **Business** and **Economy**.
+## Cabins
+
+SkyHub flights have two cabins: **Business class** and **Economy class**. You choose the cabin when you choose seats, from the seat map.
 
 ## Choosing seats
 

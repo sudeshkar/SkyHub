@@ -1,0 +1,147 @@
+# Retrieval evals (ADR-0091): questions written the way a traveller asks them, not in the articles' words.
+#
+# answerable:  each question, and the article (or articles) whose passage should come back
+# off_topic:   nothing to do with SkyHub or travel; retrieval must return nothing
+# not_covered: travel questions the help centre does not answer (SkyHub has no baggage, meal or loyalty rules). They sit
+#              as close to the passages as real answers do, so no distance cut-off can drop them without dropping real
+#              answers: some passages come back, and the model must see they do not answer and say it does not know.
+#              Reported here; held to account by the answer evals of the next slices (ADR-0091).
+#
+# Written by the same person as the articles, so kinder than real travellers. Add real questions when the chat exists.
+
+answerable:
+  # booking-a-flight
+  - question: How many people can I put on one booking?
+    article: booking-a-flight
+  - question: Can I book a trip with several flights in one go?
+    article: booking-a-flight
+  - question: The seats I picked disappeared while I was typing passenger names. Why?
+    article: booking-a-flight
+  - question: I clicked pay twice, will I be charged twice?
+    article: booking-a-flight
+  - question: Do I need an account to book a flight?
+    article: [booking-a-flight, your-account]
+  - question: Is there business class?
+    article: booking-a-flight
+  - question: Where is my e-ticket?
+    article: booking-a-flight
+
+  # connecting-in-dubai
+  - question: How much time do I need to change planes in Dubai?
+    article: connecting-in-dubai
+  - question: My connection lands at DXB and leaves from Al Maktoum. Is there enough time?
+    article: connecting-in-dubai
+  - question: Why don't I see a connection with a 15 hour layover?
+    article: connecting-in-dubai
+  - question: What happens to my connection if the first flight is late?
+    article: [connecting-in-dubai, delays-and-cancelled-flights]
+
+  # managing-a-booking
+  - question: How do I find my booking again?
+    article: managing-a-booking
+  - question: Can I change my seat after booking?
+    article: managing-a-booking
+  - question: I was looking at my booking and it logged me out. Why?
+    article: managing-a-booking
+  - question: Can I change the name on my ticket?
+    article: managing-a-booking
+  - question: I used a computer at a hotel to see my booking. How do I make sure nobody else can open it?
+    article: managing-a-booking
+  - question: Can I switch to a different flight on the same booking?
+    article: managing-a-booking
+
+  # cancellations-and-refunds
+  - question: Will I get my money back if I cancel?
+    article: cancellations-and-refunds
+  - question: I want to cancel my flight tomorrow morning. Is it refundable?
+    article: cancellations-and-refunds
+  - question: My refund says pending. What does that mean?
+    article: cancellations-and-refunds
+  - question: The airline cancelled my flight. Do I get a refund?
+    article: [cancellations-and-refunds, delays-and-cancelled-flights]
+  - question: Can I cancel just one passenger?
+    article: cancellations-and-refunds
+  - question: I cancelled and then the flight was put back on. Is my booking back?
+    article: [cancellations-and-refunds, delays-and-cancelled-flights]
+
+  # checking-in-online
+  - question: When can I check in?
+    article: checking-in-online
+  - question: Why can't I check in yet? My flight is in two days.
+    article: checking-in-online
+  - question: Can I check in only my daughter and not the rest of us?
+    article: checking-in-online
+  - question: How do I get my boarding pass?
+    article: checking-in-online
+  - question: I checked in but now I want a window seat. What can I do?
+    article: checking-in-online
+  - question: My flight was changed by the airline and my boarding pass no longer works.
+    article: [checking-in-online, delays-and-cancelled-flights]
+
+  # boarding
+  - question: What time does boarding start?
+    article: boarding
+  - question: I arrived at the gate late. Can I still get on?
+    article: boarding
+  - question: The gate scanner rejected my boarding pass. Why?
+    article: boarding
+  - question: Can I use a screenshot of my old boarding pass?
+    article: [boarding, checking-in-online]
+
+  # delays-and-cancelled-flights
+  - question: My flight is delayed. What happens now?
+    article: delays-and-cancelled-flights
+  - question: My flight was cancelled. What are my options?
+    article: delays-and-cancelled-flights
+  - question: Will SkyHub put me on another flight if mine is cancelled?
+    article: delays-and-cancelled-flights
+  - question: Will my family be kept together if we are moved to another flight?
+    article: delays-and-cancelled-flights
+  - question: How will I know if my flight is delayed?
+    article: delays-and-cancelled-flights
+
+  # your-account
+  - question: How do I create an account?
+    article: your-account
+  - question: I forgot my password.
+    article: your-account
+  - question: My account is locked after typing the wrong password.
+    article: your-account
+  - question: Can I save my kids' names so I don't type them every time?
+    article: your-account
+  - question: How do I change the email on my account?
+    article: your-account
+  - question: I got an email saying my address was changed but it wasn't me.
+    article: your-account
+  - question: How do I log out on all my devices?
+    article: your-account
+
+  # about-skyhub
+  - question: Is SkyHub a real airline?
+    article: about-skyhub
+  - question: Which airports does SkyHub fly from?
+    article: [about-skyhub, connecting-in-dubai]
+  - question: Can you cancel my booking for me?
+    article: [about-skyhub, cancellations-and-refunds]
+  - question: Is my card really charged?
+    article: [about-skyhub, booking-a-flight]
+
+off_topic:
+  - Write me a poem about the sea.
+  - What is the capital of Australia?
+  - How do I bake sourdough bread?
+  - Explain how photosynthesis works.
+  - Who won the football world cup?
+  - Translate good morning into French.
+  - What is the square root of two?
+  - Recommend a good science fiction novel.
+
+not_covered:
+  - How many kilos of baggage can I bring?
+  - Can I bring my dog on the plane?
+  - Is there wifi on board?
+  - What meals are served on the flight?
+  - Do I need a visa to visit Dubai?
+  - What's the weather in Dubai next week?
+  - Can you recommend a hotel near the airport?
+  - How many loyalty points do I earn on this flight?

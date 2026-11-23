@@ -4,8 +4,19 @@ A chat assistant for SkyHub's travellers: it answers questions about SkyHub's ru
 about the traveller's own booking. It never changes a booking: cancelling, changing a seat and checking in are done by
 the traveller on the Manage booking page. Design and the slices it is built in: [ADR-0090](../../docs/adr/0090-traveller-assistant-and-its-help-centre.md).
 
-**Built so far (slice 1 of 6):** the help centre and the test that keeps it true. Retrieval, the MCP server, the CrewAI
-crew, the API and the website chat follow, one slice at a time.
+**Built so far (slices 1 and 2 of 6):** the help centre and the test that keeps it true, and `search_help_centre`, the
+tool that finds the passages answering a question, with Chroma ([ADR-0091](../../docs/adr/0091-searching-the-help-centre-with-chroma.md)).
+The MCP server, the CrewAI crew, the API and the website chat follow, one slice at a time.
+
+```
+help-centre/*.md ──► passages (one per ## section, at most 150 words)
+                        │ all-MiniLM-L6-v2, run locally (free, no key)
+                        ▼
+                     Chroma, in memory, cosine distance, built at start
+                        │
+search_help_centre("can I get a refund?") ──► the nearest passages within 0.70, each naming its article,
+                                              and the rule: answer only from these, or say you do not know
+```
 
 ## The help centre
 
@@ -46,11 +57,36 @@ check-in-opens:
   article's `facts`. If no code enforces it, it does not belong in the help centre.
 - **A sentence without a number** is not checked by the test. Check it against the code and the ADRs when you write it.
 
-## Run the tests
+## Searching the help centre
+
+```python
+from traveller_assistant.embedding import MiniLmEmbedder
+from traveller_assistant.index import build_index
+from traveller_assistant.tools import search_help_centre
+
+index = build_index(MiniLmEmbedder())          # the first time, downloads the model (about 80 MB) to ~/.cache/chroma
+search_help_centre(index, "Can I still get my money back if I cancel tomorrow?")
+# {"passages": [{"article": "cancellations-and-refunds", "title": ..., "section": "Do I get my money back?", "text": ...}, ...],
+#  "note": "Answer only from these passages and name the article you used. ..."}
+```
+
+A question that has nothing to do with SkyHub gets no passages. A travel question the help centre does not cover
+(baggage, for instance) can still get near passages that do not answer it, which is why the `note` is always there: see
+the ADR.
+
+## Run the tests and the evals
+
+The assistant runs on **Python 3.13**: CrewAI, which a later slice adds, does not install on 3.14 yet.
 
 ```bash
 cd services/traveller-assistant
-python -m venv .venv && source .venv/Scripts/activate     # on macOS/Linux: .venv/bin/activate
-pip install -e ".[dev]"
-python -m pytest                                          # needs the rest of the repository: it reads the services' code
+uv venv --python 3.13 .venv                               # or: py -3.13 -m venv .venv
+source .venv/Scripts/activate                             # on macOS/Linux: .venv/bin/activate
+pip install -e ".[dev]"                                   # with uv: uv pip install -e ".[dev]"
+python -m pytest                                          # tests and evals; needs the rest of the repository
+python -m evals                                           # every eval question with its rank and distance
 ```
+
+`python -m pytest` runs the unit tests (a fake embedder, offline, about a second) and the retrieval evals (the real
+model, about 15 seconds). The evals fail if hit@1 falls below 88%, hit@3 below 96%, or any off-topic question gets a
+passage. To try another cut-off, `python -m evals --max-distance 0.65`.
