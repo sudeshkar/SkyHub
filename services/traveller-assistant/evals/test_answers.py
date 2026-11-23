@@ -5,7 +5,9 @@ Opt-in: these spend Groq's free tier (about 50,000 tokens, several minutes), so 
 SKYHUB_LIVE_EVALS=1 and a GROQ_API_KEY (in the environment or the repository's .env). CI runs neither.
 
 Measured on 2026-11-23 with openai/gpt-oss-120b, two runs: help 6 of 6, not covered 5 of 5 declined, off topic 3 of 3,
-flights 2 of 2, no answer replaced for naming a flight the search never returned.
+flights 2 of 2, no answer replaced for naming a flight the search never returned. With the booking groups
+(ADR-0094), after its fixes: booking 4 of 4, no booking open 2 of 2, and no answer held a name, the email, the
+reference or the token.
 """
 
 import os
