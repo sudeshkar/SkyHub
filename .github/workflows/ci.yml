@@ -34,7 +34,8 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: python -m pytest
 
-  # The traveller assistant (ADR-0090): the help centre, checked against the services' code. Needs no API key.
+  # The traveller assistant (ADR-0090, ADR-0091): the help centre checked against the services' code, the retrieval
+  # tests, and the retrieval evals with the real embedding model. Needs no API key. Python 3.13: CrewAI is not on 3.14 yet.
   assistant:
     runs-on: ubuntu-latest
     defaults:
@@ -44,9 +45,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: services/traveller-assistant/pyproject.toml
+      # The embedding model (about 80 MB, checked by Chroma against a fixed SHA-256), so a run does not download it again.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/chroma/onnx_models
+          key: chroma-all-MiniLM-L6-v2
       - run: pip install -e ".[dev]"
       - run: python -m pytest
 

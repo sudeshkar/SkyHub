@@ -1,9 +1,11 @@
 [project]
 name = "traveller-assistant"
 version = "0.1.0"
-description = "Answers travellers' questions about SkyHub from a help centre that is checked against the code (ADR-0090)."
-requires-python = ">=3.12"
+description = "Answers travellers' questions about SkyHub from a help centre checked against the code (ADR-0090, ADR-0091)."
+# Below 3.14 until CrewAI supports it (ADR-0091).
+requires-python = ">=3.12,<3.14"
 dependencies = [
+    "chromadb>=1.5,<2",
     "pyyaml>=6.0,<7",
 ]
 
@@ -18,5 +20,5 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "evals"]
 pythonpath = ["src", "."]

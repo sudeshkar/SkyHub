@@ -31,6 +31,8 @@ When a flight is disrupted, staff may move bookings to another flight. A person 
 
 A booking is not moved once a passenger has boarded the flight.
 
+## After you have been moved
+
 You get an email with your new flight and seats. If you had checked in, the move checks you out: your old boarding passes stop working and you need to check in again for the new flight. The email says so.
 
 Being moved does not take away your refund. If you were moved off a flight that SkyHub cancelled, you still get a full refund if you later cancel the booking.
