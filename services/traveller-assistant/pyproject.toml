@@ -1,15 +1,23 @@
 [project]
 name = "traveller-assistant"
 version = "0.1.0"
-description = "Answers travellers' questions about SkyHub from a help centre checked against the code (ADR-0090, ADR-0091)."
+description = "Answers travellers' questions about SkyHub with a CrewAI crew, checked in code (ADR-0090 to ADR-0093)."
 # Below 3.14 until CrewAI supports it (ADR-0091).
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    "anyio>=4.4,<5",
     "chromadb>=1.5,<2",
+    "crewai>=1.15.44,<2",
+    # MCPServerAdapter keeps one MCP server process; CrewAI's own MCP tools start one per tool call (ADR-0093).
+    "crewai-tools[mcp]>=1.15.44,<2",
     "httpx>=0.28,<1",
     # Below 2 because CrewAI needs mcp<2 (ADR-0092); the protocol on the wire is the same as the 2.x SDK.
     "mcp>=1.30,<2",
+    "openai>=2,<3",
+    "prometheus-client>=0.21,<1",
     "pyyaml>=6.0,<7",
+    "starlette>=1.0,<2",
+    "uvicorn>=0.30,<1",
 ]
 
 [project.optional-dependencies]
@@ -25,3 +33,5 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "evals"]
 pythonpath = ["src", "."]
+# Deprecation notices raised inside CrewAI itself (function_calling_llm), not by this code.
+filterwarnings = ["ignore::DeprecationWarning:crewai.*"]

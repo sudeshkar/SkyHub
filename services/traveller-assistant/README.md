@@ -4,10 +4,24 @@ A chat assistant for SkyHub's travellers: it answers questions about SkyHub's ru
 about the traveller's own booking. It never changes a booking: cancelling, changing a seat and checking in are done by
 the traveller on the Manage booking page. Design and the slices it is built in: [ADR-0090](../../docs/adr/0090-traveller-assistant-and-its-help-centre.md).
 
-**Built so far (slices 1 to 3 of 6):** the help centre and the test that keeps it true; `search_help_centre`, the
+**Built so far (slices 1 to 4 of 6):** the help centre and the test that keeps it true; `search_help_centre`, the
 tool that finds the passages answering a question, with Chroma ([ADR-0091](../../docs/adr/0091-searching-the-help-centre-with-chroma.md));
-and **`skyhub-traveller`, the MCP server** that offers it with `search_flights` ([ADR-0092](../../docs/adr/0092-the-traveller-mcp-server.md)).
-The CrewAI crew, the API and the website chat follow, one slice at a time.
+**`skyhub-traveller`, the MCP server** that offers it with `search_flights` ([ADR-0092](../../docs/adr/0092-the-traveller-mcp-server.md));
+and **the CrewAI crew behind an API**, with every answer checked in code ([ADR-0093](../../docs/adr/0093-the-traveller-assistant-crew-and-its-api.md)).
+Booking tools that use the traveller's own manage token, and the chat on the website, follow.
+
+```
+website's server ──POST /api/v1/assistant/messages──► traveller-assistant (127.0.0.1:8085, shared token)
+                                                          │ router (one short model call): help | flights | other
+                                                          ▼
+                                     CrewAI crew: policy agent (help centre) or trip agent (flights + help centre)
+                                                          │ tools, recorded for this message
+                                                          ▼
+                                     skyhub-traveller MCP server, started once, over stdio ──► Chroma, flight-search
+                                                          │
+                                     code checks the answer: cited articles and named flights must be what the
+                                     tools returned, or the traveller gets the standard "I don't know" reply
+```
 
 ```
 help-centre/*.md ──► passages (one per ## section, at most 150 words)
@@ -109,6 +123,36 @@ npx @modelcontextprotocol/inspector .venv/Scripts/python -m traveller_assistant.
 
 The first start downloads the embedding model (about 80 MB); after that a start takes a few seconds.
 
+## The API
+
+```bash
+export GROQ_API_KEY=...                                   # a free Groq key: https://console.groq.com
+export SKYHUB_ASSISTANT_API_TOKEN=$(openssl rand -base64 32)   # shared with the website's server
+python -m traveller_assistant.web                         # http://127.0.0.1:8085
+```
+
+| Setting | Default | |
+|---|---|---|
+| `GROQ_API_KEY` | (required) | The model's key |
+| `SKYHUB_ASSISTANT_API_TOKEN` | (required, 32+ characters) | Only a caller with it gets an answer |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Rerun the answer evals after changing it |
+| `SKYHUB_SEARCH_API_URL` | `http://localhost:8081` | flight-search, passed to the MCP server (and nothing else is) |
+| `SKYHUB_ASSISTANT_HOST`, `SKYHUB_ASSISTANT_PORT` | `127.0.0.1`, `8085` | |
+
+```bash
+curl -s localhost:8085/api/v1/assistant/messages -H "Authorization: Bearer $SKYHUB_ASSISTANT_API_TOKEN" \
+     -H 'Content-Type: application/json' -d '{"message": "Can I get a refund if I cancel tomorrow?"}'
+# {"reply": "You will receive a full refund only if you cancel at least 24 hours before ...", "route": "help",
+#  "outcome": "answered", "sources": [{"article": "cancellations-and-refunds", "title": "Cancellations and refunds"}]}
+```
+
+The contract is [`api-specs/traveller-assistant-api.yaml`](../../api-specs/traveller-assistant-api.yaml). The service keeps
+no conversation: the caller sends up to 6 earlier turns. At most 2 answers run at once; a third caller gets a `503`
+after 2 seconds, and so does a model that is down or out of its rate limit (with `Retry-After`). `GET /metrics` serves
+`skyhub_assistant_messages_total{route,outcome}` and `skyhub_assistant_message_seconds`.
+
+**On Groq's free tier, expect two or three messages a minute**: an answer takes about 1,300 to 4,600 tokens.
+
 ## Run the tests and the evals
 
 The assistant runs on **Python 3.13**: CrewAI, which a later slice adds, does not install on 3.14 yet.
@@ -119,9 +163,14 @@ uv venv --python 3.13 .venv                               # or: py -3.13 -m venv
 source .venv/Scripts/activate                             # on macOS/Linux: .venv/bin/activate
 pip install -e ".[dev]"                                   # with uv: uv pip install -e ".[dev]"
 python -m pytest                                          # tests and evals; needs the rest of the repository
-python -m evals                                           # every eval question with its rank and distance
+python -m evals                                           # retrieval: every question with its rank and distance
+python -m evals.answers                                   # the whole assistant with the real model (needs GROQ_API_KEY)
+SKYHUB_LIVE_EVALS=1 python -m pytest evals/test_answers.py   # the same, held to its bars
 ```
 
-`python -m pytest` runs the unit tests (a fake embedder and a fake flight-search, offline), one test that starts the real
-server over stdio, and the retrieval evals (the real model); about 25 seconds in all. The evals fail if hit@1 falls below 88%, hit@3 below 96%, or any off-topic question gets a
+`python -m pytest` runs the unit tests (a fake embedder, a fake flight-search, and a scripted model that CrewAI runs
+for real), one test that starts the real MCP server over stdio, and the retrieval evals (the real embedding model); no
+key is needed. The **answer evals** use Groq and spend about 50,000 of the free tier's tokens over about four minutes, so
+they run only when asked: `python -m evals.answers` reads `GROQ_API_KEY` from the environment or the repository's
+git-ignored `.env` (it never prints it), and starts a stand-in flight-search on this machine. The evals fail if hit@1 falls below 88%, hit@3 below 96%, or any off-topic question gets a
 passage. To try another cut-off, `python -m evals --max-distance 0.65`.

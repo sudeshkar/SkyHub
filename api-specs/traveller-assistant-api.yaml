@@ -1,0 +1,144 @@
+openapi: 3.0.3
+info:
+  title: SkyHub Traveller Assistant API
+  version: 1.0.0
+  description: |
+    Answers a traveller's message about SkyHub's rules or flights (ADR-0090, ADR-0093). A crew of agents uses the help
+    centre and flight search through the traveller MCP server (ADR-0092), and code checks every answer: an answer about a
+    rule is shown only with an article the help centre returned, an answer about flights only with flights the search
+    returned; otherwise the traveller gets a standard "I do not know" reply. It never sees or changes a booking.
+    Internal: called by the website's server, never by a browser. Keeps no conversation: the caller sends the turns so far.
+servers:
+  - url: http://localhost:8085
+paths:
+  /api/v1/assistant/messages:
+    post:
+      operationId: answerMessage
+      summary: The assistant's answer to one message
+      description: |
+        At most a few answers are worked on at once; a further caller is turned away with 503 after a short wait. The
+        model being unavailable or out of its rate limit is also a 503, with Retry-After.
+      security:
+        - assistantToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+      responses:
+        '200':
+          description: The answer. Never cached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+
+  /healthz:
+    get:
+      operationId: health
+      summary: The service is up and its MCP server is running
+      responses:
+        '200':
+          description: Up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [up]
+
+components:
+  securitySchemes:
+    assistantToken:
+      type: http
+      scheme: bearer
+      description: A shared secret between the website's server and this service (SKYHUB_ASSISTANT_API_TOKEN, 32+ characters).
+
+  responses:
+    Problem:
+      description: What went wrong, worded so it can be shown to the traveller
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [detail]
+            properties:
+              detail:
+                type: string
+
+  schemas:
+    MessageRequest:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: The traveller's message. Blank after trimming is refused.
+          example: Can I still get a refund if I cancel tomorrow?
+        history:
+          type: array
+          maxItems: 6
+          description: The conversation so far, oldest first. The website keeps it; the service keeps nothing.
+          items:
+            $ref: '#/components/schemas/Turn'
+
+    Turn:
+      type: object
+      required: [role, text]
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          enum: [traveller, assistant]
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+
+    Answer:
+      type: object
+      required: [reply, route, outcome, sources]
+      properties:
+        reply:
+          type: string
+          description: What to show the traveller.
+        route:
+          type: string
+          enum: [help, flights, other]
+          description: Which agent answered. `other` is a message not about SkyHub, answered without one.
+        outcome:
+          type: string
+          enum: [answered, declined, unverified, other]
+          description: |
+            `answered`: checked against what the tools returned. `declined`: the assistant said it does not know.
+            `unverified`: the model's answer did not pass the check and was replaced by the standard reply.
+            `other`: the message was not about SkyHub.
+        sources:
+          type: array
+          description: The help-centre articles the answer comes from, taken from what the tool returned, not from the model.
+          items:
+            $ref: '#/components/schemas/Source'
+
+    Source:
+      type: object
+      required: [article, title]
+      properties:
+        article:
+          type: string
+          example: cancellations-and-refunds
+        title:
+          type: string
+          example: Cancellations and refunds
