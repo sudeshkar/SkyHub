@@ -98,7 +98,7 @@ python -m traveller_assistant.server                  # SKYHUB_SEARCH_API_URL, d
 npx @modelcontextprotocol/inspector .venv/Scripts/python -m traveller_assistant.server
 ```
 
-**Or from Claude Desktop**, in `claude_desktop_config.json` (use the full path to this folder's `.venv` Python):
+**Or from a desktop MCP client**, in its `mcpServers` settings (use the full path to this folder's `.venv` Python):
 
 ```json
 { "mcpServers": { "skyhub-traveller": {

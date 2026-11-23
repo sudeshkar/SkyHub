@@ -5,7 +5,7 @@
 
 ## Context
 
-ADR-0090 planned the traveller assistant as a crew of agents (CrewAI) that reach SkyHub through an **MCP server**, and ADR-0091 built its first tool, `search_help_centre`. This slice is that server: the one place where the assistant's tools live, so the crew (next slice), the MCP Inspector or any MCP client (Claude Desktop, an IDE) can use them in the same way.
+ADR-0090 planned the traveller assistant as a crew of agents (CrewAI) that reach SkyHub through an **MCP server**, and ADR-0091 built its first tool, `search_help_centre`. This slice is that server: the one place where the assistant's tools live, so the crew (next slice), the MCP Inspector or any other MCP client (a desktop chat app, an IDE) can use them in the same way.
 
 SkyHub already has an MCP server, the disruption agent's (ADR-0022). It logs in with an `OPS` staff account and lists the bookings on a flight. A traveller's questions must never reach a process that holds that login.
 
@@ -40,7 +40,7 @@ Which MCP SDK:
 ## Consequences
 
 - Positive: the traveller's side and the staff side of SkyHub's AI are two processes with nothing in common: a traveller cannot reach the staff login through a prompt, because it is not there.
-- Positive: the tools can be tried in the MCP Inspector or Claude Desktop with no crew and no API key (`README.md` says how).
+- Positive: the tools can be tried in the MCP Inspector or any desktop MCP client with no crew and no API key (`README.md` says how).
 - Positive: a new read-only tool (say, a flight's status by number) is one class.
 - Negative: **two MCP SDK majors in the repository** (2.x for the disruption agent, 1.30 for the traveller server) until CrewAI accepts 2.x. Their Python APIs differ (`MCPServer` and `Client` against `FastMCP` and `ClientSession`), so code is not shared between them.
 - Negative: **times are UTC.** flight-search returns UTC and leaves local time to its clients (ADR-0005); the model is told so, but a traveller asking "what time does it leave?" may get a UTC time unless the crew converts it. Follow-up: give the tool each airport's time zone.

@@ -1,7 +1,7 @@
 """skyhub-traveller: the traveller assistant's MCP server (ADR-0092).
 
 Run it with ``python -m traveller_assistant.server``; it speaks MCP over stdin and stdout, so it opens no port, and the
-crew starts it as a child process. Any MCP client can use it too (the MCP Inspector, Claude Desktop). It holds no
+crew starts it as a child process. Any MCP client can use it too (the MCP Inspector, a desktop chat app). It holds no
 credentials: its tools are read-only and none can see or change a booking. stdout carries the protocol, so logs go to
 stderr.
 """
