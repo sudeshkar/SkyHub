@@ -1,0 +1,113 @@
+# Every rule with a number that the help centre states, and where SkyHub's code enforces it (ADR-0090).
+#
+#   value:   the number the articles state
+#   says:    the words an article uses for it; {value} is where the number goes
+#   source:  the file that enforces it, from the repository root
+#   pattern: a regular expression with one group that captures the value; it must match exactly once
+#
+# tests/test_help_centre_matches_the_code.py fails if the code stops saying a value, if an article declares a fact
+# and does not state it in these words, or if an article states any number that is not one of its declared facts.
+# The code defaults are read, not a running deployment: an environment override is not seen (see the ADR).
+
+# Checking in and boarding (booking service, ADR-0013, ADR-0063)
+check-in-opens:
+  value: 24
+  says: "{value} hours before"
+  source: services/booking/src/main/java/com/skyhub/booking/config/CheckInConfig.java
+  pattern: 'check-in\.opens-before:PT(\d+)H\}'
+check-in-closes:
+  value: 60
+  says: "{value} minutes before"
+  source: services/booking/src/main/java/com/skyhub/booking/config/CheckInConfig.java
+  pattern: 'check-in\.closes-before:PT(\d+)M\}'
+boarding-opens:
+  value: 45
+  says: "{value} minutes before"
+  source: services/booking/src/main/resources/application.yml
+  pattern: 'boarding:\s*\n\s*opens-before: PT(\d+)M'
+boarding-closes:
+  value: 10
+  says: "{value} minutes before"
+  source: services/booking/src/main/resources/application.yml
+  pattern: 'boarding:\s*\n\s*opens-before: PT\d+M\s*\n\s*closes-before: PT(\d+)M'
+
+# Booking and managing a booking (booking service, ADR-0011, ADR-0012, ADR-0016)
+seat-hold:
+  value: 10
+  says: "held for {value} minutes"
+  source: services/booking/src/main/java/com/skyhub/booking/application/HoldService.java
+  pattern: 'hold-ttl:PT(\d+)M\}'
+max-passengers:
+  value: 9
+  says: "up to {value} passengers"
+  source: services/booking/src/main/java/com/skyhub/booking/application/rules/PassengerCountRule.java
+  pattern: 'MAX_PASSENGERS = (\d+);'
+max-flights:
+  value: 4
+  says: "up to {value} flights"
+  source: services/booking/src/main/java/com/skyhub/booking/application/rules/SegmentCountRule.java
+  pattern: 'MAX_SEGMENTS = (\d+);'
+manage-session:
+  value: 15
+  says: "for {value} minutes"
+  source: services/booking/src/main/resources/application.yml
+  pattern: 'manage-token-ttl: PT(\d+)M'
+free-cancellation:
+  value: 24
+  says: "{value} hours or more before"
+  source: services/booking/src/main/java/com/skyhub/booking/domain/RefundPolicy.java
+  pattern: 'FREE_CANCELLATION_NOTICE = Duration\.ofHours\((\d+)\)'
+
+# Connections in Dubai (flight-search service)
+dxb-connection:
+  value: 75
+  says: "at DXB needs at least {value} minutes"
+  source: services/flight-search/src/main/resources/application.yml
+  pattern: 'code: DXB\s*\n\s*name: [^\n]*\n\s*active: true\s*\n\s*minimum-connection-time: (\d+)m'
+dwc-connection:
+  value: 60
+  says: "at DWC needs at least {value} minutes"
+  source: services/flight-search/src/main/resources/application.yml
+  pattern: 'code: DWC\s*\n\s*name: [^\n]*\n\s*active: true\s*\n\s*minimum-connection-time: (\d+)m'
+airport-transfer:
+  value: 120
+  says: "{value} minutes for the transfer"
+  source: services/flight-search/src/main/resources/application.yml
+  pattern: 'from: DXB\s*\n\s*to: DWC\s*\n\s*duration: (\d+)m'
+max-layover:
+  value: 12
+  says: "{value} hours"
+  source: services/flight-search/src/main/resources/application.yml
+  pattern: 'max-layover: (\d+)h'
+
+# Accounts (booking service, ADR-0033, ADR-0048, ADR-0054, ADR-0078)
+password-link:
+  value: 1
+  says: "for {value} hour"
+  source: services/booking/src/main/java/com/skyhub/booking/domain/TravellerAccount.java
+  pattern: 'LINK_LIFETIME = Duration\.ofHours\((\d+)\);'
+password-length:
+  value: 12
+  says: "at least {value} characters"
+  source: services/booking/src/main/java/com/skyhub/booking/domain/PasswordPolicy.java
+  pattern: 'MIN_CHARACTERS = (\d+);'
+login-attempts:
+  value: 5
+  says: "{value} wrong passwords"
+  source: services/booking/src/main/java/com/skyhub/booking/domain/LoginLock.java
+  pattern: 'MAX_FAILED_ATTEMPTS = (\d+);'
+login-lock:
+  value: 15
+  says: "locked for {value} minutes"
+  source: services/booking/src/main/java/com/skyhub/booking/domain/LoginLock.java
+  pattern: 'LOCK_DURATION = Duration\.ofMinutes\((\d+)\);'
+take-back-link:
+  value: 7
+  says: "for {value} days"
+  source: services/booking/src/main/java/com/skyhub/booking/domain/TravellerAccount.java
+  pattern: 'UNDO_LIFETIME = Duration\.ofDays\((\d+)\);'
+saved-passengers:
+  value: 10
+  says: "up to {value} names"
+  source: services/booking/src/main/java/com/skyhub/booking/application/SavedPassengerService.java
+  pattern: 'LIMIT = (\d+);'

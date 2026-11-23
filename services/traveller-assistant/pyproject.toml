@@ -1,0 +1,22 @@
+[project]
+name = "traveller-assistant"
+version = "0.1.0"
+description = "Answers travellers' questions about SkyHub from a help centre that is checked against the code (ADR-0090)."
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]

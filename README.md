@@ -201,7 +201,7 @@ CI runs the same on every pull request.
 
 ```
 api-specs/      OpenAPI contracts, written before the code (the services generate their interfaces from them)
-services/       flight-search, booking and notification (Spring Boot), and disruption-agent (Python)
+services/       flight-search, booking and notification (Spring Boot), and disruption-agent and traveller-assistant (Python)
 frontend/       the website (Next.js)
 observability/  Prometheus rules, Grafana dashboard, Loki / Tempo / Alloy config
 docs/           design documents, decision records (ADRs), runbooks, and the [roadmap](docs/ROADMAP.md) of what is done and pending
