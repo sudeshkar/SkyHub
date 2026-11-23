@@ -93,3 +93,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0087](0087-e-ticket-receipt.md) | The confirmation as an e-ticket receipt, with a PDF | Accepted |
 | [0088](0088-rebooked-email-as-an-itinerary.md) | The "your booking has moved" email as an itinerary card | Accepted |
 | [0089](0089-rebooking-by-group.md) | The model chooses flights per group, and code fills them (families first) | Accepted |
+| [0090](0090-traveller-assistant-and-its-help-centre.md) | A traveller assistant, and the help centre it answers from | Accepted |

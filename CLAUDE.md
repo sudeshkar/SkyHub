@@ -1,6 +1,6 @@
 # SkyHub
 
-A two-hub airline booking platform (portfolio project). Services: `flight-search` (8081), `booking` (8082), `notification` (8083), `disruption-agent` (Python, 8084), and the Next.js website in `frontend/`. Start with `README.md`; to run and test everything by hand see `docs/TESTING-LOCALLY.md`.
+A two-hub airline booking platform (portfolio project). Services: `flight-search` (8081), `booking` (8082), `notification` (8083), `disruption-agent` (Python, 8084), `traveller-assistant` (Python, in progress: ADR-0090), and the Next.js website in `frontend/`. Start with `README.md`; to run and test everything by hand see `docs/TESTING-LOCALLY.md`.
 
 ## Read these first
 - `docs/DEVELOPMENT.md` is the working agreement (slices, TDD, design, security, git, verification, machine notes). **It wins over anything here.**
