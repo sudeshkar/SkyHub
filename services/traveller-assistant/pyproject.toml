@@ -6,6 +6,9 @@ description = "Answers travellers' questions about SkyHub from a help centre che
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "chromadb>=1.5,<2",
+    "httpx>=0.28,<1",
+    # Below 2 because CrewAI needs mcp<2 (ADR-0092); the protocol on the wire is the same as the 2.x SDK.
+    "mcp>=1.30,<2",
     "pyyaml>=6.0,<7",
 ]
 

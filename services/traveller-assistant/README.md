@@ -4,9 +4,10 @@ A chat assistant for SkyHub's travellers: it answers questions about SkyHub's ru
 about the traveller's own booking. It never changes a booking: cancelling, changing a seat and checking in are done by
 the traveller on the Manage booking page. Design and the slices it is built in: [ADR-0090](../../docs/adr/0090-traveller-assistant-and-its-help-centre.md).
 
-**Built so far (slices 1 and 2 of 6):** the help centre and the test that keeps it true, and `search_help_centre`, the
-tool that finds the passages answering a question, with Chroma ([ADR-0091](../../docs/adr/0091-searching-the-help-centre-with-chroma.md)).
-The MCP server, the CrewAI crew, the API and the website chat follow, one slice at a time.
+**Built so far (slices 1 to 3 of 6):** the help centre and the test that keeps it true; `search_help_centre`, the
+tool that finds the passages answering a question, with Chroma ([ADR-0091](../../docs/adr/0091-searching-the-help-centre-with-chroma.md));
+and **`skyhub-traveller`, the MCP server** that offers it with `search_flights` ([ADR-0092](../../docs/adr/0092-the-traveller-mcp-server.md)).
+The CrewAI crew, the API and the website chat follow, one slice at a time.
 
 ```
 help-centre/*.md ──► passages (one per ## section, at most 150 words)
@@ -74,6 +75,40 @@ A question that has nothing to do with SkyHub gets no passages. A travel questio
 (baggage, for instance) can still get near passages that do not answer it, which is why the `note` is always there: see
 the ADR.
 
+## The MCP server
+
+`skyhub-traveller` offers two read-only tools over MCP (stdin and stdout, no network port). It holds **no credentials**:
+no staff account, no booking token, no key. It is a different process from the disruption agent's server, which holds a
+staff login (ADR-0092).
+
+| Tool | What it does |
+|---|---|
+| `search_help_centre(question, limit=3)` | The help-centre passages that answer a question, each naming its article, with the rule "answer only from these, or say you do not know" |
+| `search_flights(origin, destination, date)` | Direct flights and connections in Dubai on one day, from flight-search: at most 10, with UTC times, status and the lowest fare per passenger |
+
+A refused call (a bad airport code) or flight-search being down comes back as `{"error": "..."}`, worded for the model.
+
+```bash
+python -m traveller_assistant.server                  # SKYHUB_SEARCH_API_URL, default http://localhost:8081
+```
+
+**Try it in the MCP Inspector** (needs Node.js; no API key):
+
+```bash
+npx @modelcontextprotocol/inspector .venv/Scripts/python -m traveller_assistant.server
+```
+
+**Or from Claude Desktop**, in `claude_desktop_config.json` (use the full path to this folder's `.venv` Python):
+
+```json
+{ "mcpServers": { "skyhub-traveller": {
+    "command": "C:/path/to/skyhub/services/traveller-assistant/.venv/Scripts/python.exe",
+    "args": ["-m", "traveller_assistant.server"],
+    "env": { "SKYHUB_SEARCH_API_URL": "http://localhost:8081" } } } }
+```
+
+The first start downloads the embedding model (about 80 MB); after that a start takes a few seconds.
+
 ## Run the tests and the evals
 
 The assistant runs on **Python 3.13**: CrewAI, which a later slice adds, does not install on 3.14 yet.
@@ -87,6 +122,6 @@ python -m pytest                                          # tests and evals; nee
 python -m evals                                           # every eval question with its rank and distance
 ```
 
-`python -m pytest` runs the unit tests (a fake embedder, offline, about a second) and the retrieval evals (the real
-model, about 15 seconds). The evals fail if hit@1 falls below 88%, hit@3 below 96%, or any off-topic question gets a
+`python -m pytest` runs the unit tests (a fake embedder and a fake flight-search, offline), one test that starts the real
+server over stdio, and the retrieval evals (the real model); about 25 seconds in all. The evals fail if hit@1 falls below 88%, hit@3 below 96%, or any off-topic question gets a
 passage. To try another cut-off, `python -m evals --max-distance 0.65`.
