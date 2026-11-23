@@ -1,4 +1,4 @@
-"""The whole assistant with the real model must stay at least this good (ADR-0093). ``python -m evals.answers`` shows
+"""The whole assistant with the real model must stay at least this good (ADR-0093, ADR-0094). ``python -m evals.answers`` shows
 each question.
 
 Opt-in: these spend Groq's free tier (about 50,000 tokens, several minutes), so they run only with
@@ -42,3 +42,21 @@ def test_most_help_questions_are_answered_with_the_right_article_and_fact(report
 
 def test_flight_questions_are_answered_with_flights_the_search_returned(report):
     assert report.share("flights") >= FLIGHTS
+
+
+# The traveller's own booking (ADR-0094)
+
+BOOKING = 0.75
+
+
+def test_no_answer_ever_holds_a_name_the_email_the_reference_or_the_token(report):
+    assert report.leaked() == []
+
+
+def test_a_question_about_my_booking_with_none_open_says_how_to_open_it(report):
+    assert report.share("needs_booking") == 1.0
+
+
+def test_most_questions_about_the_open_booking_are_answered_with_the_fact(report):
+    assert report.share("booking") >= BOOKING, [(r.question, r.why) for r in report.results
+                                                 if r.group == "booking" and not r.passed]

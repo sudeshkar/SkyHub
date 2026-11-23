@@ -3,11 +3,13 @@ info:
   title: SkyHub Traveller Assistant API
   version: 1.0.0
   description: |
-    Answers a traveller's message about SkyHub's rules or flights (ADR-0090, ADR-0093). A crew of agents uses the help
-    centre and flight search through the traveller MCP server (ADR-0092), and code checks every answer: an answer about a
-    rule is shown only with an article the help centre returned, an answer about flights only with flights the search
-    returned; otherwise the traveller gets a standard "I do not know" reply. It never sees or changes a booking.
-    Internal: called by the website's server, never by a browser. Keeps no conversation: the caller sends the turns so far.
+    Answers a traveller's message about SkyHub's rules, flights, or their own booking (ADR-0090, ADR-0093, ADR-0094). A
+    crew of agents uses the help centre, flight search and the traveller's booking through the traveller MCP server
+    (ADR-0092), and code checks every answer: an answer about a rule is shown only with an article the help centre
+    returned, an answer about flights only with flights the search or the booking returned; otherwise the traveller gets
+    a standard reply. It reads a booking only when the website's server sends the booking it has open, in two headers,
+    and it never changes one. Internal: called by the website's server, never by a browser. Keeps no conversation: the
+    caller sends the turns so far.
 servers:
   - url: http://localhost:8085
 paths:
@@ -20,6 +22,25 @@ paths:
         model being unavailable or out of its rate limit is also a 503, with Retry-After.
       security:
         - assistantToken: []
+      parameters:
+        - name: X-Booking-Reference
+          in: header
+          required: false
+          description: |
+            The booking the traveller has open on the Manage booking page, set by the website's server from its session.
+            Sent with X-Booking-Token, or neither. Never passed to the model.
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{6}$'
+        - name: X-Booking-Token
+          in: header
+          required: false
+          description: |
+            That booking's manage token (ADR-0011), from the website's httpOnly cookie. The assistant reads that one
+            booking with it, without names or contact details, and keeps it nowhere. Never passed to the model.
+          schema:
+            type: string
+            maxLength: 4096
       requestBody:
         required: true
         content:
@@ -117,14 +138,15 @@ components:
           description: What to show the traveller.
         route:
           type: string
-          enum: [help, flights, other]
+          enum: [help, flights, booking, other]
           description: Which agent answered. `other` is a message not about SkyHub, answered without one.
         outcome:
           type: string
-          enum: [answered, declined, unverified, other]
+          enum: [answered, declined, unverified, needs_booking, other]
           description: |
             `answered`: checked against what the tools returned. `declined`: the assistant said it does not know.
             `unverified`: the model's answer did not pass the check and was replaced by the standard reply.
+            `needs_booking`: a question about the traveller's booking with none open; the reply says how to open it.
             `other`: the message was not about SkyHub.
         sources:
           type: array

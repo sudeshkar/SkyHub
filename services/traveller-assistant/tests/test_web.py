@@ -128,15 +128,75 @@ def test_at_most_the_allowed_number_of_answers_run_at_once_and_the_next_caller_i
     assert [c.message for c in busy.seen] == ["first"]
 
 
+# The traveller's own booking, sent beside the message (ADR-0094)
+
+MANAGE_TOKEN = "eyJhbGciOiJIUzI1NiJ9.manage-payload.signature"
+WITH_BOOKING = {**AUTH, "X-Booking-Reference": "ABC234", "X-Booking-Token": MANAGE_TOKEN}
+
+
+def test_the_open_booking_reaches_the_assistant_from_the_headers_not_the_body():
+    assistant = FakeAssistant()
+
+    post(client(assistant), {"message": "Am I checked in?"}, WITH_BOOKING)
+
+    assert assistant.seen[0].booking.reference == "ABC234" and assistant.seen[0].booking.token == MANAGE_TOKEN
+
+
+def test_no_booking_headers_means_no_booking():
+    assistant = FakeAssistant()
+
+    post(client(assistant), {"message": "Am I checked in?"})
+
+    assert assistant.seen[0].booking is None
+
+
+@pytest.mark.parametrize("headers", [{"X-Booking-Reference": "ABC234"}, {"X-Booking-Token": MANAGE_TOKEN},
+                                     {"X-Booking-Reference": "abc234", "X-Booking-Token": MANAGE_TOKEN},
+                                     {"X-Booking-Reference": "ABC234", "X-Booking-Token": "not a token"}])
+def test_a_booking_sent_half_or_in_the_wrong_shape_is_a_400(headers):
+    assistant = FakeAssistant()
+
+    response = post(client(assistant), {"message": "Am I checked in?"}, {**AUTH, **headers})
+
+    assert response.status_code == 400 and assistant.seen == []
+
+
+def test_the_manage_token_never_appears_in_an_answer_or_a_log_line(caplog):
+    http = client(FakeAssistant(RuntimeError("failed while reading the booking")))
+
+    response = post(http, {"message": "Am I checked in?"}, WITH_BOOKING)
+
+    assert MANAGE_TOKEN not in response.text and MANAGE_TOKEN not in caplog.text
+
+
+def test_a_question_about_my_booking_without_one_open_is_counted_as_needing_a_booking():
+    http = client(FakeAssistant(Answer(rules.NEEDS_BOOKING_REPLY, Route.BOOKING, "needs_booking")))
+
+    body = post(http, {"message": "Am I checked in?"}).json()
+
+    assert (body["route"], body["outcome"]) == ("booking", "needs_booking")
+    assert 'skyhub_assistant_messages_total{outcome="needs_booking",route="booking"} 1.0' in http.get("/metrics").text
+
+
+def test_the_contract_names_the_booking_headers_the_service_reads():
+    parameters = {p["name"]: p for p in SPEC["paths"]["/api/v1/assistant/messages"]["post"]["parameters"]}
+
+    assert set(parameters) == {"X-Booking-Reference", "X-Booking-Token"}
+    assert all(p["in"] == "header" and not p.get("required") for p in parameters.values())
+    assert parameters["X-Booking-Reference"]["schema"]["pattern"] == "^[A-Z0-9]{6}$"
+
+
 # Starting the MCP server
 
 
 def test_the_mcp_server_is_started_without_the_model_key_or_the_api_token_because_it_holds_no_credentials():
     parameters = mcp_server_parameters({"GROQ_API_KEY": "gsk_secret", "SKYHUB_ASSISTANT_API_TOKEN": TOKEN,
-                                        "SKYHUB_SEARCH_API_URL": "http://flight-search:8081", "PATH": "/usr/bin"})
+                                        "SKYHUB_SEARCH_API_URL": "http://flight-search:8081", "PATH": "/usr/bin",
+                                        "SKYHUB_BOOKING_API_URL": "http://booking:8082"})
 
     assert parameters.args == ["-m", "traveller_assistant.server"]
     assert parameters.env["SKYHUB_SEARCH_API_URL"] == "http://flight-search:8081"
+    assert parameters.env["SKYHUB_BOOKING_API_URL"] == "http://booking:8082"
     assert "GROQ_API_KEY" not in parameters.env and "SKYHUB_ASSISTANT_API_TOKEN" not in parameters.env
     assert "gsk_secret" not in str(parameters.env) and TOKEN not in str(parameters.env)
 

@@ -1,11 +1,11 @@
-"""The traveller assistant: route a message, let a crew answer it, and check the answer in code (ADR-0093).
+"""The traveller assistant: route a message, let a crew answer it, and check the answer in code (ADR-0093, 0094).
 
 The model proposes, code checks (the rule of ADR-0022). Every tool call of a message is recorded in a ``ToolLedger``;
 an answer is shown only if what it cites is in the ledger:
 
 * an article in its ``SOURCES`` line must be one ``search_help_centre`` returned in this run;
 * a help answer needs at least one such article;
-* every flight number it names must be one ``search_flights`` returned in this run.
+* every flight number it names must be one ``search_flights`` or ``get_my_booking`` returned in this run.
 
 Otherwise the traveller gets a standard reply. Nothing here knows about CrewAI or the model: the router and the crews
 are ports (``Router``, ``Crews``), so the rules are tested on their own.
@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
@@ -31,6 +31,9 @@ HELP_FALLBACK = ("I don't know the answer to that, and I won't guess: SkyHub's h
                  "about your own booking, use the Manage booking page.")
 FLIGHTS_FALLBACK = ("I couldn't check SkyHub's flights for that just now. Please try the flight search on the SkyHub "
                     "website.")
+BOOKING_FALLBACK = ("I couldn't read your booking just now. You can see everything about it on the Manage booking page.")
+NEEDS_BOOKING_REPLY = ("To answer questions about your booking, I need it open: find it on the Manage booking page with "
+                       "your booking reference and a passenger's last name, then ask me again there.")
 
 # Two letters and up to four digits: SK501. An aircraft (A350) or a time (08:30) is not one.
 _FLIGHT = re.compile(r"\b[A-Z]{2}\d{1,4}\b")
@@ -39,11 +42,15 @@ _SOURCES = re.compile(r"[*_`]*\bsources\b[*_`\s]*:[*_`]*", re.IGNORECASE)
 # Models write no-break and narrow spaces ("75\u202fminutes"); read them as plain spaces.
 _ODD_SPACES = str.maketrans({c: " " for c in "\u00a0\u2007\u2009\u202f"})
 _ARTICLE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+# The booking API's own patterns: a reference is six capitals or digits; a manage token is a JWT (base64url parts).
+_REFERENCE = re.compile(r"[A-Z0-9]{6}")
+_TOKEN = re.compile(r"[A-Za-z0-9_\-.]{1,4096}")
 
 
 class Route(StrEnum):
     HELP = "help"
     FLIGHTS = "flights"
+    BOOKING = "booking"
     OTHER = "other"
 
 
@@ -62,9 +69,29 @@ class Turn:
 
 
 @dataclass(frozen=True)
+class BookingSession:
+    """The booking the website's server has open for this traveller (ADR-0094): sent beside the message, never through
+    the model. The token is left out of every repr, so it cannot reach a log line by accident."""
+
+    reference: str
+    token: str = field(repr=False)
+
+    @classmethod
+    def from_headers(cls, reference: str | None, token: str | None) -> "BookingSession | None":
+        if reference is None and token is None:
+            return None
+        if reference is None or token is None:
+            raise InvalidMessage("Send both the booking reference and its token, or neither.")
+        if not _REFERENCE.fullmatch(reference) or not _TOKEN.fullmatch(token):
+            raise InvalidMessage("The booking reference or its token is not in the shape the booking service gives.")
+        return cls(reference, token)
+
+
+@dataclass(frozen=True)
 class Conversation:
     message: str
     history: tuple[Turn, ...] = ()
+    booking: BookingSession | None = None
 
     @classmethod
     def from_request(cls, body: object) -> "Conversation":
@@ -130,6 +157,8 @@ class ToolLedger:
         elif tool == "search_flights":
             for itinerary in data.get("itineraries") or []:
                 self.flights.update(str(f["flight"]) for f in itinerary.get("flights") or [])
+        elif tool == "get_my_booking":
+            self.flights.update(str(f["flight"]) for f in data.get("flights") or [])
 
 
 class Router(Protocol):
@@ -151,6 +180,8 @@ class TravellerAssistant:
         route = self._router.route(conversation)
         if route is Route.OTHER:
             return Answer(OTHER_REPLY, route, "other")
+        if route is Route.BOOKING and conversation.booking is None:
+            return Answer(NEEDS_BOOKING_REPLY, route, "needs_booking")
         ledger = ToolLedger()
         return check(route, self._crews.run(route, conversation, ledger), ledger)
 
@@ -158,13 +189,13 @@ class TravellerAssistant:
 def check(route: Route, text: str, ledger: ToolLedger) -> Answer:
     """The model's text as the traveller sees it, or the standard reply if it cites anything the tools did not return."""
     reply, declared = _split_sources(text)
-    fallback = FLIGHTS_FALLBACK if route is Route.FLIGHTS else HELP_FALLBACK
+    fallback = {Route.FLIGHTS: FLIGHTS_FALLBACK, Route.BOOKING: BOOKING_FALLBACK}.get(route, HELP_FALLBACK)
 
     if set(_FLIGHT.findall(reply)) - ledger.flights:
         return Answer(fallback, route, "unverified")
     if declared is None:
         # No SOURCES line: the format was not followed, so nothing says where a rule came from.
-        return Answer(reply, route, "answered") if route is Route.FLIGHTS else Answer(fallback, route, "unverified")
+        return Answer(fallback, route, "unverified") if route is Route.HELP else Answer(reply, route, "answered")
     if any(article not in ledger.articles for article in declared):
         return Answer(fallback, route, "unverified")
     sources = tuple(Source(a, ledger.articles[a]) for a in declared)

@@ -67,6 +67,15 @@ class FakeTool(BaseTool):
         return json.dumps(self.answer)
 
 
+class BookingArgs(BaseModel):
+    reference: str
+    booking_token: str
+
+
+MY_BOOKING = {"status": "CONFIRMED", "passengers": 2,
+              "flights": [{"flight": "SK201", "checked_in": ["passenger 1"]}, {"flight": "SK701", "checked_in": []}],
+              "note": "Passengers are not named."}
+
 CHECK_IN = {"passages": [{"article": "checking-in-online", "title": "Checking in online", "section": "When",
                           "text": "Online check-in opens 24 hours before departure."}], "note": "Answer only from these."}
 BOM_JFK = {"itineraries": [{"flights": [{"flight": "SK201"}, {"flight": "SK701"}]}], "total": 1, "note": "UTC."}
@@ -76,4 +85,6 @@ def tools() -> dict[str, FakeTool]:
     return {"search_help_centre": FakeTool(name="search_help_centre", description="Search the help centre.",
                                            answer=CHECK_IN),
             "search_flights": FakeTool(name="search_flights", description="Search flights.", args_schema=FlightArgs,
-                                       answer=BOM_JFK)}
+                                       answer=BOM_JFK),
+            "get_my_booking": FakeTool(name="get_my_booking", description="The traveller's own booking.",
+                                       args_schema=BookingArgs, answer=MY_BOOKING)}

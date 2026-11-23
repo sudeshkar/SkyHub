@@ -17,6 +17,7 @@ import contextlib
 import hmac
 import logging
 import time
+from dataclasses import replace
 from collections.abc import AsyncIterator, Callable
 from typing import Protocol
 
@@ -27,7 +28,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route as Path
 
-from traveller_assistant.assistant import Answer, Conversation, InvalidMessage, ModelUnavailable
+from traveller_assistant.assistant import Answer, BookingSession, Conversation, InvalidMessage, ModelUnavailable
 
 MIN_TOKEN_LENGTH = 32
 RETRY_AFTER_SECONDS = 30
@@ -95,7 +96,10 @@ def create_app(assistant: Assistant, api_token: str, *, registry: CollectorRegis
         if not request.headers.get("authorization", "").startswith("Bearer ") or not hmac.compare_digest(provided, expected):
             return counted(_problem(401, "A valid assistant API token is required"), "none", "unauthorised")
         try:
-            conversation = Conversation.from_request(await request.json())
+            # The open booking comes beside the message, in headers the website's server sets (ADR-0094).
+            booking = BookingSession.from_headers(request.headers.get("x-booking-reference"),
+                                                  request.headers.get("x-booking-token"))
+            conversation = replace(Conversation.from_request(await request.json()), booking=booking)
         except InvalidMessage as problem:
             return counted(_problem(400, str(problem)), "none", "invalid")
         except ValueError:
@@ -143,8 +147,9 @@ def mcp_server_parameters(environ: dict[str, str]):
     from mcp.client.stdio import get_default_environment
 
     env = get_default_environment()
-    if "SKYHUB_SEARCH_API_URL" in environ:
-        env["SKYHUB_SEARCH_API_URL"] = environ["SKYHUB_SEARCH_API_URL"]
+    for name in ("SKYHUB_SEARCH_API_URL", "SKYHUB_BOOKING_API_URL"):
+        if name in environ:
+            env[name] = environ[name]
     return StdioServerParameters(command=sys.executable, args=["-m", "traveller_assistant.server"], env=env)
 
 
