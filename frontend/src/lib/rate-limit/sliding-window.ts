@@ -30,6 +30,8 @@ export const POLICIES = {
   accountLink: { name: "account-link", limit: 5, windowMs: 15 * 60_000 },
   /** Traveller sign-in is a password-guessing target; the service also locks an account after five misses. */
   accountSignIn: { name: "account-sign-in", limit: 10, windowMs: 15 * 60_000 },
+  /** Each message costs language-model calls on a free tier shared by every visitor (ADR-0093, ADR-0095). */
+  assistant: { name: "assistant", limit: 6, windowMs: 60_000 },
 } as const satisfies Record<string, Policy>;
 
 export function createRateLimiter(store: CounterStore, now: () => number = Date.now) {

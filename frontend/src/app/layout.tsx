@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, Inter } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import logo from "@/assets/skyhub-logo.png";
+import { AssistantChatSlot } from "@/components/assistant-chat-slot";
 import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
 
@@ -51,6 +53,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </header>
         <main className="flex-1">{children}</main>
         <SiteFooter />
+        <Suspense fallback={null}>
+          <AssistantChatSlot />
+        </Suspense>
       </body>
     </html>
   );
