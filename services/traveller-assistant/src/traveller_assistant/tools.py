@@ -1,7 +1,8 @@
-"""The tools the assistant's model can call (ADR-0091, ADR-0092).
+"""The tools the assistant's model can call (ADR-0091, ADR-0092, ADR-0094).
 
 Each tool is a class with a typed ``run``; the MCP server is built from a registry of them, so adding a tool is one class
-and one line, with no change to the server. Every tool here is read-only: none can see or change a booking.
+and one line, with no change to the server. Every tool here is read-only: none can change a booking, and only
+``get_my_booking`` can read one, the one whose manage token it is given for the call.
 """
 
 from __future__ import annotations
@@ -16,12 +17,13 @@ from typing import Any
 
 from mcp.types import ToolAnnotations
 
+from traveller_assistant.booking import BookingClient
 from traveller_assistant.errors import ServiceError, ToolInputError
 from traveller_assistant.flights import FlightSearchClient
 from traveller_assistant.index import HelpCentreIndex
 
-__all__ = ["ToolInputError", "ServiceError", "Tool", "SearchHelpCentre", "SearchFlights", "ToolRegistry",
-           "search_help_centre"]
+__all__ = ["ToolInputError", "ServiceError", "Tool", "SearchHelpCentre", "SearchFlights", "GetMyBooking",
+           "ToolRegistry", "search_help_centre"]
 
 MAX_QUESTION_CHARACTERS = 500
 MAX_PASSAGES = 5
@@ -41,7 +43,16 @@ ABOUT_FLIGHTS = ("Times are UTC. fare_from is the lowest price per passenger, no
 NO_FLIGHTS = ("SkyHub has no flights on this route on that day. Suggest another day, or check the airport codes; "
               "do not suggest other airlines.")
 
+ABOUT_BOOKING = ("Passengers are not named, on purpose: call them passenger 1, passenger 2 and so on. Times are UTC. "
+                 "Seats, check-in and cancelling are done by the traveller on the Manage booking page; you cannot do "
+                 "them. Only say what is listed here about this booking.")
+NO_BOOKING_OPEN = ("There is no booking open in this conversation. Ask the traveller to open their booking on the Manage "
+                   "booking page, then ask again.")
+
 _AIRPORT = re.compile(r"[A-Za-z]{3}")
+_REFERENCE = re.compile(r"[A-Z0-9]{6}")
+# A manage token is a JWT: three base64url parts. Anything else is refused before it is sent anywhere.
+_TOKEN = re.compile(r"[A-Za-z0-9_\-.]{1,4096}")
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True)
 
 
@@ -109,6 +120,22 @@ class SearchFlights(Tool):
             return {"itineraries": [], "total": 0, "note": NO_FLIGHTS}
         return {"itineraries": [_itinerary(i) for i in found[:MAX_ITINERARIES]], "total": len(found),
                 "note": ABOUT_FLIGHTS}
+
+
+class GetMyBooking(Tool):
+    name = "get_my_booking"
+    description = ("The traveller's own booking: its status, each flight with its times (UTC), delay or cancellation, "
+                   "each passenger's seat and who is checked in, and the refund of a cancelled booking. Passengers are "
+                   "not named. The booking reference and its manage token are supplied by the application, not by you.")
+
+    def __init__(self, bookings: BookingClient):
+        self._bookings = bookings
+
+    def run(self, reference: str, booking_token: str) -> dict:
+        # Checked before anything is sent: a reference of another shape could change the path it is put into.
+        if not _REFERENCE.fullmatch(reference) or not _TOKEN.fullmatch(booking_token):
+            raise ToolInputError(NO_BOOKING_OPEN)
+        return {**self._bookings.my_booking(reference, booking_token), "note": ABOUT_BOOKING}
 
 
 def _airport(value: str, field: str) -> str:

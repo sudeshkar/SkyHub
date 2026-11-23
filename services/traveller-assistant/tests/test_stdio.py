@@ -29,6 +29,6 @@ def test_the_server_answers_over_stdio_with_the_real_help_centre_and_survives_fl
 
     names, help_answer, flights_answer = asyncio.run(asyncio.wait_for(go(), timeout=120))
 
-    assert names == {"search_help_centre", "search_flights"}
+    assert names == {"search_help_centre", "search_flights", "get_my_booking"}
     assert help_answer.structuredContent["passages"][0]["article"] == "checking-in-online"
     assert flights_answer.structuredContent["error"].startswith("Flight search is not answering")

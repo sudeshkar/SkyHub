@@ -4,17 +4,19 @@ A chat assistant for SkyHub's travellers: it answers questions about SkyHub's ru
 about the traveller's own booking. It never changes a booking: cancelling, changing a seat and checking in are done by
 the traveller on the Manage booking page. Design and the slices it is built in: [ADR-0090](../../docs/adr/0090-traveller-assistant-and-its-help-centre.md).
 
-**Built so far (slices 1 to 4 of 6):** the help centre and the test that keeps it true; `search_help_centre`, the
+**Built so far (slices 1 to 5 of 6):** the help centre and the test that keeps it true; `search_help_centre`, the
 tool that finds the passages answering a question, with Chroma ([ADR-0091](../../docs/adr/0091-searching-the-help-centre-with-chroma.md));
 **`skyhub-traveller`, the MCP server** that offers it with `search_flights` ([ADR-0092](../../docs/adr/0092-the-traveller-mcp-server.md));
-and **the CrewAI crew behind an API**, with every answer checked in code ([ADR-0093](../../docs/adr/0093-the-traveller-assistant-crew-and-its-api.md)).
-Booking tools that use the traveller's own manage token, and the chat on the website, follow.
+**the CrewAI crew behind an API**, with every answer checked in code ([ADR-0093](../../docs/adr/0093-the-traveller-assistant-crew-and-its-api.md));
+and **the traveller's own booking**, read with the manage token the website already holds, never through the model and
+without names ([ADR-0094](../../docs/adr/0094-the-assistant-reads-the-travellers-own-booking.md)). The chat on the website follows.
 
 ```
 website's server ──POST /api/v1/assistant/messages──► traveller-assistant (127.0.0.1:8085, shared token)
-                                                          │ router (one short model call): help | flights | other
+                                                          │ router (one short model call): help | flights | booking | other
                                                           ▼
-                                     CrewAI crew: policy agent (help centre) or trip agent (flights + help centre)
+                                     CrewAI crew: policy agent (help centre), trip agent (flights + help centre),
+                                     or booking agent (the open booking, bound to this message + help centre)
                                                           │ tools, recorded for this message
                                                           ▼
                                      skyhub-traveller MCP server, started once, over stdio ──► Chroma, flight-search
@@ -91,19 +93,21 @@ the ADR.
 
 ## The MCP server
 
-`skyhub-traveller` offers two read-only tools over MCP (stdin and stdout, no network port). It holds **no credentials**:
-no staff account, no booking token, no key. It is a different process from the disruption agent's server, which holds a
-staff login (ADR-0092).
+`skyhub-traveller` offers three read-only tools over MCP (stdin and stdout, no network port). It holds **no credentials**:
+no staff account and no key, and a traveller's manage token reaches it only with the call that uses it. It is a
+different process from the disruption agent's server, which holds a staff login (ADR-0092).
 
 | Tool | What it does |
 |---|---|
 | `search_help_centre(question, limit=3)` | The help-centre passages that answer a question, each naming its article, with the rule "answer only from these, or say you do not know" |
 | `search_flights(origin, destination, date)` | Direct flights and connections in Dubai on one day, from flight-search: at most 10, with UTC times, status and the lowest fare per passenger |
+| `get_my_booking(reference, booking_token)` | The booking that manage token opens: status, each flight's times, delay, seats and who is checked in, and the refund. Passengers by position only: never a name, the email, the reference or a barcode. In the crew, the reference and the token are added by code; the model calls it with nothing |
 
 A refused call (a bad airport code) or flight-search being down comes back as `{"error": "..."}`, worded for the model.
 
 ```bash
-python -m traveller_assistant.server                  # SKYHUB_SEARCH_API_URL, default http://localhost:8081
+python -m traveller_assistant.server                  # SKYHUB_SEARCH_API_URL (default http://localhost:8081),
+                                                      # SKYHUB_BOOKING_API_URL (default http://localhost:8082)
 ```
 
 **Try it in the MCP Inspector** (needs Node.js; no API key):
@@ -136,7 +140,8 @@ python -m traveller_assistant.web                         # http://127.0.0.1:808
 | `GROQ_API_KEY` | (required) | The model's key |
 | `SKYHUB_ASSISTANT_API_TOKEN` | (required, 32+ characters) | Only a caller with it gets an answer |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Rerun the answer evals after changing it |
-| `SKYHUB_SEARCH_API_URL` | `http://localhost:8081` | flight-search, passed to the MCP server (and nothing else is) |
+| `SKYHUB_SEARCH_API_URL` | `http://localhost:8081` | flight-search, passed to the MCP server |
+| `SKYHUB_BOOKING_API_URL` | `http://localhost:8082` | The booking service, passed to the MCP server (it gets nothing else: not the key, not the token) |
 | `SKYHUB_ASSISTANT_HOST`, `SKYHUB_ASSISTANT_PORT` | `127.0.0.1`, `8085` | |
 
 ```bash
@@ -144,6 +149,16 @@ curl -s localhost:8085/api/v1/assistant/messages -H "Authorization: Bearer $SKYH
      -H 'Content-Type: application/json' -d '{"message": "Can I get a refund if I cancel tomorrow?"}'
 # {"reply": "You will receive a full refund only if you cancel at least 24 hours before ...", "route": "help",
 #  "outcome": "answered", "sources": [{"article": "cancellations-and-refunds", "title": "Cancellations and refunds"}]}
+```
+
+**The traveller's own booking**: the website's server adds the booking the traveller has open on the Manage page, from
+its httpOnly cookie, as two headers. The model never sees either, and without them a question about "my booking" gets a
+reply saying how to open it.
+
+```bash
+curl -s localhost:8085/api/v1/assistant/messages -H "Authorization: Bearer $SKYHUB_ASSISTANT_API_TOKEN" \
+     -H "X-Booking-Reference: ABC234" -H "X-Booking-Token: $MANAGE_TOKEN" \
+     -H 'Content-Type: application/json' -d '{"message": "Am I checked in for my first flight?"}'
 ```
 
 The contract is [`api-specs/traveller-assistant-api.yaml`](../../api-specs/traveller-assistant-api.yaml). The service keeps

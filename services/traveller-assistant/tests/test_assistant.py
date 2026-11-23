@@ -4,8 +4,9 @@ import json
 
 import pytest
 
-from traveller_assistant.assistant import (FLIGHTS_FALLBACK, HELP_FALLBACK, OTHER_REPLY, Conversation, InvalidMessage,
-                                           ModelUnavailable, Route, Source, ToolLedger, TravellerAssistant, Turn)
+from traveller_assistant.assistant import (BOOKING_FALLBACK, FLIGHTS_FALLBACK, HELP_FALLBACK, NEEDS_BOOKING_REPLY,
+                                           OTHER_REPLY, BookingSession, Conversation, InvalidMessage, ModelUnavailable,
+                                           Route, Source, ToolLedger, TravellerAssistant, Turn)
 
 CHECK_IN = {"passages": [{"article": "checking-in-online", "title": "Checking in online", "section": "When",
                           "text": "Check-in opens 24 hours before departure."}], "note": "..."}
@@ -227,6 +228,68 @@ def test_aircraft_and_times_are_not_taken_for_flight_numbers():
                        [("search_help_centre", CHECK_IN)])
 
     assert result.outcome == "answered"
+
+
+# The traveller's own booking (ADR-0094)
+
+MY_BOOKING = {"status": "CONFIRMED", "passengers": 2,
+              "flights": [{"flight": "SK201", "checked_in": ["passenger 1"]}, {"flight": "SK701", "checked_in": []}],
+              "note": "..."}
+SESSION = BookingSession("ABC234", "eyJhbGciOiJIUzI1NiJ9.payload.signature")
+
+
+def booking_answer(reply, results=(), session=SESSION):
+    crews = FakeCrews(reply, results)
+    result = TravellerAssistant(FakeRouter(Route.BOOKING), crews).answer(Conversation("Am I checked in?", (), session))
+    return result, crews
+
+
+def test_a_question_about_my_booking_with_no_booking_open_says_how_to_open_it_without_running_a_crew():
+    result, crews = booking_answer("should not be used", session=None)
+
+    assert (result.reply, result.route, result.outcome) == (NEEDS_BOOKING_REPLY, Route.BOOKING, "needs_booking")
+    assert "Manage booking page" in NEEDS_BOOKING_REPLY and crews.runs == []
+
+
+def test_the_booking_crew_gets_the_open_booking_with_the_message():
+    _, crews = booking_answer("Passenger 1 is checked in on SK201.\nSOURCES: none", [("get_my_booking", MY_BOOKING)])
+
+    assert crews.runs[0][1].booking == SESSION
+
+
+def test_a_booking_answer_naming_the_bookings_own_flights_is_shown():
+    result, _ = booking_answer("Passenger 1 is checked in on SK201; nobody yet on SK701.\nSOURCES: none",
+                               [("get_my_booking", MY_BOOKING)])
+
+    assert (result.outcome, result.reply) == ("answered", "Passenger 1 is checked in on SK201; nobody yet on SK701.")
+
+
+def test_a_booking_answer_naming_a_flight_that_is_not_on_the_booking_is_replaced():
+    result, _ = booking_answer("You are on SK999.\nSOURCES: none", [("get_my_booking", MY_BOOKING)])
+
+    assert (result.reply, result.outcome) == (BOOKING_FALLBACK, "unverified")
+
+
+def test_a_booking_answer_citing_the_help_centre_is_checked_like_any_other():
+    result, _ = booking_answer("You can cancel for a full refund.\nSOURCES: cancellations-and-refunds",
+                               [("get_my_booking", MY_BOOKING), ("search_help_centre", REFUNDS)])
+
+    assert result.outcome == "answered" and [s.article for s in result.sources] == ["cancellations-and-refunds"]
+
+
+def test_the_booking_session_never_shows_its_token():
+    assert "signature" not in repr(SESSION) and "signature" not in str(Conversation("hi", (), SESSION))
+
+
+@pytest.mark.parametrize("reference, token", [("ABC234", None), (None, "eyJ.a.b"), ("abc234", "eyJ.a.b"),
+                                              ("ABC23", "eyJ.a.b"), ("ABC234", "not a token!"), ("ABC234", "")])
+def test_a_booking_sent_half_or_in_the_wrong_shape_is_refused(reference, token):
+    with pytest.raises(InvalidMessage, match="booking"):
+        BookingSession.from_headers(reference, token)
+
+
+def test_no_booking_headers_means_no_booking():
+    assert BookingSession.from_headers(None, None) is None
 
 
 # The ledger of what the tools returned

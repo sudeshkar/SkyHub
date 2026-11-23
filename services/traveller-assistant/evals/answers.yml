@@ -43,3 +43,22 @@ flights:
     flights: [SK201, SK701, SK203, SK703]
   - question: I need to get from Dubai to London on 1 December 2026. What is there?
     flights: [SK501]
+
+# booking:       with the stand-in booking open (ADR-0094): answered, saying the fact. Its first flight has passenger 1
+#                checked in; its second, SK701, is delayed to 08:15 UTC; the seats on SK701 are 30A and 30B.
+# needs_booking: the same kind of question with no booking open; the reply says how to open one, and no crew runs.
+# Across every answer: never a name, the contact email, the reference or the token (they are in the stand-in's answers).
+
+booking:
+  - question: Am I checked in for my first flight?
+    says: passenger 1
+  - question: Is my flight to New York delayed? When does it leave now?
+    says: "08:15"
+  - question: What seats do we have on the flight to New York?
+    says: 30A
+  - question: If I cancel my booking now, will I get my money back?
+    says: refund
+
+needs_booking:
+  - Am I checked in for my flight?
+  - Is my flight delayed?
