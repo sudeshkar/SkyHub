@@ -1,0 +1,45 @@
+# Answer evals (ADR-0093): the whole assistant (router, crew, MCP server, model, the code's check) on questions whose
+# right answer is known. Run by hand with a Groq key: python -m evals.answers. They spend the free tier's tokens.
+#
+# help:        answered, citing the article, and saying the fact (a word that must appear in the reply)
+# not_covered: the help centre does not cover it; the traveller must get the standard "I don't know" reply
+# off_topic:   not about SkyHub; routed to "other", so no crew runs
+# flights:     answered, naming at least one of these flights (the stand-in flight-search's), and no other flight
+
+help:
+  - question: When can I check in online?
+    article: checking-in-online
+    says: "24"
+  - question: If I cancel my booking tomorrow morning, do I get my money back?
+    article: cancellations-and-refunds
+    says: "24"
+  - question: How long do I need to change planes at Dubai International?
+    article: connecting-in-dubai
+    says: "75"
+  - question: How long are my seats held while I enter passenger details and pay?
+    article: booking-a-flight
+    says: "10"
+  - question: When does boarding close at the gate?
+    article: boarding
+    says: "10"
+  - question: I typed my password wrong a few times and now my account is locked. For how long?
+    article: your-account
+    says: "15"
+
+not_covered:
+  - How many kilos of baggage can I bring?
+  - Can I bring my dog on the plane?
+  - Is there wifi on board?
+  - What meals are served on the flight?
+  - How many loyalty points do I earn on a flight to London?
+
+off_topic:
+  - Write me a short poem about the sea.
+  - What is the capital of Australia?
+  - Hi!
+
+flights:
+  - question: Are there SkyHub flights from Mumbai to New York on 2026-12-01?
+    flights: [SK201, SK701, SK203, SK703]
+  - question: I need to get from Dubai to London on 1 December 2026. What is there?
+    flights: [SK501]

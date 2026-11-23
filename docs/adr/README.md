@@ -96,3 +96,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0090](0090-traveller-assistant-and-its-help-centre.md) | A traveller assistant, and the help centre it answers from | Accepted |
 | [0091](0091-searching-the-help-centre-with-chroma.md) | Searching the help centre with Chroma | Accepted |
 | [0092](0092-the-traveller-mcp-server.md) | The traveller MCP server | Accepted |
+| [0093](0093-the-traveller-assistant-crew-and-its-api.md) | The traveller assistant's crew and its API | Accepted |
