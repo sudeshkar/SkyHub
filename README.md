@@ -16,6 +16,7 @@ SkyHub is a **portfolio project, not a real airline**. It is built the way a pro
 | **Book and pay** | One booking covers every flight of the trip. The server works out the price and charges it (demo payment methods, no real card); if booking then fails the charge is refunded. Repeating a request (double-click, retry) never books or charges twice. The confirmation email is an itinerary in local times, with the e-ticket attached as a PDF. |
 | **Manage** | Look up a booking with its reference and a passenger's last name, then change seats or cancel. |
 | **Check in** | Opens 24 hours before departure. Gives each passenger a boarding pass with a signed barcode. |
+| **Ask** | "Ask SkyHub" on every page answers from a help centre checked against the code, finds flights, and, on the Manage page, answers about your open booking. Code checks every answer against what the tools returned, and the model never sees names or the booking's token. It cannot change a booking. See [`services/traveller-assistant`](services/traveller-assistant/README.md). |
 
 ## Screenshots
 

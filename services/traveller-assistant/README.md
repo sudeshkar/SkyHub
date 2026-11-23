@@ -4,12 +4,14 @@ A chat assistant for SkyHub's travellers: it answers questions about SkyHub's ru
 about the traveller's own booking. It never changes a booking: cancelling, changing a seat and checking in are done by
 the traveller on the Manage booking page. Design and the slices it is built in: [ADR-0090](../../docs/adr/0090-traveller-assistant-and-its-help-centre.md).
 
-**Built so far (slices 1 to 5 of 6):** the help centre and the test that keeps it true; `search_help_centre`, the
+**Built (all six slices):** the help centre and the test that keeps it true; `search_help_centre`, the
 tool that finds the passages answering a question, with Chroma ([ADR-0091](../../docs/adr/0091-searching-the-help-centre-with-chroma.md));
 **`skyhub-traveller`, the MCP server** that offers it with `search_flights` ([ADR-0092](../../docs/adr/0092-the-traveller-mcp-server.md));
 **the CrewAI crew behind an API**, with every answer checked in code ([ADR-0093](../../docs/adr/0093-the-traveller-assistant-crew-and-its-api.md));
 and **the traveller's own booking**, read with the manage token the website already holds, never through the model and
-without names ([ADR-0094](../../docs/adr/0094-the-assistant-reads-the-travellers-own-booking.md)). The chat on the website follows.
+without names ([ADR-0094](../../docs/adr/0094-the-assistant-reads-the-travellers-own-booking.md)); and **the chat on the
+website**, "Ask SkyHub" on every traveller page ([ADR-0095](../../docs/adr/0095-the-assistant-on-the-website.md)). Running it in a container
+and in the deployment is next.
 
 ```
 website's server ──POST /api/v1/assistant/messages──► traveller-assistant (127.0.0.1:8085, shared token)

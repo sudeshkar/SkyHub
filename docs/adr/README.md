@@ -98,3 +98,4 @@ An ADR records one significant decision: the context, the decision, and its cons
 | [0092](0092-the-traveller-mcp-server.md) | The traveller MCP server | Accepted |
 | [0093](0093-the-traveller-assistant-crew-and-its-api.md) | The traveller assistant's crew and its API | Accepted |
 | [0094](0094-the-assistant-reads-the-travellers-own-booking.md) | The assistant reads the traveller's own booking | Accepted |
+| [0095](0095-the-assistant-on-the-website.md) | The assistant on the website | Accepted |
